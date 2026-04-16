@@ -32,8 +32,8 @@ def ensure_dirs(root: Path) -> None:
     for relative in (
         Path("visible/train"),
         Path("visible/val"),
-        Path("infrared/train"),
-        Path("infrared/val"),
+        Path("nir/train"),
+        Path("nir/val"),
         Path("meta"),
     ):
         (root / relative).mkdir(parents=True, exist_ok=True)
@@ -53,7 +53,7 @@ def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, 
     annotation_path = source_root / "annotations" / f"{split}.json"
     payload = json.loads(annotation_path.read_text(encoding="utf-8"))
     visible_split_dir = output_root / "visible" / split
-    infrared_split_dir = output_root / "infrared" / split
+    nir_split_dir = output_root / "nir" / split
 
     image_count = 0
     label_count = 0
@@ -71,9 +71,9 @@ def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, 
         shared_image_name = f"{sample_stem}{vis_src.suffix.lower()}"
         shared_label_name = f"{sample_stem}.txt"
         vis_dst = visible_split_dir / shared_image_name
-        nir_dst = infrared_split_dir / shared_image_name
+        nir_dst = nir_split_dir / shared_image_name
         vis_label_dst = visible_split_dir / shared_label_name
-        nir_label_dst = infrared_split_dir / shared_label_name
+        nir_label_dst = nir_split_dir / shared_label_name
 
         shutil.copy2(vis_src, vis_dst)
         shutil.copy2(nir_src, nir_dst)

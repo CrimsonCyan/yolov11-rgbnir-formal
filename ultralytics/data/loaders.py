@@ -320,7 +320,7 @@ class LoadImagesAndVideos:
         - Can read from a text file containing paths to images and videos.
     """
 
-    def __init__(self, path, batch=1, vid_stride=1,use_simotm="SimOTMBBS",imgsz=640,pairs_rgb_ir= ['visible', 'infrared']):
+    def __init__(self, path, batch=1, vid_stride=1,use_simotm="SimOTMBBS",imgsz=640,pairs_rgb_ir= ['visible', 'nir']):
         """Initialize dataloader for images and videos, supporting various input formats."""
         parent = None
         self.use_simotm = use_simotm
@@ -330,7 +330,7 @@ class LoadImagesAndVideos:
         if not (isinstance(self.pairs_rgb_ir, list) and
                 len(self.pairs_rgb_ir) == 2 and
                 all(isinstance(x, str) for x in self.pairs_rgb_ir)):
-            self.pairs_rgb_ir = ['visible', 'infrared']
+            self.pairs_rgb_ir = ['visible', 'nir']
         self.augment=False
         if isinstance(path, str) and Path(path).suffix == ".txt":  # *.txt file with img/vid/dir on each line
             parent = Path(path).parent
@@ -411,21 +411,21 @@ class LoadImagesAndVideos:
                         if success:
                             if self.use_simotm == 'RGBT':
                                 im_visible = im0  # BGR
-                                im_infrared = im0_ir  # BGR
+                                im_nir = im0_ir  # BGR
 
-                                if len(im_infrared.shape) == 2:
+                                if len(im_nir.shape) == 2:
                                     # print("单通道（灰度图）")
                                     pass
-                                    # im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_GRAY2BGR)
-                                elif len(im_infrared.shape) == 3 and im_infrared.shape[2] == 3:
-                                    im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_BGR2GRAY)
+                                    # im_nir = cv2.cvtColor(im_nir, cv2.COLOR_GRAY2BGR)
+                                elif len(im_nir.shape) == 3 and im_nir.shape[2] == 3:
+                                    im_nir = cv2.cvtColor(im_nir, cv2.COLOR_BGR2GRAY)
                                 else:
                                     success=False
                                     print("未知格式")
 
                                 if success:
                                     h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
+                                    h_inf, w_inf = im_nir.shape[:2]  # orig hw
 
                                     if h_vis != h_inf or w_vis != w_inf:
                                         r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
@@ -438,7 +438,7 @@ class LoadImagesAndVideos:
                                                                     interpolation=interp)
                                         if r_inf != 1:  # if sizes are not equal
                                             interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                                            im_infrared = cv2.resize(im_infrared, (
+                                            im_nir = cv2.resize(im_nir, (
                                                 min(math.ceil(w_inf * r_inf), self.imgsz),
                                                 min(math.ceil(h_inf * r_inf), self.imgsz)),
                                                                      interpolation=interp)
@@ -446,18 +446,18 @@ class LoadImagesAndVideos:
                                     # 将彩色图像的三个通道分离
                                     b, g, r = cv2.split(im_visible)
                                     # 合并成四通道图像
-                                    im0 = cv2.merge((b, g, r, im_infrared))
+                                    im0 = cv2.merge((b, g, r, im_nir))
                             elif self.use_simotm == 'RGBRGB6C':
                                 # im_visible = imread(path)  # BGR
-                                # im_infrared = imread(path.replace('visible', 'infrared'))  # BGR
+                                # im_nir = imread(path.replace('visible', 'nir'))  # BGR
                                 im_visible = im0  # BGR
-                                im_infrared = im0_ir  # BGR
-                                if len(im_infrared.shape) == 2:
+                                im_nir = im0_ir  # BGR
+                                if len(im_nir.shape) == 2:
                                     # print("单通道（灰度图）")
                                     # pass
-                                    im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_GRAY2BGR)
-                                elif len(im_infrared.shape) == 3 and im_infrared.shape[2] == 3:
-                                    # im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_BGR2GRAY)
+                                    im_nir = cv2.cvtColor(im_nir, cv2.COLOR_GRAY2BGR)
+                                elif len(im_nir.shape) == 3 and im_nir.shape[2] == 3:
+                                    # im_nir = cv2.cvtColor(im_nir, cv2.COLOR_BGR2GRAY)
                                     pass
                                 else:
                                     success=False
@@ -465,7 +465,7 @@ class LoadImagesAndVideos:
 
                                 if success:
                                     h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
+                                    h_inf, w_inf = im_nir.shape[:2]  # orig hw
 
                                     if h_vis != h_inf or w_vis != w_inf:
 
@@ -479,14 +479,14 @@ class LoadImagesAndVideos:
                                                                     interpolation=interp)
                                         if r_inf != 1:  # if sizes are not equal
                                             interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                                            im_infrared = cv2.resize(im_infrared, (
+                                            im_nir = cv2.resize(im_nir, (
                                                 min(math.ceil(w_inf * r_inf), self.imgsz),
                                                 min(math.ceil(h_inf * r_inf), self.imgsz)),
                                                                      interpolation=interp)
 
                                     # 将彩色图像的三个通道分离
                                     b, g, r = cv2.split(im_visible)
-                                    b2, g2, r2 = cv2.split(im_infrared)
+                                    b2, g2, r2 = cv2.split(im_nir)
                                     # 合并成6通道图像
                                     im0 = cv2.merge((b, g, r, b2, g2, r2))
 
@@ -553,10 +553,10 @@ class LoadImagesAndVideos:
                     im0 = SimOTMSSS(im0)
                 elif self.use_simotm == 'RGBT':
                     im_visible = imread(path)  # BGR
-                    im_infrared = imread(path.replace(pairs_rgb,pairs_ir), cv2.IMREAD_GRAYSCALE)  # BGR
+                    im_nir = imread(path.replace(pairs_rgb,pairs_ir), cv2.IMREAD_GRAYSCALE)  # BGR
 
                     h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
+                    h_inf, w_inf = im_nir.shape[:2]  # orig hw
 
                     if h_vis != h_inf or w_vis != w_inf:
                         r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
@@ -569,20 +569,20 @@ class LoadImagesAndVideos:
                                                     interpolation=interp)
                         if r_inf != 1:  # if sizes are not equal
                             interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                            im_infrared = cv2.resize(im_infrared, (
+                            im_nir = cv2.resize(im_nir, (
                                 min(math.ceil(w_inf * r_inf), self.imgsz), min(math.ceil(h_inf * r_inf), self.imgsz)),
                                                      interpolation=interp)
 
                     # 将彩色图像的三个通道分离
                     b, g, r = cv2.split(im_visible)
                     # 合并成四通道图像
-                    im0 = cv2.merge((b, g, r, im_infrared))
+                    im0 = cv2.merge((b, g, r, im_nir))
                 elif self.use_simotm == 'RGBRGB6C':
                     im_visible = imread(path)  # BGR
-                    im_infrared = imread(path.replace(pairs_rgb,pairs_ir))  # BGR
+                    im_nir = imread(path.replace(pairs_rgb,pairs_ir))  # BGR
 
                     h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
+                    h_inf, w_inf = im_nir.shape[:2]  # orig hw
 
                     if h_vis != h_inf or w_vis != w_inf:
 
@@ -595,13 +595,13 @@ class LoadImagesAndVideos:
                                                     interpolation=interp)
                         if r_inf != 1:  # if sizes are not equal
                             interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                            im_infrared = cv2.resize(im_infrared, (
+                            im_nir = cv2.resize(im_nir, (
                                 min(math.ceil(w_inf * r_inf), self.imgsz), min(math.ceil(h_inf * r_inf), self.imgsz)),
                                                      interpolation=interp)
 
                     # 将彩色图像的三个通道分离
                     b, g, r = cv2.split(im_visible)
-                    b2, g2, r2 = cv2.split(im_infrared)
+                    b2, g2, r2 = cv2.split(im_nir)
                     # 合并成6通道图像
                     im0 = cv2.merge((b, g, r, b2, g2, r2))
                 elif self.use_simotm == 'Multispectral':
