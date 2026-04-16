@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-root",
         default=r"E:\毕设\code\datasets\iddaw_fog_yolov11_rgbnir",
-        help="Target YOLOv11-RGBT dataset root.",
+        help="Target YOLOv11 RGB+NIR dataset root.",
     )
     parser.add_argument(
         "--clean",

@@ -15,7 +15,7 @@ import requests
 import torch
 from PIL import Image
 
-from ultralytics.data.utils import FORMATS_HELP_MSG, IMG_FORMATS, VID_FORMATS
+from ultralytics.data.utils import FORMATS_HELP_MSG, IMG_FORMATS, VID_FORMATS, canonical_multimodal_mode
 from ultralytics.utils import IS_COLAB, IS_KAGGLE, LOGGER, ops
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.patches import imread
@@ -323,7 +323,7 @@ class LoadImagesAndVideos:
     def __init__(self, path, batch=1, vid_stride=1,use_simotm="SimOTMBBS",imgsz=640,pairs_rgb_ir= ['visible', 'nir']):
         """Initialize dataloader for images and videos, supporting various input formats."""
         parent = None
-        self.use_simotm = use_simotm
+        self.use_simotm = canonical_multimodal_mode(use_simotm)
         self.imgsz=imgsz
         self.pairs_rgb_ir = pairs_rgb_ir
         # 若 self.pairs_rgb_ir 不是长度为 2 的字符列表，则重置为默认值
@@ -370,7 +370,7 @@ class LoadImagesAndVideos:
             self._new_video(videos[0])  # new video
         else:
             self.cap = None
-            self.ir_cap = None
+            self.nir_cap = None
         if self.nf == 0:
             raise FileNotFoundError(f"No images or videos found in {p}. {FORMATS_HELP_MSG}")
 
@@ -398,20 +398,20 @@ class LoadImagesAndVideos:
 
                 for _ in range(self.vid_stride):
                     success = self.cap.grab()
-                    if  self.use_simotm in ("RGBT","RGBRGB6C") :
-                        success =   success  and self.ir_cap.grab()
+                    if self.use_simotm in ("RGBNIR", "RGBRGB6C"):
+                        success = success and self.nir_cap.grab()
                     if not success:
                         break  # end of video or failure
 
                 if success:
                     success, im0 = self.cap.retrieve()
-                    if  self.use_simotm in ("RGBT","RGBRGB6C") :
-                        success_ir,im0_ir=self.ir_cap.retrieve()
-                        success=success and success_ir
+                    if self.use_simotm in ("RGBNIR", "RGBRGB6C"):
+                        success_nir, im0_nir = self.nir_cap.retrieve()
+                        success = success and success_nir
                         if success:
-                            if self.use_simotm == 'RGBT':
+                            if self.use_simotm == 'RGBNIR':
                                 im_visible = im0  # BGR
-                                im_nir = im0_ir  # BGR
+                                im_nir = im0_nir  # BGR
 
                                 if len(im_nir.shape) == 2:
                                     # print("单通道（灰度图）")
@@ -527,8 +527,8 @@ class LoadImagesAndVideos:
                     self.count += 1
                     if self.cap:
                         self.cap.release()
-                    if  self.use_simotm in ("RGBT","RGBRGB6C") and self.ir_cap:
-                        self.ir_cap.release()
+                    if self.use_simotm in ("RGBNIR", "RGBRGB6C") and self.nir_cap:
+                        self.nir_cap.release()
                     if self.count < self.nf:
                         self._new_video(self.files[self.count])
             else:
@@ -551,7 +551,7 @@ class LoadImagesAndVideos:
                     im0 = imread(path, cv2.IMREAD_UNCHANGED)  # TIF 16bit
                     im0 = im0.astype(np.float32)
                     im0 = SimOTMSSS(im0)
-                elif self.use_simotm == 'RGBT':
+                elif self.use_simotm == 'RGBNIR':
                     im_visible = imread(path)  # BGR
                     im_nir = imread(path.replace(pairs_rgb,pairs_ir), cv2.IMREAD_GRAYSCALE)  # BGR
 
@@ -701,21 +701,21 @@ class LoadImagesAndVideos:
         """
         self.frame = 0
 
-        rgb_path =path
-        pairs_rgb, pairs_ir = self.pairs_rgb_ir
-        ir_path=rgb_path.replace(pairs_rgb, pairs_ir )
+        rgb_path = path
+        pairs_rgb, pairs_nir = self.pairs_rgb_ir
+        nir_path = rgb_path.replace(pairs_rgb, pairs_nir)
         # Initialize RGB video capture
         self.cap = cv2.VideoCapture(rgb_path)
         if not self.cap.isOpened():
             raise FileNotFoundError(f"Failed to open RGB video {rgb_path}")
 
-        # Initialize IR video capture if IR path is provided
-        self.ir_cap = None
-        if self.use_simotm in ("RGBT","RGBRGB6C"):
-            if ir_path:
-                self.ir_cap = cv2.VideoCapture(ir_path)
-                if not self.ir_cap.isOpened():
-                    raise FileNotFoundError(f"Failed to open IR video {ir_path}")
+        # Initialize the paired NIR video capture when the active mode needs a second branch.
+        self.nir_cap = None
+        if self.use_simotm in ("RGBNIR", "RGBRGB6C"):
+            if nir_path:
+                self.nir_cap = cv2.VideoCapture(nir_path)
+                if not self.nir_cap.isOpened():
+                    raise FileNotFoundError(f"Failed to open NIR video {nir_path}")
 
         # Get video properties from RGB video (assuming RGB and IR videos have the same properties)
         self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))

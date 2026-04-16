@@ -14,7 +14,7 @@ import numpy as np
 import psutil
 from torch.utils.data import Dataset
 
-from ultralytics.data.utils import FORMATS_HELP_MSG, HELP_URL, IMG_FORMATS
+from ultralytics.data.utils import FORMATS_HELP_MSG, HELP_URL, IMG_FORMATS, canonical_multimodal_mode
 from ultralytics.utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, TQDM
 from ultralytics.utils.patches import imread
 
@@ -67,7 +67,7 @@ class BaseDataset(Dataset):
     ):
         """Initialize BaseDataset with given configuration and options."""
         super().__init__()
-        self.use_simotm = use_simotm
+        self.use_simotm = canonical_multimodal_mode(use_simotm)
         self.img_path = img_path
         self.imgsz = imgsz
         self.augment = augment
@@ -121,7 +121,7 @@ class BaseDataset(Dataset):
         for f in self.im_files:
             file_path = Path(f)
             pre_fix_mode= ""
-            if self.use_simotm in {"RGBT","RGBRGB6C"}:
+            if self.use_simotm in {"RGBNIR", "RGBRGB6C"}:
                 pre_fix_mode="_"+self.use_simotm
             file_stem = file_path.stem  # 提取文件名主体，比如 "image1"
             new_file_name = file_stem + pre_fix_mode +".npy"
@@ -177,6 +177,7 @@ class BaseDataset(Dataset):
     def load_and_preprocess_image(self, file_path, use_simotm=None, pairs_rgb=None, pairs_ir=None):
         if use_simotm is None:
             use_simotm = self.use_simotm
+        use_simotm = canonical_multimodal_mode(use_simotm)
 
         if use_simotm == 'Gray2BGR':
             im = imread(file_path)  # BGR
@@ -199,7 +200,7 @@ class BaseDataset(Dataset):
             im = imread(file_path, cv2.IMREAD_UNCHANGED)  # TIF 16bit
             im = im.astype(np.float32)
             im = SimOTMSSS(im)
-        elif use_simotm == 'RGBT':
+        elif use_simotm == 'RGBNIR':
             im_visible = imread(file_path)  # BGR
             im_nir = imread(file_path.replace(pairs_rgb, pairs_ir), cv2.IMREAD_GRAYSCALE)  # GRAY
 
@@ -331,7 +332,7 @@ class BaseDataset(Dataset):
                 continue
 
             ratio_m =1.0
-            if self.use_simotm in { 'RGBT', 'RGBRGB6C'}:
+            if self.use_simotm in {'RGBNIR', 'RGBRGB6C'}:
                 ratio_m=2.0
 
             b += im.nbytes * ratio_m
@@ -362,7 +363,7 @@ class BaseDataset(Dataset):
             ratio = self.imgsz / max(im.shape[0], im.shape[1])  # max(h, w)  # ratio
 
             ratio_m =1.0
-            if self.use_simotm in { 'RGBT', 'RGBRGB6C'}:
+            if self.use_simotm in {'RGBNIR', 'RGBRGB6C'}:
                 ratio_m=2.0
             b += im.nbytes * ratio**2 *ratio_m
 

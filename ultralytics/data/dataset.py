@@ -30,6 +30,7 @@ from .base import BaseDataset
 from .utils import (
     HELP_URL,
     LOGGER,
+    canonical_multimodal_mode,
     get_hash,
     img2label_paths,
     load_dataset_cache_file,
@@ -421,7 +422,7 @@ class ClassificationDataset:
         import torchvision  # scope for faster 'import ultralytics'
         # print(args)
         self.pairs_rgb_ir=args.pairs_rgb_ir
-        self.use_simotm = args.use_simotm
+        self.use_simotm = canonical_multimodal_mode(args.use_simotm)
         self.imgsz=args.imgsz
         # Base class assigned as attribute rather than used as base class to allow for scoping slow torchvision import
         if TORCHVISION_0_18:  # 'allow_empty' argument first introduced in torchvision 0.18
@@ -557,6 +558,7 @@ class ClassificationDataset:
     def load_and_preprocess_image(self, file_path, use_simotm=None, pairs_rgb=None, pairs_ir=None):
         if use_simotm is None:
             use_simotm = self.use_simotm
+        use_simotm = canonical_multimodal_mode(use_simotm)
 
         if use_simotm == 'Gray2BGR':
             im = imread(file_path)  # BGR
@@ -579,7 +581,7 @@ class ClassificationDataset:
             im = imread(file_path, cv2.IMREAD_UNCHANGED)  # TIF 16bit
             im = im.astype(np.float32)
             im = SimOTMSSS(im)
-        elif use_simotm == 'RGBT':
+        elif use_simotm == 'RGBNIR':
             im_visible = imread(file_path)  # BGR
             im_nir = imread(file_path.replace(pairs_rgb, pairs_ir), cv2.IMREAD_GRAYSCALE)  # GRAY
 

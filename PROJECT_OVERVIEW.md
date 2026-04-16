@@ -24,9 +24,10 @@
    - 多模态 loader 中 `use_simotm`
 2. `ultralytics/cfg/models/11/`
    - 单模态 RGB 与 Gray 版 YOLO11 配置
-3. 上游已经实现的 `RGBT` 读取逻辑
+3. 上游已经实现的双模态读取逻辑
    - 通过 `pairs_rgb_ir=['visible', 'nir']`
-   - 通过 `use_simotm='RGBT'` 将 RGB 和灰度 NIR 合并为 4 通道输入
+   - 通过 `use_simotm='RGBNIR'` 将 RGB 和灰度 NIR 合并为 4 通道输入
+   - 对旧的 `RGBT` 入口保留兼容别名，但 formal 主线不再以它作为规范名称
 4. 可复用的训练接口
    - `YOLO(...).train()`
    - `YOLO(...).val()`
@@ -77,7 +78,7 @@
 
 ### `tools/export_iddaw_fog_to_yolo.py`
 
-- 负责把 `visnir-det` 里的 paired JSON 导出成 YOLOv11-RGBT 可读目录
+- 负责把 `visnir-det` 里的 paired JSON 导出成当前 YOLOv11 RGB+NIR 主线可读目录
 - 当前是真正的数据桥接点
 - 导出时使用 `sample_id` 作为文件名前缀，避免不同序列同名帧互相覆盖
 

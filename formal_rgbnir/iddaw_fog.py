@@ -97,7 +97,7 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
     if mode == "nir":
         return {"use_simotm": "Gray", "channels": 1}
     if mode == "rgbnir":
-        return {"use_simotm": "RGBT", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
+        return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
     raise ValueError(f"Unsupported mode: {mode}")
 
 
