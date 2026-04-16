@@ -103,12 +103,12 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
 
 def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0") -> dict[str, object]:
     return {
-        "cache": False,
+        "cache": "ram",
         "imgsz": 640,
         "epochs": epochs,
-        "batch": 8,
+        "batch": 32,
         "close_mosaic": 5,
-        "workers": 2,
+        "workers": 8,
         "device": device,
         "optimizer": "SGD",
         "project": "runs/IDD_AW_FOG",
@@ -120,7 +120,7 @@ def common_val_kwargs(mode: str) -> dict[str, object]:
     return {
         "split": "val",
         "imgsz": 640,
-        "batch": 8,
+        "batch": 32,
         "project": "runs/IDD_AW_FOG_VAL",
         "name": experiment_name(mode),
     }
