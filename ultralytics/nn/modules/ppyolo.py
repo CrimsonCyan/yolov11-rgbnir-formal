@@ -4,7 +4,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torchvision.ops import deform_conv2d
-from timm.models.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
+try:
+    from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
+except ImportError:  # pragma: no cover - compatibility with older timm
+    from timm.models.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
 from functools import partial
 import torch.nn.functional as F
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad

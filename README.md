@@ -25,12 +25,20 @@
 python tools/export_iddaw_fog_to_yolo.py --clean
 ```
 
-跑三组第一阶段基线：
+跑第一阶段三组训练型基线：
 
 ```powershell
 python scripts/iddaw_fog/run_experiment.py --mode rgb --task train --epochs 1
 python scripts/iddaw_fog/run_experiment.py --mode nir --task train --epochs 1
 python scripts/iddaw_fog/run_experiment.py --mode rgbnir --task train --epochs 1
+```
+
+第二阶段入口：
+
+```powershell
+python scripts/iddaw_fog/run_experiment.py --mode input_fusion --task train --epochs 1
+python scripts/iddaw_fog/run_experiment.py --mode light_gate --task train --epochs 1
+python scripts/iddaw_fog/run_experiment.py --mode decision_fusion --task val
 ```
 
 ## 远端 nohup 训练

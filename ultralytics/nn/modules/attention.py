@@ -14,7 +14,10 @@ from torch import Tensor
 from typing import Tuple, Optional, List
 from .conv import Conv, autopad
 
-from timm.models.layers import trunc_normal_
+try:
+    from timm.layers import trunc_normal_
+except ImportError:  # pragma: no cover - compatibility with older timm
+    from timm.models.layers import trunc_normal_
 
 __all__ = ['EMA', 'SimAM', 'SpatialGroupEnhance', 'BiLevelRoutingAttention', 'BiLevelRoutingAttention_nchw', 'TripletAttention', 
            'CoordAtt', 'BAMBlock', 'EfficientAttention', 'LSKBlock', 'SEAttention', 'CPCA', 'MPCA', 'deformable_LKA',
@@ -1797,5 +1800,4 @@ class AFGCAttention(nn.Module):
         out = self.sigmoid(out)
 
         return input*out
-
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 CATEGORY_NAMES = ["person", "rider", "motorcycle", "car"]
 DEFAULT_PAIRS = ["visible", "nir"]
+TRAINABLE_MODES = {"rgb", "nir", "rgbnir", "input_fusion", "light_gate"}
 
 
 def repo_root() -> Path:
@@ -44,7 +45,7 @@ def build_dataset_yaml(mode: str) -> Path:
     elif mode == "nir":
         train = "nir/train"
         val = "nir/val"
-    elif mode == "rgbnir":
+    elif mode in {"rgbnir", "input_fusion", "light_gate", "decision_fusion"}:
         train = "visible/train"
         val = "visible/val"
     else:
@@ -74,6 +75,9 @@ def experiment_name(mode: str) -> str:
         "rgb": "iddaw-fog-yolo11n-rgb",
         "nir": "iddaw-fog-yolo11n-nir",
         "rgbnir": "iddaw-fog-yolo11n-rgbnir-plain",
+        "input_fusion": "iddaw-fog-yolo11n-input-fusion",
+        "light_gate": "iddaw-fog-yolo11n-rgbnir-light-gate",
+        "decision_fusion": "iddaw-fog-yolo11n-decision-fusion",
     }
     if mode not in names:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -87,7 +91,11 @@ def model_config_for(mode: str) -> str:
     if mode == "nir":
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11-gray.yaml").resolve())
     if mode == "rgbnir":
-        return str((root / "configs" / "models" / "yolo11_rgbnir_midfusion_plain.yaml").resolve())
+        return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_plain.yaml").resolve())
+    if mode == "input_fusion":
+        return str((root / "configs" / "models" / "yolo11n_rgbnir_input_fusion.yaml").resolve())
+    if mode == "light_gate":
+        return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_gate.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -96,7 +104,7 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
         return {"use_simotm": "BGR", "channels": 3}
     if mode == "nir":
         return {"use_simotm": "Gray", "channels": 1}
-    if mode == "rgbnir":
+    if mode in {"rgbnir", "input_fusion", "light_gate", "decision_fusion"}:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
     raise ValueError(f"Unsupported mode: {mode}")
 
@@ -106,6 +114,8 @@ def train_batch_for(mode: str) -> int:
         "rgb": 96,
         "nir": 96,
         "rgbnir": 48,
+        "input_fusion": 96,
+        "light_gate": 48,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -117,6 +127,8 @@ def workers_for(mode: str) -> int:
         "rgb": 12,
         "nir": 12,
         "rgbnir": 10,
+        "input_fusion": 12,
+        "light_gate": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -124,6 +136,8 @@ def workers_for(mode: str) -> int:
 
 
 def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0") -> dict[str, object]:
+    if mode not in TRAINABLE_MODES:
+        raise ValueError(f"Mode does not support training: {mode}")
     return {
         "cache": "ram",
         "imgsz": 640,
@@ -139,10 +153,11 @@ def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0") -> dict[
 
 
 def common_val_kwargs(mode: str) -> dict[str, object]:
+    batch = 16 if mode == "decision_fusion" else train_batch_for(mode)
     return {
         "split": "val",
         "imgsz": 640,
-        "batch": train_batch_for(mode),
+        "batch": batch,
         "project": "runs/IDD_AW_FOG_VAL",
         "name": experiment_name(mode),
     }
@@ -150,7 +165,7 @@ def common_val_kwargs(mode: str) -> dict[str, object]:
 
 def common_predict_kwargs(mode: str) -> dict[str, object]:
     dataset_root = resolve_dataset_root()
-    source_subdir = "visible/val" if mode in {"rgb", "rgbnir"} else "nir/val"
+    source_subdir = "visible/val" if mode in {"rgb", "rgbnir", "input_fusion", "light_gate", "decision_fusion"} else "nir/val"
     return {
         "source": str((dataset_root / source_subdir).resolve()),
         "imgsz": 640,
@@ -158,3 +173,24 @@ def common_predict_kwargs(mode: str) -> dict[str, object]:
         "name": experiment_name(mode),
         "save": True,
     }
+
+
+def experiment_project_dir() -> Path:
+    return repo_root() / "runs" / "IDD_AW_FOG"
+
+
+def latest_run_dir(mode: str) -> Path:
+    prefix = experiment_name(mode)
+    project_dir = experiment_project_dir()
+    candidates = [path for path in project_dir.glob(f"{prefix}*") if path.is_dir()]
+    if not candidates:
+        raise FileNotFoundError(f"No run directory found for mode '{mode}' under {project_dir}")
+    candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def latest_weights_for(mode: str, weight_name: str = "best.pt") -> Path:
+    weight_path = latest_run_dir(mode) / "weights" / weight_name
+    if not weight_path.exists():
+        raise FileNotFoundError(f"Weight file not found: {weight_path}")
+    return weight_path

@@ -2446,7 +2446,10 @@ class ADD(nn.Module):
 
 ######################################## C2f-Faster begin ########################################
 
-from timm.models.layers import DropPath
+try:
+    from timm.layers import DropPath
+except ImportError:  # pragma: no cover - compatibility with older timm
+    from timm.models.layers import DropPath
 
 
 class Partial_conv3(nn.Module):

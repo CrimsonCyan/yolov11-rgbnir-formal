@@ -21,7 +21,9 @@ __all__ = (
     "ChannelAttention",
     "SpatialAttention",
     "CBAM",
-    "Concat",'TransformerFusionBlock','NiNfusion',
+    "Concat",
+    "ConcatGate",
+    'TransformerFusionBlock','NiNfusion',
     "RepConv",
     "Index",
     'Silence', 'SilenceChannel', 'ChannelToNumber', 'NumberToChannel',
@@ -335,6 +337,22 @@ class Concat(nn.Module):
     def forward(self, x):
         """Forward pass for the YOLOv8 mask Proto module."""
         return torch.cat(x, self.d)
+
+
+class ConcatGate(nn.Module):
+    """Concatenate tensors then recalibrate them with a lightweight 1x1 gate."""
+
+    def __init__(self, channels, dimension=1):
+        super().__init__()
+        self.d = dimension
+        self.gate = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        fused = torch.cat(x, self.d)
+        return fused * self.gate(fused)
 
 
 class Index(nn.Module):

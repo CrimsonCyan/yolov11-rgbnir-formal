@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|nir|rgbnir> [epochs] [device]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|nir|rgbnir|input_fusion|light_gate> [epochs] [device]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 

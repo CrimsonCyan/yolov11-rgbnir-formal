@@ -49,6 +49,10 @@ def yolo_line(annotation: dict[str, object], width: int, height: int) -> str:
     return f"{category} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}"
 
 
+def unique_preserve_order(items: list[str]) -> list[str]:
+    return list(dict.fromkeys(items))
+
+
 def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, int]:
     annotation_path = source_root / "annotations" / f"{split}.json"
     payload = json.loads(annotation_path.read_text(encoding="utf-8"))
@@ -57,6 +61,7 @@ def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, 
 
     image_count = 0
     label_count = 0
+    duplicate_count = 0
 
     for sample in payload["samples"]:
         width = int(sample["width"])
@@ -79,14 +84,21 @@ def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, 
         shutil.copy2(nir_src, nir_dst)
 
         lines = [yolo_line(annotation, width, height) for annotation in sample["annotations"]]
-        label_text = "\n".join(lines)
+        unique_lines = unique_preserve_order(lines)
+        duplicate_count += len(lines) - len(unique_lines)
+        label_text = "\n".join(unique_lines)
         vis_label_dst.write_text(label_text, encoding="utf-8")
         nir_label_dst.write_text(label_text, encoding="utf-8")
 
         image_count += 2
         label_count += 2
 
-    return {"images": image_count, "labels": label_count, "samples": len(payload["samples"])}
+    return {
+        "images": image_count,
+        "labels": label_count,
+        "samples": len(payload["samples"]),
+        "duplicate_labels_removed": duplicate_count,
+    }
 
 
 def main() -> None:
