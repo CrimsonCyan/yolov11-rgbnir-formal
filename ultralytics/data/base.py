@@ -63,7 +63,7 @@ class BaseDataset(Dataset):
         classes=None,
         fraction=1.0,
         use_simotm="RGB",
-        pairs_rgb_ir=['visible', 'infrared']
+        pairs_rgb_ir=['visible', 'nir']
     ):
         """Initialize BaseDataset with given configuration and options."""
         super().__init__()
@@ -92,7 +92,7 @@ class BaseDataset(Dataset):
         if not (isinstance(self.pairs_rgb_ir, list) and
                 len(self.pairs_rgb_ir) == 2 and
                 all(isinstance(x, str) for x in self.pairs_rgb_ir)):
-            self.pairs_rgb_ir = ['visible', 'infrared']
+            self.pairs_rgb_ir = ['visible', 'nir']
 
         # Buffer thread for mosaic images
         self.buffer = []  # buffer size = batch size
@@ -201,22 +201,22 @@ class BaseDataset(Dataset):
             im = SimOTMSSS(im)
         elif use_simotm == 'RGBT':
             im_visible = imread(file_path)  # BGR
-            im_infrared = imread(file_path.replace(pairs_rgb, pairs_ir), cv2.IMREAD_GRAYSCALE)  # GRAY
+            im_nir = imread(file_path.replace(pairs_rgb, pairs_ir), cv2.IMREAD_GRAYSCALE)  # GRAY
 
-            if im_visible is None or im_infrared is None:
+            if im_visible is None or im_nir is None:
                 raise FileNotFoundError(f"Image Not Found {file_path}")
 
-            im_visible, im_infrared = self._resize_images(im_visible, im_infrared)
-            im = self._merge_channels(im_visible, im_infrared)
+            im_visible, im_nir = self._resize_images(im_visible, im_nir)
+            im = self._merge_channels(im_visible, im_nir)
         elif use_simotm == 'RGBRGB6C':
             im_visible = imread(file_path)  # BGR
-            im_infrared = imread(file_path.replace(pairs_rgb, pairs_ir))  # BGR
+            im_nir = imread(file_path.replace(pairs_rgb, pairs_ir))  # BGR
 
-            if im_visible is None or im_infrared is None:
+            if im_visible is None or im_nir is None:
                 raise FileNotFoundError(f"Image Not Found {file_path}")
 
-            im_visible, im_infrared = self._resize_images(im_visible, im_infrared)
-            im = self._merge_channels_rgb(im_visible, im_infrared)
+            im_visible, im_nir = self._resize_images(im_visible, im_nir)
+            im = self._merge_channels_rgb(im_visible, im_nir)
         else:
             im = imread(file_path, cv2.IMREAD_COLOR)  # BGR
 
@@ -225,9 +225,9 @@ class BaseDataset(Dataset):
 
         return im
 
-    def _resize_images(self, im_visible, im_infrared):
+    def _resize_images(self, im_visible, im_nir):
         h_vis, w_vis = im_visible.shape[:2]  # orig hw
-        h_inf, w_inf = im_infrared.shape[:2]  # orig hw
+        h_inf, w_inf = im_nir.shape[:2]  # orig hw
 
         if h_vis != h_inf or w_vis != w_inf:
             r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
@@ -240,19 +240,19 @@ class BaseDataset(Dataset):
                                         interpolation=interp)
             if r_inf != 1:  # if sizes are not equal
                 interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                im_infrared = cv2.resize(im_infrared, (
+                im_nir = cv2.resize(im_nir, (
                 min(math.ceil(w_inf * r_inf), self.imgsz), min(math.ceil(h_inf * r_inf), self.imgsz)),
                                          interpolation=interp)
-        return im_visible, im_infrared
+        return im_visible, im_nir
 
-    def _merge_channels(self, im_visible, im_infrared):
+    def _merge_channels(self, im_visible, im_nir):
         b, g, r = cv2.split(im_visible)
-        im = cv2.merge((b, g, r, im_infrared))
+        im = cv2.merge((b, g, r, im_nir))
         return im
 
-    def _merge_channels_rgb(self, im_visible, im_infrared):
+    def _merge_channels_rgb(self, im_visible, im_nir):
         b, g, r = cv2.split(im_visible)
-        b2, g2, r2 = cv2.split(im_infrared)
+        b2, g2, r2 = cv2.split(im_nir)
         im = cv2.merge((b, g, r, b2, g2, r2))
         return im
 

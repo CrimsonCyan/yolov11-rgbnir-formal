@@ -93,7 +93,7 @@ def seed_worker(worker_id):  # noqa
     random.seed(worker_seed)
 
 
-def build_yolo_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32, multi_modal=False, use_simotm="RGB",pairs_rgb_ir= ['visible', 'infrared']):
+def build_yolo_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32, multi_modal=False, use_simotm="RGB",pairs_rgb_ir= ['visible', 'nir']):
     """Build YOLO Dataset."""
     dataset = YOLOMultiModalDataset if multi_modal else YOLODataset
     return dataset(
@@ -186,7 +186,7 @@ def check_source(source):
 
 
 
-def load_inference_source(source=None, batch=1, vid_stride=1, buffer=False,use_simotm="SimOTMBBS",imgsz=640,pairs_rgb_ir= ['visible', 'infrared']):
+def load_inference_source(source=None, batch=1, vid_stride=1, buffer=False,use_simotm="SimOTMBBS",imgsz=640,pairs_rgb_ir= ['visible', 'nir']):
     """
     Loads an inference source for object detection and applies necessary transformations.
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 CATEGORY_NAMES = ["person", "rider", "motorcycle", "car"]
-DEFAULT_PAIRS = ["visible", "infrared"]
+DEFAULT_PAIRS = ["visible", "nir"]
 
 
 def repo_root() -> Path:
@@ -42,8 +42,8 @@ def build_dataset_yaml(mode: str) -> Path:
         train = "visible/train"
         val = "visible/val"
     elif mode == "nir":
-        train = "infrared/train"
-        val = "infrared/val"
+        train = "nir/train"
+        val = "nir/val"
     elif mode == "rgbnir":
         train = "visible/train"
         val = "visible/val"
@@ -128,7 +128,7 @@ def common_val_kwargs(mode: str) -> dict[str, object]:
 
 def common_predict_kwargs(mode: str) -> dict[str, object]:
     dataset_root = resolve_dataset_root()
-    source_subdir = "visible/val" if mode in {"rgb", "rgbnir"} else "infrared/val"
+    source_subdir = "visible/val" if mode in {"rgb", "rgbnir"} else "nir/val"
     return {
         "source": str((dataset_root / source_subdir).resolve()),
         "imgsz": 640,

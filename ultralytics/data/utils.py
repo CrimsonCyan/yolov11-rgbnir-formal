@@ -431,8 +431,8 @@ def check_cls_dataset(dataset, split=""):
         s = f"Dataset download success ✅ ({time.time() - t:.1f}s), saved to {colorstr('bold', data_dir)}\n"
         LOGGER.info(s)
 
-    # Check if the dataset has 'visible' and 'infrared' subdirectories
-    if (data_dir / "visible").is_dir() and (data_dir / "infrared").is_dir():
+    # Check if the dataset has 'visible' and 'nir' subdirectories
+    if (data_dir / "visible").is_dir() and (data_dir / "nir").is_dir():
         train_set = data_dir / "visible" / "train"
         val_set = (
             data_dir / "visible" / "val"

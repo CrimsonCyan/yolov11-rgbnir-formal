@@ -25,7 +25,7 @@
 2. `ultralytics/cfg/models/11/`
    - 单模态 RGB 与 Gray 版 YOLO11 配置
 3. 上游已经实现的 `RGBT` 读取逻辑
-   - 通过 `pairs_rgb_ir=['visible', 'infrared']`
+   - 通过 `pairs_rgb_ir=['visible', 'nir']`
    - 通过 `use_simotm='RGBT'` 将 RGB 和灰度 NIR 合并为 4 通道输入
 4. 可复用的训练接口
    - `YOLO(...).train()`
