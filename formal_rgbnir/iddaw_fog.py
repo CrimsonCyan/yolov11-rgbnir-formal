@@ -101,14 +101,36 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
     raise ValueError(f"Unsupported mode: {mode}")
 
 
+def train_batch_for(mode: str) -> int:
+    batches = {
+        "rgb": 96,
+        "nir": 96,
+        "rgbnir": 48,
+    }
+    if mode not in batches:
+        raise ValueError(f"Unsupported mode: {mode}")
+    return batches[mode]
+
+
+def workers_for(mode: str) -> int:
+    workers = {
+        "rgb": 12,
+        "nir": 12,
+        "rgbnir": 10,
+    }
+    if mode not in workers:
+        raise ValueError(f"Unsupported mode: {mode}")
+    return workers[mode]
+
+
 def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0") -> dict[str, object]:
     return {
         "cache": "ram",
         "imgsz": 640,
         "epochs": epochs,
-        "batch": 32,
+        "batch": train_batch_for(mode),
         "close_mosaic": 5,
-        "workers": 8,
+        "workers": workers_for(mode),
         "device": device,
         "optimizer": "SGD",
         "project": "runs/IDD_AW_FOG",
@@ -120,7 +142,7 @@ def common_val_kwargs(mode: str) -> dict[str, object]:
     return {
         "split": "val",
         "imgsz": 640,
-        "batch": 32,
+        "batch": train_batch_for(mode),
         "project": "runs/IDD_AW_FOG_VAL",
         "name": experiment_name(mode),
     }
