@@ -11,7 +11,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--yolo-root", required=True)
     parser.add_argument("--paired-root", default="", help="Optional paired-json dataset root for exact label cross-check.")
-    parser.add_argument("--num-classes", type=int, default=4)
+    parser.add_argument("--num-classes", type=int, default=7)
     parser.add_argument("--write-report", action="store_true")
     return parser.parse_args()
 

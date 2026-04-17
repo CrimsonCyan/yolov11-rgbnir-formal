@@ -5,7 +5,7 @@ import json
 import shutil
 from pathlib import Path
 
-CATEGORY_NAMES = ["person", "rider", "motorcycle", "car"]
+CATEGORY_NAMES = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 
 
 def parse_args() -> argparse.Namespace:

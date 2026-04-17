@@ -22,6 +22,7 @@
   - 当前 `IDD-AW FOG` 子集实验入口
 - `tools/export_iddaw_fog_to_yolo.py`
   - 把 `visnir-det` 的 paired JSON 导出为当前工程可读数据
+  - 当前默认导出 `person / rider / motorcycle / car / truck / bus / autorickshaw` 共 `7` 类
 
 ## 当前第一阶段入口
 

@@ -7,7 +7,7 @@ DEVICE="${3:-0}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/home/lym/anaconda3/envs/visnir-exp/bin/python}"
-DEFAULT_DATA_ROOT="/home/lym/lvyanhu/code/datasets/iddaw_fog_yolov11_rgbnir"
+DEFAULT_DATA_ROOT="/home/lym/lvyanhu/code/datasets/iddaw_fog_full_yolov11_rgbnir"
 export IDDAW_FOG_YOLO_ROOT="${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}"
 export PYTHONUNBUFFERED=1
 

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 
-CATEGORY_NAMES = ["person", "rider", "motorcycle", "car"]
+CATEGORY_NAMES = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 DEFAULT_PAIRS = ["visible", "nir"]
 TRAINABLE_MODES = {"rgb", "nir", "rgbnir", "input_fusion", "light_gate"}
 
@@ -62,8 +62,8 @@ def build_dataset_yaml(mode: str) -> Path:
                 f"path: {dataset_root.as_posix()}",
                 f"train: {train}",
                 f"val: {val}",
-                "nc: 4",
-                'names: ["person", "rider", "motorcycle", "car"]',
+                "nc: 7",
+                'names: ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]',
                 "",
             ]
         ),
