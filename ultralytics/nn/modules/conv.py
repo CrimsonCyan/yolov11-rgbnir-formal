@@ -23,6 +23,7 @@ __all__ = (
     "CBAM",
     "Concat",
     "ConcatGate",
+    "BiFPN",
     'TransformerFusionBlock','NiNfusion',
     "RepConv",
     "Index",
@@ -353,6 +354,73 @@ class ConcatGate(nn.Module):
     def forward(self, x):
         fused = torch.cat(x, self.d)
         return fused * self.gate(fused)
+
+
+class WeightedFeatureFusion(nn.Module):
+    """Learnable normalized weighted sum used by BiFPN."""
+
+    def __init__(self, num_inputs, eps=1e-4):
+        super().__init__()
+        self.eps = eps
+        self.weights = nn.Parameter(torch.ones(num_inputs, dtype=torch.float32))
+
+    def forward(self, features):
+        if len(features) != self.weights.numel():
+            raise ValueError(f"Expected {self.weights.numel()} features, got {len(features)}")
+        weights = F.relu(self.weights)
+        weights = weights / (weights.sum() + self.eps)
+        fused = 0
+        for weight, feature in zip(weights, features):
+            fused = fused + weight * feature
+        return fused
+
+
+class BiFPNBlock(nn.Module):
+    """Minimal 3-scale BiFPN block for P3/P4/P5 features."""
+
+    def __init__(self, channels):
+        super().__init__()
+        self.p4_td_fuse = WeightedFeatureFusion(2)
+        self.p3_td_fuse = WeightedFeatureFusion(2)
+        self.p4_out_fuse = WeightedFeatureFusion(3)
+        self.p5_out_fuse = WeightedFeatureFusion(3)
+
+        self.p4_td_conv = Conv(channels, channels, 3, 1)
+        self.p3_out_conv = Conv(channels, channels, 3, 1)
+        self.p4_out_conv = Conv(channels, channels, 3, 1)
+        self.p5_out_conv = Conv(channels, channels, 3, 1)
+
+    def forward(self, features):
+        if len(features) != 3:
+            raise ValueError(f"BiFPNBlock expects 3 feature maps, got {len(features)}")
+        p3, p4, p5 = features
+
+        p5_td = p5
+        p4_td = self.p4_td_conv(self.p4_td_fuse([p4, F.interpolate(p5_td, size=p4.shape[-2:], mode="nearest")]))
+        p3_out = self.p3_out_conv(self.p3_td_fuse([p3, F.interpolate(p4_td, size=p3.shape[-2:], mode="nearest")]))
+
+        p4_out = self.p4_out_conv(self.p4_out_fuse([p4, p4_td, F.max_pool2d(p3_out, kernel_size=2, stride=2)]))
+        p5_out = self.p5_out_conv(self.p5_out_fuse([p5, p5_td, F.max_pool2d(p4_out, kernel_size=2, stride=2)]))
+        return [p3_out, p4_out, p5_out]
+
+
+class BiFPN(nn.Module):
+    """Minimal BiFPN wrapper with input projection and repeated 3-scale fusion."""
+
+    def __init__(self, in_channels, out_channels, repeats=2):
+        super().__init__()
+        if len(in_channels) != 3:
+            raise ValueError(f"BiFPN expects 3 input channels, got {len(in_channels)}")
+        self.input_proj = nn.ModuleList([Conv(c, out_channels, 1, 1) for c in in_channels])
+        self.blocks = nn.ModuleList([BiFPNBlock(out_channels) for _ in range(repeats)])
+
+    def forward(self, x):
+        if len(x) != 3:
+            raise ValueError(f"BiFPN expects 3 feature maps, got {len(x)}")
+        features = [proj(feature) for proj, feature in zip(self.input_proj, x)]
+        for block in self.blocks:
+            features = block(features)
+        return features
 
 
 class Index(nn.Module):

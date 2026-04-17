@@ -47,6 +47,7 @@ from ultralytics.nn.modules import (
     Classify,
     Concat,
     ConcatGate,
+    BiFPN,
     Conv,
     Conv2,
     ConvTranspose,
@@ -1109,6 +1110,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m is ConcatGate:
             c2 = sum(ch[x] for x in f)
             args = [c2, *args]
+        elif m is BiFPN:
+            c2 = args[0]
+            args = [[ch[x] for x in f], *args]
         elif m is ADD:
             c2 = max(ch[x] for x in f)
         elif m is CrossAttentionShared:

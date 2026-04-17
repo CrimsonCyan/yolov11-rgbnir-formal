@@ -65,6 +65,7 @@ from .block import (
     TorchVision,
 )
 from .conv import (
+    BiFPN,
     CBAM,
     ChannelAttention,
     Concat,
@@ -115,6 +116,7 @@ __all__ = (
     "CBAM",
     "Concat",
     "ConcatGate",
+    "BiFPN",
     "TransformerLayer",
     "TransformerBlock",
     "MLPBlock",

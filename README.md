@@ -6,9 +6,9 @@
 
 当前默认数据根解析顺序为：
 
-1. 优先读取环境变量 `IDDAW_FOG_YOLO_ROOT`
-2. 若未设置，则优先使用全量 `FOG` 根目录 `E:\毕设\code\datasets\iddaw_fog_full_yolov11_rgbnir`
-3. 若全量根不存在，再回退到旧的中等子集 `iddaw_fog_yolov11_rgbnir`
+1. 优先读取环境变量 `IDDAW_YOLO_ROOT`
+2. 若未设置，则优先使用全量 all-weather 根目录 `E:\毕设\code\datasets\iddaw_all_weather_full_yolov11_rgbnir`
+3. 若全量根不存在，再回退到旧的 `iddaw_fog_full_yolov11_rgbnir` 与 `iddaw_fog_yolov11_rgbnir`
 
 ## 目录职责
 
@@ -18,7 +18,7 @@
   - 当前项目自己的公共逻辑
 - `configs/models/`
   - 当前项目自己的模型配置
-- `scripts/iddaw_fog/`
+- `scripts/iddaw/`
   - 当前 `IDD-AW FOG` 子集实验入口
 - `tools/export_iddaw_fog_to_yolo.py`
   - 把 `visnir-det` 的 paired JSON 导出为当前工程可读数据
@@ -35,17 +35,17 @@ python tools/export_iddaw_fog_to_yolo.py --clean
 跑第一阶段三组训练型基线：
 
 ```powershell
-python scripts/iddaw_fog/run_experiment.py --mode rgb --task train --epochs 1
-python scripts/iddaw_fog/run_experiment.py --mode nir --task train --epochs 1
-python scripts/iddaw_fog/run_experiment.py --mode rgbnir --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode rgb --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode nir --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode rgbnir --task train --epochs 1
 ```
 
 第二阶段入口：
 
 ```powershell
-python scripts/iddaw_fog/run_experiment.py --mode input_fusion --task train --epochs 1
-python scripts/iddaw_fog/run_experiment.py --mode light_gate --task train --epochs 1
-python scripts/iddaw_fog/run_experiment.py --mode decision_fusion --task val
+python scripts/iddaw/run_experiment.py --mode input_fusion --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode light_gate --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode decision_fusion --task val
 ```
 
 ## 远端 nohup 训练
@@ -55,25 +55,25 @@ python scripts/iddaw_fog/run_experiment.py --mode decision_fusion --task val
 启动：
 
 ```bash
-bash scripts/iddaw_fog/launch_nohup_train.sh rgbnir 1 0
+bash scripts/iddaw/launch_nohup_train.sh rgbnir 1 0
 ```
 
 查看最新日志：
 
 ```bash
-bash scripts/iddaw_fog/tail_latest_log.sh rgbnir
+bash scripts/iddaw/tail_latest_log.sh rgbnir
 ```
 
 查看最近一次任务元信息：
 
 ```bash
-bash scripts/iddaw_fog/show_latest_run.sh rgbnir
+bash scripts/iddaw/show_latest_run.sh rgbnir
 ```
 
 停止最近一次任务：
 
 ```bash
-bash scripts/iddaw_fog/stop_latest_train.sh rgbnir
+bash scripts/iddaw/stop_latest_train.sh rgbnir
 ```
 
 ## 当前原则

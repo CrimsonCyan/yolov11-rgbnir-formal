@@ -9,7 +9,7 @@
 - formal 自定义层：只放当前论文主线真正需要的内容
   - `formal_rgbnir/`
   - `configs/models/`
-  - `scripts/iddaw_fog/`
+  - `scripts/iddaw/`
   - `tools/export_iddaw_fog_to_yolo.py`
 
 这样处理的目的不是重写上游，而是把“能复用的公共能力”和“论文相关改造”明确分层，避免后续继续把自定义代码散落到上游根目录。
@@ -64,7 +64,7 @@
   - 放在项目配置目录，而不是塞回 `ultralytics/cfg`
   - 便于后续继续演进到 `light gate / BiFPN / 注意力`
 
-### `scripts/iddaw_fog/`
+### `scripts/iddaw/`
 
 这里放真正面向实验执行的入口。
 
@@ -93,16 +93,16 @@ python tools/export_iddaw_fog_to_yolo.py --clean
 2. 再跑三组第一阶段基线
 
 ```powershell
-python scripts/iddaw_fog/run_experiment.py --mode rgb --task train --epochs 1
-python scripts/iddaw_fog/run_experiment.py --mode nir --task train --epochs 1
-python scripts/iddaw_fog/run_experiment.py --mode rgbnir --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode rgb --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode nir --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode rgbnir --task train --epochs 1
 ```
 
 3. 训练完成后，用同一入口做验证或预测
 
 ```powershell
-python scripts/iddaw_fog/run_experiment.py --mode rgbnir --task val --weights <best.pt>
-python scripts/iddaw_fog/run_experiment.py --mode rgbnir --task predict --weights <best.pt>
+python scripts/iddaw/run_experiment.py --mode rgbnir --task val --weights <best.pt>
+python scripts/iddaw/run_experiment.py --mode rgbnir --task predict --weights <best.pt>
 ```
 
 ## 后续扩展位置
