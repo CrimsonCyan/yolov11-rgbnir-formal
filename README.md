@@ -4,6 +4,12 @@
 
 它不是把上游 `YOLOv11-RGBT` 整仓继续堆改下去，而是只抽取当前真正需要的部分，形成一个更干净的开发目录。当前活动主线的规范语义已经收口为 `RGBNIR`，也就是 `RGB backbone + NIR backbone / branch`。后续所有正式代码改动，默认都应写在这个目录下，而不是再回到 `yolov11-rgbt-formal`。
 
+当前默认数据根解析顺序为：
+
+1. 优先读取环境变量 `IDDAW_FOG_YOLO_ROOT`
+2. 若未设置，则优先使用全量 `FOG` 根目录 `E:\毕设\code\datasets\iddaw_fog_full_yolov11_rgbnir`
+3. 若全量根不存在，再回退到旧的中等子集 `iddaw_fog_yolov11_rgbnir`
+
 ## 目录职责
 
 - `ultralytics/`

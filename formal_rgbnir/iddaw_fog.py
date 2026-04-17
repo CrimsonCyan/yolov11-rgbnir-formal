@@ -22,7 +22,9 @@ def resolve_dataset_root() -> Path:
         return root
 
     candidates = [
+        repo_root().parent / "datasets" / "iddaw_fog_full_yolov11_rgbnir",
         repo_root().parent / "datasets" / "iddaw_fog_yolov11_rgbnir",
+        repo_root() / "datasets" / "iddaw_fog_full_yolov11_rgbnir",
         repo_root() / "datasets" / "iddaw_fog_yolov11_rgbnir",
     ]
     for candidate in candidates:
