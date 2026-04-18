@@ -25,6 +25,7 @@ __all__ = (
     "ConcatGate",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
+    "ResidualQualityAwareFusionV2",
     "BiFPN",
     'TransformerFusionBlock','NiNfusion',
     "RepConv",
@@ -460,6 +461,90 @@ class ResidualQualityAwareFusion(nn.Module):
         nir_gain = nir_weight * nir_spatial
         rgb_out = rgb_feat * (1 + rgb_gain)
         nir_out = nir_feat * (1 + nir_gain)
+        return torch.cat((rgb_out, nir_out), dim=self.d)
+
+
+class ResidualQualityAwareFusionV2(nn.Module):
+    """Residual quality-aware fusion with explicit cross-modal residual injection."""
+
+    def __init__(self, channels, dimension=1, reduction=4):
+        super().__init__()
+        if channels % 2 != 0:
+            raise ValueError(f"ResidualQualityAwareFusionV2 expects an even channel count, got {channels}")
+        self.d = dimension
+        self.single_channels = channels // 2
+        hidden = max(self.single_channels // reduction, 1)
+        pooled_quality_channels = self.single_channels * 6
+
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.channel_mlp = nn.Sequential(
+            nn.Conv2d(pooled_quality_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, channels * 2, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Tanh(),
+        )
+        self.spatial_gate = nn.Sequential(
+            nn.Conv2d(6, 16, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(16, 4, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Tanh(),
+        )
+        self.self_scale = nn.Parameter(torch.tensor(0.25, dtype=torch.float32))
+        self.cross_scale = nn.Parameter(torch.tensor(0.15, dtype=torch.float32))
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ResidualQualityAwareFusionV2 expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape != nir_feat.shape:
+            raise ValueError(
+                "ResidualQualityAwareFusionV2 requires matching feature shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        abs_diff = torch.abs(rgb_feat - nir_feat)
+        pooled_quality = torch.cat(
+            (
+                self.avg_pool(rgb_feat),
+                self.max_pool(rgb_feat),
+                self.avg_pool(nir_feat),
+                self.max_pool(nir_feat),
+                self.avg_pool(abs_diff),
+                self.max_pool(abs_diff),
+            ),
+            dim=1,
+        )
+        channel_gates = self.channel_mlp(pooled_quality)
+        rgb_self_c, nir_self_c, rgb_cross_c, nir_cross_c = torch.split(
+            channel_gates, self.single_channels, dim=1
+        )
+
+        spatial_quality = torch.cat(
+            (
+                rgb_feat.mean(dim=1, keepdim=True),
+                nir_feat.mean(dim=1, keepdim=True),
+                abs_diff.mean(dim=1, keepdim=True),
+                rgb_feat.amax(dim=1, keepdim=True),
+                nir_feat.amax(dim=1, keepdim=True),
+                abs_diff.amax(dim=1, keepdim=True),
+            ),
+            dim=1,
+        )
+        spatial_gates = self.spatial_gate(spatial_quality)
+        rgb_self_s, nir_self_s, rgb_cross_s, nir_cross_s = torch.chunk(spatial_gates, 4, dim=1)
+
+        self_scale = torch.tanh(self.self_scale)
+        cross_scale = torch.tanh(self.cross_scale)
+
+        rgb_self_gain = rgb_self_c * rgb_self_s
+        nir_self_gain = nir_self_c * nir_self_s
+        rgb_cross_gain = rgb_cross_c * rgb_cross_s
+        nir_cross_gain = nir_cross_c * nir_cross_s
+
+        rgb_out = rgb_feat * (1 + self_scale * rgb_self_gain) + cross_scale * rgb_cross_gain * nir_feat
+        nir_out = nir_feat * (1 + self_scale * nir_self_gain) + cross_scale * nir_cross_gain * rgb_feat
         return torch.cat((rgb_out, nir_out), dim=self.d)
 
 

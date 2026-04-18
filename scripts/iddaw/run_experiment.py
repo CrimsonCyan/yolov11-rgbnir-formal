@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
             "attention_only",
             "full_proposed",
             "full_proposed_residual",
+            "full_proposed_residual_v2",
             "decision_fusion",
         ],
         required=True,

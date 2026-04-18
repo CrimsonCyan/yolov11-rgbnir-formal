@@ -16,6 +16,7 @@ TRAINABLE_MODES = {
     "attention_only",
     "full_proposed",
     "full_proposed_residual",
+    "full_proposed_residual_v2",
 }
 
 
@@ -67,6 +68,7 @@ def build_dataset_yaml(mode: str) -> Path:
         "attention_only",
         "full_proposed",
         "full_proposed_residual",
+        "full_proposed_residual_v2",
         "decision_fusion",
     }:
         train = "visible/train"
@@ -104,6 +106,7 @@ def experiment_name(mode: str) -> str:
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
         "full_proposed_residual": "iddaw-yolo11n-rgbnir-full-proposed-residual",
+        "full_proposed_residual_v2": "iddaw-yolo11n-rgbnir-full-proposed-residual-v2",
         "decision_fusion": "iddaw-yolo11n-decision-fusion",
     }
     if mode not in names:
@@ -131,6 +134,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed.yaml").resolve())
     if mode == "full_proposed_residual":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed_residual.yaml").resolve())
+    if mode == "full_proposed_residual_v2":
+        return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed_residual_v2.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -147,6 +152,7 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
         "attention_only",
         "full_proposed",
         "full_proposed_residual",
+        "full_proposed_residual_v2",
         "decision_fusion",
     }:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
@@ -164,6 +170,7 @@ def train_batch_for(mode: str) -> int:
         "attention_only": 48,
         "full_proposed": 48,
         "full_proposed_residual": 48,
+        "full_proposed_residual_v2": 48,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -181,6 +188,7 @@ def workers_for(mode: str) -> int:
         "attention_only": 10,
         "full_proposed": 10,
         "full_proposed_residual": 10,
+        "full_proposed_residual_v2": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -229,6 +237,7 @@ def common_predict_kwargs(mode: str) -> dict[str, object]:
             "attention_only",
             "full_proposed",
             "full_proposed_residual",
+            "full_proposed_residual_v2",
             "decision_fusion",
         }
         else "nir/val"

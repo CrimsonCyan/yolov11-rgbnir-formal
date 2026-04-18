@@ -49,6 +49,7 @@ from ultralytics.nn.modules import (
     ConcatGate,
     QualityAwareFusion,
     ResidualQualityAwareFusion,
+    ResidualQualityAwareFusionV2,
     BiFPN,
     Conv,
     Conv2,
@@ -1109,7 +1110,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in {ConcatGate, QualityAwareFusion, ResidualQualityAwareFusion}:
+        elif m in {ConcatGate, QualityAwareFusion, ResidualQualityAwareFusion, ResidualQualityAwareFusionV2}:
             c2 = sum(ch[x] for x in f)
             args = [c2, *args]
         elif m is BiFPN:
