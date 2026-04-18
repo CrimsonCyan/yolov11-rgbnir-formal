@@ -30,7 +30,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["rgb", "nir", "rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "full_proposed", "decision_fusion"],
+        choices=[
+            "rgb",
+            "nir",
+            "rgbnir",
+            "input_fusion",
+            "light_gate",
+            "bifpn_only",
+            "attention_only",
+            "full_proposed",
+            "full_proposed_residual",
+            "decision_fusion",
+        ],
         required=True,
     )
     parser.add_argument("--task", choices=["train", "val", "predict"], required=True)

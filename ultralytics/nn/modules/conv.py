@@ -24,6 +24,7 @@ __all__ = (
     "Concat",
     "ConcatGate",
     "QualityAwareFusion",
+    "ResidualQualityAwareFusion",
     "BiFPN",
     'TransformerFusionBlock','NiNfusion',
     "RepConv",
@@ -406,6 +407,60 @@ class QualityAwareFusion(nn.Module):
         rgb_refined = rgb_feat * rgb_weight * rgb_spatial
         nir_refined = nir_feat * nir_weight * nir_spatial
         return torch.cat((rgb_refined, nir_refined), dim=self.d)
+
+
+class ResidualQualityAwareFusion(nn.Module):
+    """Residual quality-aware RGB/NIR fusion that preserves the original modality features."""
+
+    def __init__(self, channels, dimension=1, reduction=4):
+        super().__init__()
+        if channels % 2 != 0:
+            raise ValueError(f"ResidualQualityAwareFusion expects an even channel count, got {channels}")
+        self.d = dimension
+        self.single_channels = channels // 2
+        hidden = max(self.single_channels // reduction, 1)
+        quality_channels = self.single_channels * 3
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.channel_mlp = nn.Sequential(
+            nn.Conv2d(quality_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden, channels, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.spatial_gate = nn.Sequential(
+            nn.Conv2d(quality_channels, 2, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ResidualQualityAwareFusion expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape != nir_feat.shape:
+            raise ValueError(
+                "ResidualQualityAwareFusion requires matching feature shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        abs_diff = torch.abs(rgb_feat - nir_feat)
+        pooled_quality = torch.cat(
+            (self.pool(rgb_feat), self.pool(nir_feat), self.pool(abs_diff)),
+            dim=1,
+        )
+        channel_weights = self.channel_mlp(pooled_quality)
+        rgb_weight, nir_weight = torch.split(channel_weights, self.single_channels, dim=1)
+
+        spatial_quality = torch.cat((rgb_feat, nir_feat, abs_diff), dim=1)
+        spatial_weights = self.spatial_gate(spatial_quality)
+        rgb_spatial = spatial_weights[:, :1]
+        nir_spatial = spatial_weights[:, 1:]
+
+        rgb_gain = rgb_weight * rgb_spatial
+        nir_gain = nir_weight * nir_spatial
+        rgb_out = rgb_feat * (1 + rgb_gain)
+        nir_out = nir_feat * (1 + nir_gain)
+        return torch.cat((rgb_out, nir_out), dim=self.d)
 
 
 class WeightedFeatureFusion(nn.Module):

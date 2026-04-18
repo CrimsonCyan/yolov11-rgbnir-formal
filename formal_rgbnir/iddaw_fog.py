@@ -6,7 +6,17 @@ from pathlib import Path
 
 CATEGORY_NAMES = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 DEFAULT_PAIRS = ["visible", "nir"]
-TRAINABLE_MODES = {"rgb", "nir", "rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "full_proposed"}
+TRAINABLE_MODES = {
+    "rgb",
+    "nir",
+    "rgbnir",
+    "input_fusion",
+    "light_gate",
+    "bifpn_only",
+    "attention_only",
+    "full_proposed",
+    "full_proposed_residual",
+}
 
 
 def repo_root() -> Path:
@@ -49,7 +59,16 @@ def build_dataset_yaml(mode: str) -> Path:
     elif mode == "nir":
         train = "nir/train"
         val = "nir/val"
-    elif mode in {"rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "full_proposed", "decision_fusion"}:
+    elif mode in {
+        "rgbnir",
+        "input_fusion",
+        "light_gate",
+        "bifpn_only",
+        "attention_only",
+        "full_proposed",
+        "full_proposed_residual",
+        "decision_fusion",
+    }:
         train = "visible/train"
         val = "visible/val"
     else:
@@ -84,6 +103,7 @@ def experiment_name(mode: str) -> str:
         "bifpn_only": "iddaw-yolo11n-rgbnir-bifpn-only",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
+        "full_proposed_residual": "iddaw-yolo11n-rgbnir-full-proposed-residual",
         "decision_fusion": "iddaw-yolo11n-decision-fusion",
     }
     if mode not in names:
@@ -109,6 +129,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / "yolo11n_rgbnir_attention_only.yaml").resolve())
     if mode == "full_proposed":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed.yaml").resolve())
+    if mode == "full_proposed_residual":
+        return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed_residual.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -117,7 +139,16 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
         return {"use_simotm": "BGR", "channels": 3}
     if mode == "nir":
         return {"use_simotm": "Gray", "channels": 1}
-    if mode in {"rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "full_proposed", "decision_fusion"}:
+    if mode in {
+        "rgbnir",
+        "input_fusion",
+        "light_gate",
+        "bifpn_only",
+        "attention_only",
+        "full_proposed",
+        "full_proposed_residual",
+        "decision_fusion",
+    }:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
     raise ValueError(f"Unsupported mode: {mode}")
 
@@ -132,6 +163,7 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only": 48,
         "attention_only": 48,
         "full_proposed": 48,
+        "full_proposed_residual": 48,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -148,6 +180,7 @@ def workers_for(mode: str) -> int:
         "bifpn_only": 10,
         "attention_only": 10,
         "full_proposed": 10,
+        "full_proposed_residual": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -186,7 +219,18 @@ def common_predict_kwargs(mode: str) -> dict[str, object]:
     dataset_root = resolve_dataset_root()
     source_subdir = (
         "visible/val"
-        if mode in {"rgb", "rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "full_proposed", "decision_fusion"}
+        if mode
+        in {
+            "rgb",
+            "rgbnir",
+            "input_fusion",
+            "light_gate",
+            "bifpn_only",
+            "attention_only",
+            "full_proposed",
+            "full_proposed_residual",
+            "decision_fusion",
+        }
         else "nir/val"
     )
     return {
