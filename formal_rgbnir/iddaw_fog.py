@@ -6,7 +6,7 @@ from pathlib import Path
 
 CATEGORY_NAMES = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 DEFAULT_PAIRS = ["visible", "nir"]
-TRAINABLE_MODES = {"rgb", "nir", "rgbnir", "input_fusion", "light_gate", "bifpn_only"}
+TRAINABLE_MODES = {"rgb", "nir", "rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only"}
 
 
 def repo_root() -> Path:
@@ -49,7 +49,7 @@ def build_dataset_yaml(mode: str) -> Path:
     elif mode == "nir":
         train = "nir/train"
         val = "nir/val"
-    elif mode in {"rgbnir", "input_fusion", "light_gate", "bifpn_only", "decision_fusion"}:
+    elif mode in {"rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "decision_fusion"}:
         train = "visible/train"
         val = "visible/val"
     else:
@@ -82,6 +82,7 @@ def experiment_name(mode: str) -> str:
         "input_fusion": "iddaw-yolo11n-input-fusion",
         "light_gate": "iddaw-yolo11n-rgbnir-light-gate",
         "bifpn_only": "iddaw-yolo11n-rgbnir-bifpn-only",
+        "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "decision_fusion": "iddaw-yolo11n-decision-fusion",
     }
     if mode not in names:
@@ -103,6 +104,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_gate.yaml").resolve())
     if mode == "bifpn_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_bifpn_only.yaml").resolve())
+    if mode == "attention_only":
+        return str((root / "configs" / "models" / "yolo11n_rgbnir_attention_only.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -111,7 +114,7 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
         return {"use_simotm": "BGR", "channels": 3}
     if mode == "nir":
         return {"use_simotm": "Gray", "channels": 1}
-    if mode in {"rgbnir", "input_fusion", "light_gate", "bifpn_only", "decision_fusion"}:
+    if mode in {"rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "decision_fusion"}:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
     raise ValueError(f"Unsupported mode: {mode}")
 
@@ -124,6 +127,7 @@ def train_batch_for(mode: str) -> int:
         "input_fusion": 96,
         "light_gate": 48,
         "bifpn_only": 48,
+        "attention_only": 48,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -138,6 +142,7 @@ def workers_for(mode: str) -> int:
         "input_fusion": 12,
         "light_gate": 10,
         "bifpn_only": 10,
+        "attention_only": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -174,7 +179,11 @@ def common_val_kwargs(mode: str) -> dict[str, object]:
 
 def common_predict_kwargs(mode: str) -> dict[str, object]:
     dataset_root = resolve_dataset_root()
-    source_subdir = "visible/val" if mode in {"rgb", "rgbnir", "input_fusion", "light_gate", "bifpn_only", "decision_fusion"} else "nir/val"
+    source_subdir = (
+        "visible/val"
+        if mode in {"rgb", "rgbnir", "input_fusion", "light_gate", "bifpn_only", "attention_only", "decision_fusion"}
+        else "nir/val"
+    )
     return {
         "source": str((dataset_root / source_subdir).resolve()),
         "imgsz": 640,
