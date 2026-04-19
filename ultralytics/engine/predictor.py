@@ -114,7 +114,10 @@ class BasePredictor:
         self.txt_path = None
         self._lock = threading.Lock()  # for automatic thread-safe inference
         callbacks.add_integration_callbacks(self)
-        self.channels = self.args.channels
+        try:
+            self.channels = max(int(self.args.channels), 1)
+        except (TypeError, ValueError):
+            self.channels = 1
 
     # def preprocess(self, im):
     #     """

@@ -10,7 +10,7 @@ import torch
 from ultralytics import YOLO
 
 from .box_ops import xywh_to_xyxy
-from .iddaw_fog import CATEGORY_NAMES, DEFAULT_PAIRS, latest_weights_for, resolve_dataset_root
+from .iddaw_fog import CATEGORY_NAMES, DEFAULT_PAIRS, latest_weights_for, mode_specific_kwargs, resolve_dataset_root
 from .metrics import build_eval_targets, evaluate_predictions
 from .nms import batched_nms
 
@@ -93,23 +93,35 @@ def _predict_branch(
     batch: int = 16,
 ):
     model = YOLO(str(weights))
+    channels = max(int(channels), 1)
+    model.overrides["channels"] = channels
+    model.overrides["use_simotm"] = use_simotm
+    model.overrides["pairs_rgb_ir"] = DEFAULT_PAIRS
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as handle:
         handle.write("\n".join(str(path) for path in sources))
         manifest_path = Path(handle.name)
     try:
-        results = model.predict(
-            source=str(manifest_path),
-            imgsz=imgsz,
-            conf=0.001,
-            iou=0.7,
-            batch=batch,
-            device=device,
-            save=False,
-            verbose=False,
-            use_simotm=use_simotm,
-            channels=channels,
-            pairs_rgb_ir=DEFAULT_PAIRS,
-        )
+        predict_args = {
+            **model.overrides,
+            "source": str(manifest_path),
+            "imgsz": imgsz,
+            "conf": 0.001,
+            "iou": 0.7,
+            "batch": batch,
+            "device": device,
+            "save": False,
+            "verbose": False,
+            "mode": "predict",
+            "use_simotm": use_simotm,
+            "channels": channels,
+            "pairs_rgb_ir": DEFAULT_PAIRS,
+        }
+        predictor = model._smart_load("predictor")(overrides=predict_args, _callbacks=model.callbacks)
+        predictor.setup_model(model=model.model, verbose=False)
+        # Decision-Fusion is an offline branch predictor. Skip warmup here to avoid the broken
+        # single-channel dummy input path and run real-image inference directly.
+        predictor.done_warmup = True
+        results = predictor(source=str(manifest_path), stream=False)
     finally:
         manifest_path.unlink(missing_ok=True)
     return [_result_to_prediction(result) for result in results]
@@ -156,18 +168,20 @@ def run_decision_fusion(
     entries = _collect_split_entries(split)
     rgb_weight_path = Path(rgb_weights) if rgb_weights else latest_weights_for("rgb")
     nir_weight_path = Path(nir_weights) if nir_weights else latest_weights_for("nir")
+    rgb_mode_kwargs = mode_specific_kwargs("rgb")
+    nir_mode_kwargs = mode_specific_kwargs("nir")
     rgb_predictions = _predict_branch(
         rgb_weight_path,
         [entry["visible_path"] for entry in entries],
-        use_simotm="BGR",
-        channels=3,
+        use_simotm=str(rgb_mode_kwargs["use_simotm"]),
+        channels=int(rgb_mode_kwargs["channels"]),
         device=device,
     )
     nir_predictions = _predict_branch(
         nir_weight_path,
         [entry["nir_path"] for entry in entries],
-        use_simotm="Gray",
-        channels=1,
+        use_simotm=str(nir_mode_kwargs["use_simotm"]),
+        channels=int(nir_mode_kwargs["channels"]),
         device=device,
     )
     fused_predictions = _fuse_predictions(rgb_predictions, nir_predictions, iou_threshold)

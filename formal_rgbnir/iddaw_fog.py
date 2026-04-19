@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 
@@ -258,7 +259,8 @@ def experiment_project_dir() -> Path:
 def latest_run_dir(mode: str) -> Path:
     prefix = experiment_name(mode)
     project_dir = experiment_project_dir()
-    candidates = [path for path in project_dir.glob(f"{prefix}*") if path.is_dir()]
+    pattern = re.compile(rf"^{re.escape(prefix)}(?:\d+)?$")
+    candidates = [path for path in project_dir.iterdir() if path.is_dir() and pattern.fullmatch(path.name)]
     if not candidates:
         raise FileNotFoundError(f"No run directory found for mode '{mode}' under {project_dir}")
     candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
