@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|nir|rgbnir|input_fusion|light_gate|bifpn_only|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2> [epochs] [device]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
+RESUME_CKPT="${4:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/home/lym/anaconda3/envs/visnir-exp/bin/python}"
@@ -32,6 +33,10 @@ CMD=(
   --device "$DEVICE"
 )
 
+if [[ -n "$RESUME_CKPT" ]]; then
+  CMD+=(--resume "$RESUME_CKPT")
+fi
+
 nohup "${CMD[@]}" >"$LOG_FILE" 2>&1 &
 PID=$!
 echo "$PID" >"$PID_FILE"
@@ -40,6 +45,7 @@ cat >"$META_FILE" <<EOF
 mode=$MODE
 epochs=$EPOCHS
 device=$DEVICE
+resume_ckpt=$RESUME_CKPT
 pid=$PID
 log_file=$LOG_FILE
 python_bin=$PYTHON_BIN

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ultralytics import YOLO
+from ultralytics import RTDETR, YOLO
 
 from formal_rgbnir.decision_fusion import run_decision_fusion, save_decision_fusion_outputs
 from formal_rgbnir.iddaw_fog import (
@@ -26,12 +26,23 @@ from formal_rgbnir.iddaw_fog import (
 )
 
 
+def completed_epochs_from_checkpoint(checkpoint_path: str) -> int:
+    run_dir = Path(checkpoint_path).resolve().parents[1]
+    results_csv = run_dir / "results.csv"
+    if results_csv.exists():
+        with results_csv.open("r", encoding="utf-8") as fh:
+            line_count = sum(1 for _ in fh)
+        return max(line_count - 1, 0)
+    return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
         choices=[
             "rgb",
+            "rgb_rtdetr",
             "nir",
             "rgbnir",
             "input_fusion",
@@ -47,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--task", choices=["train", "val", "predict"], required=True)
     parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--resume", default="", help="Checkpoint path to continue training from.")
     parser.add_argument("--weights", default="", help="Checkpoint path for val/predict.")
     parser.add_argument("--rgb-weights", default="", help="RGB checkpoint for decision fusion.")
     parser.add_argument("--nir-weights", default="", help="NIR checkpoint for decision fusion.")
@@ -73,16 +85,32 @@ def main() -> None:
 
     data_yaml = str(build_dataset_yaml(args.mode))
     mode_kwargs = mode_specific_kwargs(args.mode)
+    model_cls = RTDETR if args.mode == "rgb_rtdetr" else YOLO
 
     if args.task == "train":
-        model = YOLO(model_config_for(args.mode))
+        if args.resume:
+            completed_epochs = completed_epochs_from_checkpoint(args.resume)
+            extra_epochs = args.epochs - completed_epochs
+            if extra_epochs <= 0:
+                raise ValueError(
+                    f"Checkpoint already covers {completed_epochs} epochs, target total {args.epochs} is not larger"
+                )
+            print(
+                f"Continuing from checkpoint {args.resume}: completed_epochs={completed_epochs}, "
+                f"extra_epochs={extra_epochs}, target_total_epochs={args.epochs}"
+            )
+            model = model_cls(args.resume)
+            model.train(data=data_yaml, **common_train_kwargs(args.mode, extra_epochs, args.device), **mode_kwargs)
+            return
+
+        model = model_cls(model_config_for(args.mode))
         model.train(data=data_yaml, **common_train_kwargs(args.mode, args.epochs, args.device), **mode_kwargs)
         return
 
     if not args.weights:
         raise ValueError("--weights is required for val and predict")
 
-    model = YOLO(args.weights)
+    model = model_cls(args.weights)
     if args.task == "val":
         model.val(data=data_yaml, **common_val_kwargs(args.mode), **mode_kwargs)
         return
