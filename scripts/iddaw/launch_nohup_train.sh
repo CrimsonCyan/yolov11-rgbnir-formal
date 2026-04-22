@@ -10,16 +10,18 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/home/lym/anaconda3/envs/visnir-exp/bin/python}"
 DEFAULT_DATA_ROOT="/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
 DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
+export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
-if [[ "$MODE" == *_6cls_personmerge ]]; then
+if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
   export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"
 fi
 export PYTHONUNBUFFERED=1
 export WANDB_ENABLED="${WANDB_ENABLED:-0}"
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
+export IMGSZ="${IMGSZ:-640}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
-  if [[ "$MODE" == *_6cls_personmerge ]]; then
+  if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
     DATASET_TAG="6-class-personmerge"
   else
     DATASET_TAG="7-class"
@@ -47,6 +49,7 @@ CMD=(
   --mode "$MODE"
   --task train
   --epochs "$EPOCHS"
+  --imgsz "$IMGSZ"
   --val-interval "$VAL_INTERVAL"
   --device "$DEVICE"
 )
@@ -69,6 +72,7 @@ log_file=$LOG_FILE
 python_bin=$PYTHON_BIN
 dataset_root=$IDDAW_YOLO_ROOT
 dataset_root_6cls_personmerge=${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-}
+class_schema=$IDDAW_CLASS_SCHEMA
 wandb_enabled=$WANDB_ENABLED
 wandb_console=${WANDB_CONSOLE:-}
 wandb_project=${WANDB_PROJECT:-}
@@ -76,6 +80,7 @@ wandb_entity=${WANDB_ENTITY:-}
 wandb_group=${WANDB_GROUP:-}
 wandb_tags=${WANDB_TAGS:-}
 val_interval=$VAL_INTERVAL
+imgsz=$IMGSZ
 started_at=$STAMP
 command=${CMD[*]}
 EOF

@@ -18,6 +18,7 @@ from ultralytics.utils import SETTINGS
 from formal_rgbnir.decision_fusion import run_decision_fusion, save_decision_fusion_outputs
 from formal_rgbnir.iddaw import (
     build_dataset_yaml,
+    category_names_for_mode,
     common_predict_kwargs,
     common_train_kwargs,
     common_val_kwargs,
@@ -50,7 +51,7 @@ def configure_wandb(mode: str) -> None:
 
     os.environ.setdefault("WANDB_PROJECT", "iddaw-rgbnir-formal")
     os.environ.setdefault("WANDB_GROUP", "iddaw_all_weather")
-    dataset_tag = "6-class-personmerge" if mode.endswith("_6cls_personmerge") else "7-class"
+    dataset_tag = "6-class-personmerge" if len(category_names_for_mode(mode)) == 6 else "7-class"
     os.environ.setdefault("WANDB_TAGS", f"{mode},all-weather,{dataset_tag}")
 
 
@@ -92,6 +93,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--task", choices=["train", "val", "predict"], required=True)
     parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--val-interval", type=int, default=1, help="Run validation every N epochs during training.")
     parser.add_argument("--resume", default="", help="Checkpoint path to continue training from.")
     parser.add_argument("--weights", default="", help="Checkpoint path for val/predict.")
@@ -133,12 +135,12 @@ def main() -> None:
                 )
             print(
                 f"Continuing from checkpoint {args.resume}: completed_epochs={completed_epochs}, "
-                f"extra_epochs={extra_epochs}, target_total_epochs={args.epochs}"
+                f"extra_epochs={extra_epochs}, target_total_epochs={args.epochs}, imgsz={args.imgsz}"
             )
             model = model_cls(args.resume)
             model.train(
                 data=data_yaml,
-                **common_train_kwargs(args.mode, extra_epochs, args.device, args.val_interval),
+                **common_train_kwargs(args.mode, extra_epochs, args.device, args.val_interval, args.imgsz),
                 **mode_kwargs,
             )
             return
@@ -146,7 +148,7 @@ def main() -> None:
         model = model_cls(model_config_for(args.mode))
         model.train(
             data=data_yaml,
-            **common_train_kwargs(args.mode, args.epochs, args.device, args.val_interval),
+            **common_train_kwargs(args.mode, args.epochs, args.device, args.val_interval, args.imgsz),
             **mode_kwargs,
         )
         return
@@ -156,10 +158,10 @@ def main() -> None:
 
     model = model_cls(args.weights)
     if args.task == "val":
-        model.val(data=data_yaml, **common_val_kwargs(args.mode), **mode_kwargs)
+        model.val(data=data_yaml, **common_val_kwargs(args.mode, args.imgsz), **mode_kwargs)
         return
 
-    model.predict(**common_predict_kwargs(args.mode), **mode_kwargs)
+    model.predict(**common_predict_kwargs(args.mode, args.imgsz), **mode_kwargs)
 
 
 if __name__ == "__main__":

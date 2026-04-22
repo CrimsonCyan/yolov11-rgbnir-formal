@@ -24,6 +24,9 @@
 - 并行 6 类口径：
   - 类别：`person, motorcycle, car, truck, bus, autorickshaw`
   - 映射：`rider -> person`
+- 当前默认训练口径：
+  - 默认 `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+  - 后续新训练若未显式指定 7 类，将默认走 `6 类 person+rider 合并` 方案
 
 ## 2. 统一训练入口
 
@@ -44,6 +47,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 - `WANDB_ENABLED=0`，如需在线可视化需显式设为 `1`
 - `WANDB_CONSOLE=off`，默认不上传高频 stdout/console 流
 - `VAL_INTERVAL=1`，默认每个 epoch 验证一次
+- `IDDAW_CLASS_SCHEMA=6cls_personmerge`，默认训练使用 6 类口径
 - 自动生成 `stdout.log / pid / meta` 三类远端日志文件
 - 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
 

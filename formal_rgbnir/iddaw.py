@@ -7,8 +7,10 @@ from pathlib import Path
 
 CATEGORY_NAMES_7 = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 CATEGORY_NAMES_6_PERSONMERGE = ["person", "motorcycle", "car", "truck", "bus", "autorickshaw"]
-CATEGORY_NAMES = CATEGORY_NAMES_7
+CATEGORY_NAMES = CATEGORY_NAMES_6_PERSONMERGE
 DEFAULT_PAIRS = ["visible", "nir"]
+DEFAULT_CLASS_SCHEMA = "6cls_personmerge"
+LEGACY_CLASS_SCHEMA = "7cls"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
@@ -39,12 +41,22 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def class_schema_for_mode(mode: str) -> str:
+    if mode in PERSONMERGE_MODES:
+        return DEFAULT_CLASS_SCHEMA
+    return os.getenv("IDDAW_CLASS_SCHEMA", DEFAULT_CLASS_SCHEMA).strip().lower()
+
+
+def use_personmerge_schema(mode: str) -> bool:
+    return class_schema_for_mode(mode) != LEGACY_CLASS_SCHEMA
+
+
 def category_names_for_mode(mode: str) -> list[str]:
-    return CATEGORY_NAMES_6_PERSONMERGE if mode in PERSONMERGE_MODES else CATEGORY_NAMES_7
+    return CATEGORY_NAMES_6_PERSONMERGE if use_personmerge_schema(mode) else CATEGORY_NAMES_7
 
 
 def resolve_dataset_root(mode: str = "rgbnir") -> Path:
-    if mode in PERSONMERGE_MODES:
+    if use_personmerge_schema(mode):
         env_root = os.getenv("IDDAW_YOLO_ROOT_6CLS_PERSONMERGE")
         candidates = [
             repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge",
@@ -134,7 +146,10 @@ def experiment_name(mode: str) -> str:
     }
     if mode not in names:
         raise ValueError(f"Unsupported mode: {mode}")
-    return names[mode]
+    name = names[mode]
+    if use_personmerge_schema(mode) and "6cls-personmerge" not in name:
+        return f"{name}-6cls-personmerge"
+    return name
 
 
 def model_config_for(mode: str) -> str:
@@ -156,7 +171,8 @@ def model_config_for(mode: str) -> str:
     if mode == "bifpn_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_bifpn_only.yaml").resolve())
     if mode == "bifpn_only_yolo11s":
-        return str((root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only.yaml").resolve())
+        config = "yolo11s_rgbnir_bifpn_only_6cls_personmerge.yaml" if use_personmerge_schema(mode) else "yolo11s_rgbnir_bifpn_only.yaml"
+        return str((root / "configs" / "models" / config).resolve())
     if mode == "bifpn_only_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only_6cls_personmerge.yaml").resolve())
     if mode == "attention_only":
@@ -168,7 +184,12 @@ def model_config_for(mode: str) -> str:
     if mode == "full_proposed_residual_v2":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed_residual_v2.yaml").resolve())
     if mode == "full_proposed_residual_v2_yolo11s":
-        return str((root / "configs" / "models" / "yolo11s_rgbnir_full_proposed_residual_v2.yaml").resolve())
+        config = (
+            "yolo11s_rgbnir_full_proposed_residual_v2_6cls_personmerge.yaml"
+            if use_personmerge_schema(mode)
+            else "yolo11s_rgbnir_full_proposed_residual_v2.yaml"
+        )
+        return str((root / "configs" / "models" / config).resolve())
     if mode == "full_proposed_residual_v2_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_full_proposed_residual_v2_6cls_personmerge.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
@@ -234,12 +255,18 @@ def workers_for(mode: str) -> int:
     return workers[mode]
 
 
-def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0", val_interval: int = 1) -> dict[str, object]:
+def common_train_kwargs(
+    mode: str,
+    epochs: int = 50,
+    device: str = "0",
+    val_interval: int = 1,
+    imgsz: int = 640,
+) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
     return {
         "cache": "ram",
-        "imgsz": 640,
+        "imgsz": imgsz,
         "epochs": epochs,
         "val_interval": max(int(val_interval), 1),
         "batch": train_batch_for(mode),
@@ -252,23 +279,23 @@ def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0", val_inte
     }
 
 
-def common_val_kwargs(mode: str) -> dict[str, object]:
+def common_val_kwargs(mode: str, imgsz: int = 640) -> dict[str, object]:
     batch = 16 if mode == "decision_fusion" else train_batch_for(mode)
     return {
         "split": "val",
-        "imgsz": 640,
+        "imgsz": imgsz,
         "batch": batch,
         "project": "runs/IDD_AW_VAL",
         "name": experiment_name(mode),
     }
 
 
-def common_predict_kwargs(mode: str) -> dict[str, object]:
+def common_predict_kwargs(mode: str, imgsz: int = 640) -> dict[str, object]:
     dataset_root = resolve_dataset_root(mode)
     source_subdir = "nir/val" if mode == "nir" else "visible/val"
     return {
         "source": str((dataset_root / source_subdir).resolve()),
-        "imgsz": 640,
+        "imgsz": imgsz,
         "project": "runs/IDD_AW_PRED",
         "name": experiment_name(mode),
         "save": True,
