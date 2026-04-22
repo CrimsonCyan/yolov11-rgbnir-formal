@@ -8,7 +8,7 @@
 4. 训练日志与结果存放位置
 5. 当前最新训练状态及结果
 
-更新时间：`2026-04-20`
+更新时间：`2026-04-22`
 
 ## 1. 工程与数据根
 
@@ -107,7 +107,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 历史 `25 epoch` 路线 |
 | `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `YOLO11n Proposed`，已完成 `80 epoch` |
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
-| `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，待执行 `1 epoch smoke -> 70 epoch` |
+| `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
 
 补充：
 
@@ -193,6 +193,7 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | `bifpn_only` | `iddaw-yolo11n-rgbnir-bifpn-only3` | `50 epoch` | 已完成 | `0.68079` | `0.46012` | `0.51515` | `0.33616` | 当前 50 epoch 最强基线 |
 | `full_proposed_residual_v2` | `iddaw-yolo11n-rgbnir-full-proposed-residual-v23` | `80 epoch` | 已完成 | `0.69012` | `0.47603` | `0.52312` | `0.34447` | 当前正式 `YOLO11n Proposed` |
 | `full_proposed_residual_v2_yolo11s` | `iddaw-yolo11s-rgbnir-full-proposed-residual-v22` | `70 epoch` | 已完成 | `0.67454` | `0.50943` | `0.54620` | `0.35699` | `YOLO11s` 版 RGB-NIR Proposed |
+| `bifpn_only_yolo11s` | `iddaw-yolo11s-rgbnir-bifpn-only2` | `70 epoch` | 已完成 | `0.68281` | `0.48188` | `0.53924` | `0.35857` | `YOLO11s` 版 BiFPN-only |
 | `rgb_rtdetr` | `iddaw-rtdetr-r18-rgb2` | `50 epoch` | 已完成 | `0.42766` | `0.33811` | `0.32081` | `0.18771` | 外部现成 RGB 单模基线 |
 
 ### 6.2 历史路线结果
@@ -293,7 +294,30 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `mAP50-95 +0.02639`
 - 结论：`YOLO11s RGB-only` 已成为当前更强的单模 RGB 基线，并且当前结果已经高于 `YOLO11n` 版 Proposed 的 80 epoch 结果。这直接说明后续需要验证：在更强 backbone/scale 下，`RGB-NIR Proposed` 是否仍能保持增益。
 
-### 6.7 `YOLO11s` 版 Proposed 70 epoch 结果
+### 6.7 `YOLO11s` 版 BiFPN-only 70 epoch 结果
+
+- 当前正式完成 run：`iddaw-yolo11s-rgbnir-bifpn-only2`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only2`
+- W&B run：`mdndl274`
+- 当前模型规模：
+  - `16,476,153` parameters
+  - `54.82 GFLOPs`
+- 最终指标：
+  - `Precision = 0.68281`
+  - `Recall = 0.48188`
+  - `mAP50 = 0.53924`
+  - `mAP50-95 = 0.35857`
+- 与当前 `YOLO11s RGB-only` 基线对比：
+  - `YOLO11s RGB-only`：`0.53782 / 0.36051`
+  - `YOLO11s RGB-NIR BiFPN-only`：`0.53924 / 0.35857`
+  - 差值：`mAP50 +0.00142`，`mAP50-95 -0.00194`
+- 结果解读：
+  - 在更强 `YOLO11s` 尺度下，单独加入 `BiFPN` 后仍能把 `mAP50` 推到略高于 `RGB-only` 的水平。
+  - 但 `mAP50-95` 仍略低于 `RGB-only`，说明更严格 IoU 口径下的框质量优势还不稳定。
+  - 当前它和 `YOLO11s Proposed` 都落在与 `YOLO11s RGB-only` 非常接近的区间，说明尺度增强后，纯结构增益被明显压缩。
+
+### 6.8 `YOLO11s` 版 Proposed 70 epoch 结果
+
 
 - 当前正式完成 run：`iddaw-yolo11s-rgbnir-full-proposed-residual-v22`
 - 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-full-proposed-residual-v22`
@@ -326,11 +350,11 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 当前正式 `YOLO11n Proposed` 为 `full_proposed_residual_v2`：
   - `mAP50 = 0.52312`
   - `mAP50-95 = 0.34447`
-- 当前 `YOLO11s` 版 RGB-NIR Proposed 结果为：
-  - `mAP50 = 0.54620`
-  - `mAP50-95 = 0.35699`
+- 当前 `YOLO11s` 版 RGB-NIR 结果中：
+  - `YOLO11s BiFPN-only`：`mAP50 = 0.53924`，`mAP50-95 = 0.35857`
+  - `YOLO11s Proposed`：`mAP50 = 0.54620`，`mAP50-95 = 0.35699`
 - 与 `YOLO11s RGB-only` 对比：
-  - `mAP50` 略有提升，但 `mAP50-95` 略低
+  - 二者都在 `mAP50` 上略高于 `RGB-only`，但 `mAP50-95` 都略低
   - 当前尚不足以证明在更强 RGB-only 基线下形成全面稳定优势
 - 外部 RGB 单模基线 `RT-DETR-R18 RGB-only` 已成功接入并完成 `50 epoch`：
   - `mAP50 = 0.32081`
