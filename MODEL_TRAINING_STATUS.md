@@ -8,7 +8,7 @@
 4. 训练日志与结果存放位置
 5. 当前最新训练状态及结果
 
-更新时间：`2026-04-22`
+更新时间：`2026-04-23`
 
 ## 1. 工程与数据根
 
@@ -38,6 +38,14 @@ python scripts/iddaw/run_experiment.py --mode <mode> --task train --epochs <epoc
 ```bash
 bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 ```
+
+通过脚本后台训练时，当前默认行为为：
+
+- `WANDB_ENABLED=0`，如需在线可视化需显式设为 `1`
+- `WANDB_CONSOLE=off`，默认不上传高频 stdout/console 流
+- `VAL_INTERVAL=1`，默认每个 epoch 验证一次
+- 自动生成 `stdout.log / pid / meta` 三类远端日志文件
+- 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
 
 ### 2.3 从已完成 checkpoint 补训练到目标总 epoch
 
@@ -96,6 +104,8 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 - `close_mosaic=5`
 - 设备：`device=0`
 - 项目目录：`runs/IDD_AW`
+- 脚本默认验证频率：`val_interval=1`
+- 脚本默认 W\&B console：`WANDB_CONSOLE=off`
 
 ### 4.2 模式级差异
 
@@ -103,7 +113,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `visible/train,val` | `BGR` | `3` | `96` | `12` | `50 epoch` |
 | `rgb_yolo11s` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
-| `rgb_yolo11s_6cls_personmerge` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 计划 `80 epoch` smoke + long train |
+| `rgb_yolo11s_6cls_personmerge` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
 | `rgb_rtdetr` | `visible/train,val` | `BGR` | `3` | `32` | `10` | `50 epoch`，现补到 `70` 中 |
 | `nir` | `nir/train,val` | `Gray` | `1` | `96` | `12` | `50 epoch` |
 | `rgbnir` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
@@ -115,9 +125,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 历史 `25 epoch` 路线 |
 | `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `YOLO11n Proposed`，已完成 `80 epoch` |
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
-| `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 计划 `70 epoch` smoke + long train |
+| `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
-| `bifpn_only_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 计划 `70 epoch` smoke + long train |
+| `bifpn_only_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已启动 `70 epoch` |
 
 补充：
 
@@ -196,6 +206,7 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `iddaw-yolo11n-rgb2` | `50 epoch` | 已完成 | `0.58182` | `0.41056` | `0.43404` | `0.27339` | 官方 YOLO11 RGB-only 基线 |
 | `rgb_yolo11s` | `iddaw-yolo11s-rgb7` | `80 epoch` | 已完成 | `0.69330` | `0.48334` | `0.53782` | `0.36051` | 官方 YOLO11s RGB-only 基线 |
+| `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge2` | `80 epoch` | 已完成 | `0.66588` | `0.53652` | `0.57578` | `0.39398` | 6 类口径，`rider -> person` 后的 YOLO11s RGB-only |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 双流 plain baseline |
 | `input_fusion` | `iddaw-yolo11n-input-fusion` | `50 epoch` | 已完成 | `0.55391` | `0.42494` | `0.44575` | `0.27876` | 4 通道输入级融合 |
@@ -349,21 +360,37 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 但 `mAP50-95` 略低于 `YOLO11s RGB-only`，说明在更严格 IoU 口径下，当前 `YOLO11s` 版 Proposed 还不足以证明对更强 RGB-only 基线形成了稳定全面优势。
   - 因此这条结果更适合作为“RGB-NIR 在更强 backbone 下仍具备一定增益潜力”的证据，而不是直接替代现有最佳方案。
 
-### 6.9 6 类 `person+rider` 并行方案待执行条目
+### 6.9 6 类 `person+rider` 并行方案阶段性结果
 
 - 当前并行数据口径：`iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
 - 类别定义：`person, motorcycle, car, truck, bus, autorickshaw`
 - 合并规则：旧 `rider` 统一并入 `person`
-- 待执行关键模型：
+- 已完成关键模型：
   - `rgb_yolo11s_6cls_personmerge`：`80 epoch`
+- 已完成 run：
+  - `iddaw-yolo11s-rgb-6cls-personmerge2`
+- W\&B：
+  - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/ou6tiufd`
+- 正式结果（`best.pt`）：
+  - `Precision = 0.66588`
+  - `Recall = 0.53652`
+  - `mAP50 = 0.57578`
+  - `mAP50-95 = 0.39398`
+- 与 7 类 `YOLO11s RGB-only`（`0.53782 / 0.36051`）对比：
+  - `mAP50 +0.03796`
+  - `mAP50-95 +0.03347`
+  - `Recall +0.05318`
+  - `Precision -0.02742`
+- 结果解读：
+  - 将 `rider` 并入 `person` 后，总体 `Recall` 与两档 AP 都有明确提升，说明原 7 类口径下 `person/rider` 的类别边界确实在污染监督质量。
+  - 但按类结果看，`person`（`mAP50=0.370`）和 `motorcycle`（`mAP50=0.397`）仍明显弱于 `car` 等中大目标，说明仅靠类别合并还不足以彻底解决小目标检测问题。
+  - 因此这条结果支持继续推进 6 类并行方案下的 `BiFPN-only` 与 `Proposed`，再判断标签口径改善能否在双模态模型上继续带来稳定增益。
+- 后续关键模型：
   - `bifpn_only_yolo11s_6cls_personmerge`：`70 epoch`
   - `full_proposed_residual_v2_yolo11s_6cls_personmerge`：`70 epoch`
-- 执行顺序：先 `1 epoch` smoke，再正式长训
-- 预期日志：
-  - `latest_rgb_yolo11s_6cls_personmerge.stdout.log`
+- 对应日志：
   - `latest_bifpn_only_yolo11s_6cls_personmerge.stdout.log`
   - `latest_full_proposed_residual_v2_yolo11s_6cls_personmerge.stdout.log`
-- W\&B：继续使用 `iddaw-rgbnir-formal` 项目，标签应包含 `6-class-personmerge`
 
 ## 7. 当前可直接引用的结论
 
@@ -373,6 +400,10 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 当前 RGB-only 基线中，`YOLO11s RGB-only` 已成为更强单模基线：
   - `YOLO11s RGB-only`（80 epoch）：`mAP50 = 0.53782`，`mAP50-95 = 0.36051`
   - `YOLO11n RGB-only`（50 epoch）：`mAP50 = 0.43404`，`mAP50-95 = 0.27339`
+- 在 6 类 `person+rider` 合并口径下，`YOLO11s RGB-only` 进一步提升到：
+  - `mAP50 = 0.57578`
+  - `mAP50-95 = 0.39398`
+  - 说明 `person/rider` 的类别边界不清确实是当前数据口径中的一个实质问题
 - 当前正式 `YOLO11n Proposed` 为 `full_proposed_residual_v2`：
   - `mAP50 = 0.52312`
   - `mAP50-95 = 0.34447`

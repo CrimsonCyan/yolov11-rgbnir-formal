@@ -19,9 +19,14 @@ export WANDB_ENABLED="${WANDB_ENABLED:-0}"
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
+  if [[ "$MODE" == *_6cls_personmerge ]]; then
+    DATASET_TAG="6-class-personmerge"
+  else
+    DATASET_TAG="7-class"
+  fi
   export WANDB_PROJECT="${WANDB_PROJECT:-iddaw-rgbnir-formal}"
   export WANDB_GROUP="${WANDB_GROUP:-iddaw_all_weather}"
-  export WANDB_TAGS="${WANDB_TAGS:-${MODE},all-weather,7-class}"
+  export WANDB_TAGS="${WANDB_TAGS:-${MODE},all-weather,${DATASET_TAG}}"
 fi
 
 LOG_DIR="$ROOT/remote_logs/iddaw"
