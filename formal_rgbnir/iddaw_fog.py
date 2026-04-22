@@ -9,6 +9,7 @@ CATEGORY_NAMES = ["person", "rider", "motorcycle", "car", "truck", "bus", "autor
 DEFAULT_PAIRS = ["visible", "nir"]
 TRAINABLE_MODES = {
     "rgb",
+    "rgb_yolo11s",
     "rgb_rtdetr",
     "nir",
     "rgbnir",
@@ -56,7 +57,7 @@ def resolve_dataset_root() -> Path:
 
 def build_dataset_yaml(mode: str) -> Path:
     dataset_root = resolve_dataset_root()
-    if mode in {"rgb", "rgb_rtdetr"}:
+    if mode in {"rgb", "rgb_yolo11s", "rgb_rtdetr"}:
         train = "visible/train"
         val = "visible/val"
     elif mode == "nir":
@@ -100,6 +101,7 @@ def build_dataset_yaml(mode: str) -> Path:
 def experiment_name(mode: str) -> str:
     names = {
         "rgb": "iddaw-yolo11n-rgb",
+        "rgb_yolo11s": "iddaw-yolo11s-rgb",
         "rgb_rtdetr": "iddaw-rtdetr-r18-rgb",
         "nir": "iddaw-yolo11n-nir",
         "rgbnir": "iddaw-yolo11n-rgbnir-plain",
@@ -121,6 +123,8 @@ def model_config_for(mode: str) -> str:
     root = repo_root()
     if mode == "rgb":
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11.yaml").resolve())
+    if mode == "rgb_yolo11s":
+        return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11s.yaml").resolve())
     if mode == "rgb_rtdetr":
         return str((root / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr-r18.yaml").resolve())
     if mode == "nir":
@@ -145,7 +149,7 @@ def model_config_for(mode: str) -> str:
 
 
 def mode_specific_kwargs(mode: str) -> dict[str, object]:
-    if mode in {"rgb", "rgb_rtdetr"}:
+    if mode in {"rgb", "rgb_yolo11s", "rgb_rtdetr"}:
         return {"use_simotm": "BGR", "channels": 3}
     if mode == "nir":
         return {"use_simotm": "Gray", "channels": 1}
@@ -167,6 +171,7 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
 def train_batch_for(mode: str) -> int:
     batches = {
         "rgb": 96,
+        "rgb_yolo11s": 48,
         "rgb_rtdetr": 32,
         "nir": 96,
         "rgbnir": 48,
@@ -186,6 +191,7 @@ def train_batch_for(mode: str) -> int:
 def workers_for(mode: str) -> int:
     workers = {
         "rgb": 12,
+        "rgb_yolo11s": 12,
         "rgb_rtdetr": 10,
         "nir": 12,
         "rgbnir": 10,
@@ -202,13 +208,14 @@ def workers_for(mode: str) -> int:
     return workers[mode]
 
 
-def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0") -> dict[str, object]:
+def common_train_kwargs(mode: str, epochs: int = 50, device: str = "0", val_interval: int = 1) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
     return {
         "cache": "ram",
         "imgsz": 640,
         "epochs": epochs,
+        "val_interval": max(int(val_interval), 1),
         "batch": train_batch_for(mode),
         "close_mosaic": 5,
         "workers": workers_for(mode),
@@ -237,6 +244,7 @@ def common_predict_kwargs(mode: str) -> dict[str, object]:
         if mode
         in {
             "rgb",
+            "rgb_yolo11s",
             "rgb_rtdetr",
             "rgbnir",
             "input_fusion",

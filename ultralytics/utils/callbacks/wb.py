@@ -1,5 +1,7 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import os
+
 from ultralytics.utils import SETTINGS, TESTS_RUNNING
 from ultralytics.utils.torch_utils import model_info_for_loggers
 
@@ -110,9 +112,20 @@ def _log_plots(plots, step):
 def on_pretrain_routine_start(trainer):
     """Initiate and start project if module is present."""
     if not wb.run:
+        project = os.getenv("WANDB_PROJECT") or (
+            str(trainer.args.project).replace("/", "-") if trainer.args.project else "Ultralytics"
+        )
+        name = os.getenv("WANDB_NAME") or str(trainer.args.name).replace("/", "-")
+        entity = os.getenv("WANDB_ENTITY") or None
+        group = os.getenv("WANDB_GROUP") or None
+        tags_env = os.getenv("WANDB_TAGS", "")
+        tags = [tag.strip() for tag in tags_env.split(",") if tag.strip()] or None
         wb.init(
-            project=str(trainer.args.project).replace("/", "-") if trainer.args.project else "Ultralytics",
-            name=str(trainer.args.name).replace("/", "-"),
+            project=project,
+            entity=entity,
+            name=name,
+            group=group,
+            tags=tags,
             config=vars(trainer.args),
         )
 

@@ -66,6 +66,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | 模式 | 实现/配置文件 | 具体实现方法 |
 | --- | --- | --- |
 | `rgb` | `ultralytics/cfg/models/11/yolo11.yaml` | 官方 Ultralytics `YOLO11` 单模 RGB 检测器 |
+| `rgb_yolo11s` | `ultralytics/cfg/models/11/yolo11s.yaml` | 官方 Ultralytics `YOLO11s` 单模 RGB 检测器 |
 | `rgb_rtdetr` | `ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml` | 官方 Ultralytics `RT-DETR-R18` 单模 RGB 检测器 |
 | `nir` | `ultralytics/cfg/models/11/yolo11-gray.yaml` | 官方 `YOLO11` 灰度单模检测器，输入为单通道 NIR |
 | `rgbnir` | `configs/models/yolo11n_rgbnir_midfusion_plain.yaml` | 双流 RGB/NIR backbone，`P3/P4/P5` 同尺度 `Concat`，之后 `SPPF + C2PSA + YOLO head` |
@@ -94,6 +95,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | 模式 | 输入模态 | `use_simotm` | `channels` | batch | workers | 正式主口径 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `visible/train,val` | `BGR` | `3` | `96` | `12` | `50 epoch` |
+| `rgb_yolo11s` | `visible/train,val` | `BGR` | `3` | `48`（50 epoch 与当前 80 epoch 重训） | `12` | `50 epoch`，现重训到 `80` |
 | `rgb_rtdetr` | `visible/train,val` | `BGR` | `3` | `32` | `10` | `50 epoch`，现补到 `70` 中 |
 | `nir` | `nir/train,val` | `Gray` | `1` | `96` | `12` | `50 epoch` |
 | `rgbnir` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
@@ -181,6 +183,7 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | 模式 | 最新正式 run | 训练口径 | 当前状态 | P | R | mAP50 | mAP50-95 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `iddaw-yolo11n-rgb2` | `50 epoch` | 已完成 | `0.58182` | `0.41056` | `0.43404` | `0.27339` | 官方 YOLO11 RGB-only 基线 |
+| `rgb_yolo11s` | `iddaw-yolo11s-rgb2` | `50 epoch` | 已完成 | `0.66632` | `0.46510` | `0.50990` | `0.33412` | 官方 YOLO11s RGB-only 基线 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 双流 plain baseline |
 | `input_fusion` | `iddaw-yolo11n-input-fusion` | `50 epoch` | 已完成 | `0.55391` | `0.42494` | `0.44575` | `0.27876` | 4 通道输入级融合 |
@@ -272,11 +275,38 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `mAP50-95 = 0.224`
 - 结论：相对 `50 epoch` 的 `0.32081 / 0.18771`，继续训练后有明显提升，但整体仍弱于当前 YOLO11 RGB-only 与主要 RGB-NIR 路线
 
+### 6.6 `rgb_yolo11s` 80 epoch 从零重训练计划
+
+- 当前已完成 `50 epoch` 正式训练：
+  - run：`iddaw-yolo11s-rgb2`
+  - `P = 0.66632`
+  - `R = 0.46510`
+  - `mAP50 = 0.50990`
+  - `mAP50-95 = 0.33412`
+- 当前改为从零重新训练一条全新的 `80 epoch` 正式 run，不再沿用 `iddaw-yolo11s-rgb2` 的 `last.pt` 续训
+- 本次训练固定设置：
+  - batch：`48`
+  - `val_interval = 1`
+  - W&B：开启
+- 推荐启动命令：
+
+```bash
+WANDB_ENABLED=1 bash scripts/iddaw/launch_nohup_train.sh rgb_yolo11s 80 0
+```
+
+- 说明：
+  - 这里的 `80` 表示从 `epoch 1` 到 `epoch 80` 的完整训练
+  - 本次不传 `resume_ckpt`，因此不会从旧 run 恢复
+  - 当前已恢复为每个 epoch 都执行一次验证
+
 ## 7. 当前可直接引用的结论
 
 - 当前 `all-weather / 7 类 / 50 epoch` 主线下，`bifpn_only` 是最强结果：
   - `mAP50 = 0.51515`
   - `mAP50-95 = 0.33616`
+- 当前 RGB-only 基线中，`YOLO11s RGB-only` 强于 `YOLO11n RGB-only`：
+  - `YOLO11s RGB-only`：`mAP50 = 0.50990`，`mAP50-95 = 0.33412`
+  - `YOLO11n RGB-only`：`mAP50 = 0.43404`，`mAP50-95 = 0.27339`
 - 当前正式 `Proposed` 为 `full_proposed_residual_v2`：
   - `mAP50 = 0.49615`
   - `mAP50-95 = 0.32200`

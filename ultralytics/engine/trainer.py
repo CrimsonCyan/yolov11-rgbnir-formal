@@ -117,6 +117,7 @@ class BaseTrainer:
             yaml_save(self.save_dir / "args.yaml", vars(self.args))  # save run args
         self.last, self.best = self.wdir / "last.pt", self.wdir / "best.pt"  # checkpoint paths
         self.save_period = self.args.save_period
+        self.validated_this_epoch = False
 
         self.batch_size = self.args.batch
         self.epochs = self.args.epochs or 100  # in case users accidentally pass epochs=None with timed training
@@ -338,6 +339,7 @@ class BaseTrainer:
         if self.args.close_mosaic:
             base_idx = (self.epochs - self.args.close_mosaic) * nb
             self.plot_idx.extend([base_idx, base_idx + 1, base_idx + 2])
+        val_interval = max(int(getattr(self.args, "val_interval", 1) or 1), 1)
         epoch = self.start_epoch
         self.optimizer.zero_grad()  # zero any resumed gradients to ensure stability on train start
         while True:
@@ -427,10 +429,18 @@ class BaseTrainer:
             if RANK in {-1, 0}:
                 final_epoch = epoch + 1 >= self.epochs
                 self.ema.update_attr(self.model, include=["yaml", "nc", "args", "names", "stride", "class_weights"])
+                self.validated_this_epoch = False
 
                 # Validation
-                if self.args.val or final_epoch or self.stopper.possible_stop or self.stop:
+                should_validate = final_epoch or self.stopper.possible_stop or self.stop
+                if self.args.val and ((epoch + 1) % val_interval == 0):
+                    should_validate = True
+                if should_validate:
                     self.metrics, self.fitness = self.validate()
+                    self.validated_this_epoch = True
+                else:
+                    self.fitness = None
+                    self.metrics = {k: float("nan") for k in self.metrics}
                 self.save_metrics(metrics={**self.label_loss_items(self.tloss), **self.metrics, **self.lr})
                 self.stop |= self.stopper(epoch + 1, self.fitness) or final_epoch
                 if self.args.time:
@@ -539,7 +549,7 @@ class BaseTrainer:
 
         # Save checkpoints
         self.last.write_bytes(serialized_ckpt)  # save last.pt
-        if self.best_fitness == self.fitness:
+        if self.validated_this_epoch and self.best_fitness == self.fitness:
             self.best.write_bytes(serialized_ckpt)  # save best.pt
         if (self.save_period > 0) and (self.epoch % self.save_period == 0):
             (self.wdir / f"epoch{self.epoch}.pt").write_bytes(serialized_ckpt)  # save epoch, i.e. 'epoch3.pt'
