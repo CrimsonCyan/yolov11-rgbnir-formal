@@ -14,7 +14,7 @@ OUTPUT_ROOT = Path(r"E:\毕设\code\datasets\processed")
 SPLIT = "val"
 WEATHERS = ("FOG", "LOWLIGHT", "RAIN", "SNOW")
 SAMPLES_PER_WEATHER = 25
-CLASS_NAMES = [
+DEFAULT_CLASS_NAMES = [
     "person",
     "rider",
     "motorcycle",
@@ -75,12 +75,22 @@ def list_samples() -> dict[str, list[str]]:
     return grouped
 
 
-def yolo_to_xyxy(line: str, width: int, height: int) -> tuple[int, int, int, int, int]:
+def load_class_names() -> list[str]:
+    report_path = YOLO_ROOT / "meta" / "export_report.json"
+    if report_path.exists():
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        categories = payload.get("categories")
+        if isinstance(categories, list) and categories:
+            return [str(item) for item in categories]
+    return DEFAULT_CLASS_NAMES
+
+
+def yolo_to_xyxy(line: str, width: int, height: int, class_names: list[str]) -> tuple[int, int, int, int, int]:
     parts = line.split()
     if len(parts) != 5:
         raise ValueError(f"Invalid YOLO label: {line}")
     cls_id = int(parts[0])
-    if not (0 <= cls_id < len(CLASS_NAMES)):
+    if not (0 <= cls_id < len(class_names)):
         raise ValueError(f"Class id out of range: {cls_id}")
     cx, cy, bw, bh = (float(v) for v in parts[1:])
     if not (0.0 <= cx <= 1.0 and 0.0 <= cy <= 1.0 and 0.0 < bw <= 1.0 and 0.0 < bh <= 1.0):
@@ -95,22 +105,22 @@ def yolo_to_xyxy(line: str, width: int, height: int) -> tuple[int, int, int, int
     return cls_id, x1, y1, x2, y2
 
 
-def load_boxes(label_path: Path, width: int, height: int) -> list[tuple[int, int, int, int, int]]:
+def load_boxes(label_path: Path, width: int, height: int, class_names: list[str]) -> list[tuple[int, int, int, int, int]]:
     if not label_path.exists():
         raise FileNotFoundError(f"Missing label file: {label_path}")
     content = label_path.read_text(encoding="utf-8").strip()
     if not content:
         return []
-    return [yolo_to_xyxy(line.strip(), width, height) for line in content.splitlines() if line.strip()]
+    return [yolo_to_xyxy(line.strip(), width, height, class_names) for line in content.splitlines() if line.strip()]
 
 
-def draw_boxes(image: Image.Image, boxes: list[tuple[int, int, int, int, int]], font: ImageFont.ImageFont) -> Image.Image:
+def draw_boxes(image: Image.Image, boxes: list[tuple[int, int, int, int, int]], font: ImageFont.ImageFont, class_names: list[str]) -> Image.Image:
     canvas = image.convert("RGB").copy()
     draw = ImageDraw.Draw(canvas)
     for cls_id, x1, y1, x2, y2 in boxes:
         color = CLASS_COLORS[cls_id % len(CLASS_COLORS)]
         draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
-        label = f"{cls_id}:{CLASS_NAMES[cls_id]}"
+        label = f"{cls_id}:{class_names[cls_id]}"
         text_bbox = draw.textbbox((0, 0), label, font=font)
         text_w = text_bbox[2] - text_bbox[0]
         text_h = text_bbox[3] - text_bbox[1]
@@ -121,11 +131,11 @@ def draw_boxes(image: Image.Image, boxes: list[tuple[int, int, int, int, int]], 
     return canvas
 
 
-def build_composite(sample_id: str, weather: str, rgb_path: Path, boxes: list[tuple[int, int, int, int, int]], output_path: Path, font: ImageFont.ImageFont) -> None:
+def build_composite(sample_id: str, weather: str, rgb_path: Path, boxes: list[tuple[int, int, int, int, int]], output_path: Path, font: ImageFont.ImageFont, class_names: list[str]) -> None:
     with Image.open(rgb_path) as rgb_image:
         rgb = rgb_image.convert("RGB")
 
-    boxed_rgb = draw_boxes(rgb, boxes, font)
+    boxed_rgb = draw_boxes(rgb, boxes, font, class_names)
     width, height = rgb.size
     composite = Image.new("RGB", (width * 2 + PANEL_GAP + PADDING * 2, height + HEADER_HEIGHT + PADDING * 2), color=(255, 255, 255))
     draw = ImageDraw.Draw(composite)
@@ -154,6 +164,7 @@ def clean_output_root() -> None:
 
 def main() -> None:
     font = load_font()
+    class_names = load_class_names()
     grouped = list_samples()
     selected: dict[str, list[str]] = {}
     for weather in WEATHERS:
@@ -189,9 +200,9 @@ def main() -> None:
                 raise FileNotFoundError(f"Missing image for {stem}")
             with Image.open(rgb_path) as image:
                 width, height = image.size
-            boxes = load_boxes(label_path, width, height)
+            boxes = load_boxes(label_path, width, height, class_names)
             output_path = OUTPUT_ROOT / weather / f"{stem}.png"
-            build_composite(stem, weather, rgb_path, boxes, output_path, font)
+            build_composite(stem, weather, rgb_path, boxes, output_path, font, class_names)
             total_annotations += len(boxes)
             if not boxes:
                 empty_labels += 1

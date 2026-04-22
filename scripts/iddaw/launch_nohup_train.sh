@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2> [epochs] [device] [resume_ckpt]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
@@ -9,7 +9,11 @@ RESUME_CKPT="${4:-}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/home/lym/anaconda3/envs/visnir-exp/bin/python}"
 DEFAULT_DATA_ROOT="/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
+DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
+if [[ "$MODE" == *_6cls_personmerge ]]; then
+  export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"
+fi
 export PYTHONUNBUFFERED=1
 export WANDB_ENABLED="${WANDB_ENABLED:-0}"
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
@@ -59,6 +63,7 @@ pid=$PID
 log_file=$LOG_FILE
 python_bin=$PYTHON_BIN
 dataset_root=$IDDAW_YOLO_ROOT
+dataset_root_6cls_personmerge=${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-}
 wandb_enabled=$WANDB_ENABLED
 wandb_console=${WANDB_CONSOLE:-}
 wandb_project=${WANDB_PROJECT:-}

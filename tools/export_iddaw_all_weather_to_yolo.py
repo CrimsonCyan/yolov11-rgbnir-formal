@@ -7,6 +7,8 @@ from pathlib import Path
 
 
 CATEGORY_NAMES = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
+CATEGORY_NAMES_PERSONMERGE = ["person", "motorcycle", "car", "truck", "bus", "autorickshaw"]
+PERSONMERGE_ID_MAP = {0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,6 +28,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Remove the output directory before exporting.",
     )
+    parser.add_argument(
+        "--merge-rider-into-person",
+        action="store_true",
+        help="Merge the original rider class into person and export a 6-class dataset.",
+    )
     return parser.parse_args()
 
 
@@ -40,13 +47,20 @@ def ensure_dirs(root: Path) -> None:
         (root / relative).mkdir(parents=True, exist_ok=True)
 
 
-def yolo_line(annotation: dict[str, object], width: int, height: int) -> str:
+def map_category_id(annotation: dict[str, object], merge_rider_into_person: bool) -> int:
+    category = int(annotation["category_id"]) - 1
+    if not merge_rider_into_person:
+        return category
+    return PERSONMERGE_ID_MAP[category]
+
+
+def yolo_line(annotation: dict[str, object], width: int, height: int, merge_rider_into_person: bool) -> str:
     x, y, w, h = annotation["bbox"]
     cx = (float(x) + float(w) / 2.0) / float(width)
     cy = (float(y) + float(h) / 2.0) / float(height)
     bw = float(w) / float(width)
     bh = float(h) / float(height)
-    category = int(annotation["category_id"]) - 1
+    category = map_category_id(annotation, merge_rider_into_person)
     return f"{category} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}"
 
 
@@ -54,7 +68,7 @@ def unique_preserve_order(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
-def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, int]:
+def export_split(source_root: Path, output_root: Path, split: str, merge_rider_into_person: bool) -> dict[str, int]:
     annotation_path = source_root / "annotations" / f"{split}.json"
     payload = json.loads(annotation_path.read_text(encoding="utf-8"))
     visible_split_dir = output_root / "visible" / split
@@ -84,7 +98,10 @@ def export_split(source_root: Path, output_root: Path, split: str) -> dict[str, 
         shutil.copy2(vis_src, vis_dst)
         shutil.copy2(nir_src, nir_dst)
 
-        raw_lines = [yolo_line(annotation, width, height) for annotation in sample["annotations"]]
+        raw_lines = [
+            yolo_line(annotation, width, height, merge_rider_into_person)
+            for annotation in sample["annotations"]
+        ]
         unique_lines = unique_preserve_order(raw_lines)
         duplicate_count += len(raw_lines) - len(unique_lines)
         label_text = "\n".join(unique_lines)
@@ -111,12 +128,15 @@ def main() -> None:
         shutil.rmtree(output_root)
     ensure_dirs(output_root)
 
-    train_stats = export_split(source_root, output_root, "train")
-    val_stats = export_split(source_root, output_root, "val")
+    train_stats = export_split(source_root, output_root, "train", args.merge_rider_into_person)
+    val_stats = export_split(source_root, output_root, "val", args.merge_rider_into_person)
+    categories = CATEGORY_NAMES_PERSONMERGE if args.merge_rider_into_person else CATEGORY_NAMES
     report = {
         "source_root": str(source_root),
         "output_root": str(output_root),
-        "categories": CATEGORY_NAMES,
+        "merge_rider_into_person": args.merge_rider_into_person,
+        "categories": categories,
+        "category_mapping": PERSONMERGE_ID_MAP if args.merge_rider_into_person else None,
         "splits": {
             "train": train_stats,
             "val": val_stats,

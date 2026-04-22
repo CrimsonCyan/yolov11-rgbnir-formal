@@ -50,7 +50,8 @@ def configure_wandb(mode: str) -> None:
 
     os.environ.setdefault("WANDB_PROJECT", "iddaw-rgbnir-formal")
     os.environ.setdefault("WANDB_GROUP", "iddaw_all_weather")
-    os.environ.setdefault("WANDB_TAGS", f"{mode},all-weather,7-class")
+    dataset_tag = "6-class-personmerge" if mode.endswith("_6cls_personmerge") else "7-class"
+    os.environ.setdefault("WANDB_TAGS", f"{mode},all-weather,{dataset_tag}")
 
 
 def completed_epochs_from_checkpoint(checkpoint_path: str) -> int:
@@ -70,6 +71,7 @@ def parse_args() -> argparse.Namespace:
         choices=[
             "rgb",
             "rgb_yolo11s",
+            "rgb_yolo11s_6cls_personmerge",
             "rgb_rtdetr",
             "nir",
             "rgbnir",
@@ -77,11 +79,13 @@ def parse_args() -> argparse.Namespace:
             "light_gate",
             "bifpn_only",
             "bifpn_only_yolo11s",
+            "bifpn_only_yolo11s_6cls_personmerge",
             "attention_only",
             "full_proposed",
             "full_proposed_residual",
             "full_proposed_residual_v2",
             "full_proposed_residual_v2_yolo11s",
+            "full_proposed_residual_v2_yolo11s_6cls_personmerge",
             "decision_fusion",
         ],
         required=True,

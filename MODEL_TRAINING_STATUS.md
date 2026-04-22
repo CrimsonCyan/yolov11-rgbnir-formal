@@ -15,11 +15,15 @@
 - formal 工程目录：`E:\毕设\code\yolov11-rgbnir-formal`
 - 远端工程目录：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal`
 - 当前正式数据根：`/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir`
+- 并行 6 类数据根：`/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
 - 数据协议：
   - 数据集：`IDD-AW all-weather`
   - 模态：`RGB / NIR`
   - 类别数：`7`
   - 类别：`person, rider, motorcycle, car, truck, bus, autorickshaw`
+- 并行 6 类口径：
+  - 类别：`person, motorcycle, car, truck, bus, autorickshaw`
+  - 映射：`rider -> person`
 
 ## 2. 统一训练入口
 
@@ -67,6 +71,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | --- | --- | --- |
 | `rgb` | `ultralytics/cfg/models/11/yolo11.yaml` | 官方 Ultralytics `YOLO11` 单模 RGB 检测器 |
 | `rgb_yolo11s` | `ultralytics/cfg/models/11/yolo11s.yaml` | 官方 Ultralytics `YOLO11s` 单模 RGB 检测器 |
+| `rgb_yolo11s_6cls_personmerge` | `ultralytics/cfg/models/11/yolo11s.yaml` | 官方 `YOLO11s` 单模 RGB 检测器，6 类口径并将 `rider` 合并到 `person` |
 | `rgb_rtdetr` | `ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml` | 官方 Ultralytics `RT-DETR-R18` 单模 RGB 检测器 |
 | `nir` | `ultralytics/cfg/models/11/yolo11-gray.yaml` | 官方 `YOLO11` 灰度单模检测器，输入为单通道 NIR |
 | `rgbnir` | `configs/models/yolo11n_rgbnir_midfusion_plain.yaml` | 双流 RGB/NIR backbone，`P3/P4/P5` 同尺度 `Concat`，之后 `SPPF + C2PSA + YOLO head` |
@@ -77,6 +82,8 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed` | `configs/models/yolo11n_rgbnir_full_proposed.yaml` | `QualityAwareFusion + BiFPN` 组合版历史路线 |
 | `full_proposed_residual` | `configs/models/yolo11n_rgbnir_full_proposed_residual.yaml` | `ResidualQualityAwareFusion + BiFPN` 组合版历史路线 |
 | `full_proposed_residual_v2` | `configs/models/yolo11n_rgbnir_full_proposed_residual_v2.yaml` | 当前正式 `Proposed`：`ResidualQualityAwareFusionV2 + BiFPN` |
+| `bifpn_only_yolo11s` | `configs/models/yolo11s_rgbnir_bifpn_only.yaml` | `YOLO11s` 版双流 `BiFPN-only` |
+| `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `decision_fusion` | `formal_rgbnir/decision_fusion.py` | 离线结果级融合：读取 `rgb` 与 `nir` 权重，推理后做 batched NMS 融合 |
 
 ## 4. 统一训练参数与设置
@@ -96,6 +103,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `visible/train,val` | `BGR` | `3` | `96` | `12` | `50 epoch` |
 | `rgb_yolo11s` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
+| `rgb_yolo11s_6cls_personmerge` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 计划 `80 epoch` smoke + long train |
 | `rgb_rtdetr` | `visible/train,val` | `BGR` | `3` | `32` | `10` | `50 epoch`，现补到 `70` 中 |
 | `nir` | `nir/train,val` | `Gray` | `1` | `96` | `12` | `50 epoch` |
 | `rgbnir` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
@@ -107,7 +115,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 历史 `25 epoch` 路线 |
 | `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `YOLO11n Proposed`，已完成 `80 epoch` |
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
+| `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 计划 `70 epoch` smoke + long train |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
+| `bifpn_only_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 计划 `70 epoch` smoke + long train |
 
 补充：
 
@@ -338,6 +348,22 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - RGB-NIR Proposed 在 `mAP50` 上略高于 `YOLO11s RGB-only`，同时 `Recall` 也更高（`+0.02609`）。
   - 但 `mAP50-95` 略低于 `YOLO11s RGB-only`，说明在更严格 IoU 口径下，当前 `YOLO11s` 版 Proposed 还不足以证明对更强 RGB-only 基线形成了稳定全面优势。
   - 因此这条结果更适合作为“RGB-NIR 在更强 backbone 下仍具备一定增益潜力”的证据，而不是直接替代现有最佳方案。
+
+### 6.9 6 类 `person+rider` 并行方案待执行条目
+
+- 当前并行数据口径：`iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+- 类别定义：`person, motorcycle, car, truck, bus, autorickshaw`
+- 合并规则：旧 `rider` 统一并入 `person`
+- 待执行关键模型：
+  - `rgb_yolo11s_6cls_personmerge`：`80 epoch`
+  - `bifpn_only_yolo11s_6cls_personmerge`：`70 epoch`
+  - `full_proposed_residual_v2_yolo11s_6cls_personmerge`：`70 epoch`
+- 执行顺序：先 `1 epoch` smoke，再正式长训
+- 预期日志：
+  - `latest_rgb_yolo11s_6cls_personmerge.stdout.log`
+  - `latest_bifpn_only_yolo11s_6cls_personmerge.stdout.log`
+  - `latest_full_proposed_residual_v2_yolo11s_6cls_personmerge.stdout.log`
+- W\&B：继续使用 `iddaw-rgbnir-formal` 项目，标签应包含 `6-class-personmerge`
 
 ## 7. 当前可直接引用的结论
 
