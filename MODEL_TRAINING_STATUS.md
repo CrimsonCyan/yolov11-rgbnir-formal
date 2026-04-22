@@ -95,7 +95,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | 模式 | 输入模态 | `use_simotm` | `channels` | batch | workers | 正式主口径 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `visible/train,val` | `BGR` | `3` | `96` | `12` | `50 epoch` |
-| `rgb_yolo11s` | `visible/train,val` | `BGR` | `3` | `48`（50 epoch 与当前 80 epoch 重训） | `12` | `50 epoch`，现重训到 `80` |
+| `rgb_yolo11s` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
 | `rgb_rtdetr` | `visible/train,val` | `BGR` | `3` | `32` | `10` | `50 epoch`，现补到 `70` 中 |
 | `nir` | `nir/train,val` | `Gray` | `1` | `96` | `12` | `50 epoch` |
 | `rgbnir` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
@@ -105,7 +105,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `attention_only` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch` |
 | `full_proposed` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 历史 `25 epoch` 路线 |
 | `full_proposed_residual` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 历史 `25 epoch` 路线 |
-| `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `Proposed`，`50 epoch` |
+| `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `YOLO11n Proposed`，已完成 `80 epoch` |
+| `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
+| `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，待执行 `1 epoch smoke -> 70 epoch` |
 
 补充：
 
@@ -183,13 +185,14 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | 模式 | 最新正式 run | 训练口径 | 当前状态 | P | R | mAP50 | mAP50-95 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `iddaw-yolo11n-rgb2` | `50 epoch` | 已完成 | `0.58182` | `0.41056` | `0.43404` | `0.27339` | 官方 YOLO11 RGB-only 基线 |
-| `rgb_yolo11s` | `iddaw-yolo11s-rgb2` | `50 epoch` | 已完成 | `0.66632` | `0.46510` | `0.50990` | `0.33412` | 官方 YOLO11s RGB-only 基线 |
+| `rgb_yolo11s` | `iddaw-yolo11s-rgb7` | `80 epoch` | 已完成 | `0.69330` | `0.48334` | `0.53782` | `0.36051` | 官方 YOLO11s RGB-only 基线 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 双流 plain baseline |
 | `input_fusion` | `iddaw-yolo11n-input-fusion` | `50 epoch` | 已完成 | `0.55391` | `0.42494` | `0.44575` | `0.27876` | 4 通道输入级融合 |
 | `attention_only` | `iddaw-yolo11n-rgbnir-attention-only3` | `50 epoch` | 已完成 | `0.65444` | `0.43345` | `0.48363` | `0.30789` | `QualityAwareFusion` |
 | `bifpn_only` | `iddaw-yolo11n-rgbnir-bifpn-only3` | `50 epoch` | 已完成 | `0.68079` | `0.46012` | `0.51515` | `0.33616` | 当前 50 epoch 最强基线 |
-| `full_proposed_residual_v2` | `iddaw-yolo11n-rgbnir-full-proposed-residual-v22` | `50 epoch` | 已完成 | `0.61743` | `0.46794` | `0.49615` | `0.32200` | 当前正式 `Proposed` |
+| `full_proposed_residual_v2` | `iddaw-yolo11n-rgbnir-full-proposed-residual-v23` | `80 epoch` | 已完成 | `0.69012` | `0.47603` | `0.52312` | `0.34447` | 当前正式 `YOLO11n Proposed` |
+| `full_proposed_residual_v2_yolo11s` | `iddaw-yolo11s-rgbnir-full-proposed-residual-v22` | `70 epoch` | 已完成 | `0.67454` | `0.50943` | `0.54620` | `0.35699` | `YOLO11s` 版 RGB-NIR Proposed |
 | `rgb_rtdetr` | `iddaw-rtdetr-r18-rgb2` | `50 epoch` | 已完成 | `0.42766` | `0.33811` | `0.32081` | `0.18771` | 外部现成 RGB 单模基线 |
 
 ### 6.2 历史路线结果
@@ -275,41 +278,60 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `mAP50-95 = 0.224`
 - 结论：相对 `50 epoch` 的 `0.32081 / 0.18771`，继续训练后有明显提升，但整体仍弱于当前 YOLO11 RGB-only 与主要 RGB-NIR 路线
 
-### 6.6 `rgb_yolo11s` 80 epoch 从零重训练计划
+### 6.6 `rgb_yolo11s` 80 epoch 从零重训练结果
 
-- 当前已完成 `50 epoch` 正式训练：
-  - run：`iddaw-yolo11s-rgb2`
-  - `P = 0.66632`
-  - `R = 0.46510`
-  - `mAP50 = 0.50990`
-  - `mAP50-95 = 0.33412`
-- 当前改为从零重新训练一条全新的 `80 epoch` 正式 run，不再沿用 `iddaw-yolo11s-rgb2` 的 `last.pt` 续训
-- 本次训练固定设置：
-  - batch：`48`
-  - `val_interval = 1`
-  - W&B：开启
-- 推荐启动命令：
+- 当前正式完成 run：`iddaw-yolo11s-rgb7`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgb7`
+- W&B run：`36oh1gse`
+- 最终指标：
+  - `Precision = 0.69330`
+  - `Recall = 0.48334`
+  - `mAP50 = 0.53782`
+  - `mAP50-95 = 0.36051`
+- 相比 `50 epoch` 的 `0.50990 / 0.33412`，提升为：
+  - `mAP50 +0.02792`
+  - `mAP50-95 +0.02639`
+- 结论：`YOLO11s RGB-only` 已成为当前更强的单模 RGB 基线，并且当前结果已经高于 `YOLO11n` 版 Proposed 的 80 epoch 结果。这直接说明后续需要验证：在更强 backbone/scale 下，`RGB-NIR Proposed` 是否仍能保持增益。
 
-```bash
-WANDB_ENABLED=1 bash scripts/iddaw/launch_nohup_train.sh rgb_yolo11s 80 0
-```
+### 6.7 `YOLO11s` 版 Proposed 70 epoch 结果
 
-- 说明：
-  - 这里的 `80` 表示从 `epoch 1` 到 `epoch 80` 的完整训练
-  - 本次不传 `resume_ckpt`，因此不会从旧 run 恢复
-  - 当前已恢复为每个 epoch 都执行一次验证
+- 当前正式完成 run：`iddaw-yolo11s-rgbnir-full-proposed-residual-v22`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-full-proposed-residual-v22`
+- W&B run：`xtarzf9w`
+- 当前模型规模：
+  - `17,466,395` parameters
+  - `55.64 GFLOPs`
+- 最终 best.pt 验证指标：
+  - `Precision = 0.67454`
+  - `Recall = 0.50943`
+  - `mAP50 = 0.54620`
+  - `mAP50-95 = 0.35699`
+- 与当前 `YOLO11s RGB-only` 基线对比：
+  - `YOLO11s RGB-only`：`0.53782 / 0.36051`
+  - `YOLO11s RGB-NIR Proposed`：`0.54620 / 0.35699`
+  - 差值：`mAP50 +0.00838`，`mAP50-95 -0.00352`
+- 结果解读：
+  - RGB-NIR Proposed 在 `mAP50` 上略高于 `YOLO11s RGB-only`，同时 `Recall` 也更高（`+0.02609`）。
+  - 但 `mAP50-95` 略低于 `YOLO11s RGB-only`，说明在更严格 IoU 口径下，当前 `YOLO11s` 版 Proposed 还不足以证明对更强 RGB-only 基线形成了稳定全面优势。
+  - 因此这条结果更适合作为“RGB-NIR 在更强 backbone 下仍具备一定增益潜力”的证据，而不是直接替代现有最佳方案。
 
 ## 7. 当前可直接引用的结论
 
-- 当前 `all-weather / 7 类 / 50 epoch` 主线下，`bifpn_only` 是最强结果：
-  - `mAP50 = 0.51515`
-  - `mAP50-95 = 0.33616`
-- 当前 RGB-only 基线中，`YOLO11s RGB-only` 强于 `YOLO11n RGB-only`：
-  - `YOLO11s RGB-only`：`mAP50 = 0.50990`，`mAP50-95 = 0.33412`
-  - `YOLO11n RGB-only`：`mAP50 = 0.43404`，`mAP50-95 = 0.27339`
-- 当前正式 `Proposed` 为 `full_proposed_residual_v2`：
-  - `mAP50 = 0.49615`
-  - `mAP50-95 = 0.32200`
+- 当前 `70 epoch` 趋势测试下，`bifpn_only` 仍是现有最强内部路线：
+  - `mAP50 = 0.540`
+  - `mAP50-95 = 0.354`
+- 当前 RGB-only 基线中，`YOLO11s RGB-only` 已成为更强单模基线：
+  - `YOLO11s RGB-only`（80 epoch）：`mAP50 = 0.53782`，`mAP50-95 = 0.36051`
+  - `YOLO11n RGB-only`（50 epoch）：`mAP50 = 0.43404`，`mAP50-95 = 0.27339`
+- 当前正式 `YOLO11n Proposed` 为 `full_proposed_residual_v2`：
+  - `mAP50 = 0.52312`
+  - `mAP50-95 = 0.34447`
+- 当前 `YOLO11s` 版 RGB-NIR Proposed 结果为：
+  - `mAP50 = 0.54620`
+  - `mAP50-95 = 0.35699`
+- 与 `YOLO11s RGB-only` 对比：
+  - `mAP50` 略有提升，但 `mAP50-95` 略低
+  - 当前尚不足以证明在更强 RGB-only 基线下形成全面稳定优势
 - 外部 RGB 单模基线 `RT-DETR-R18 RGB-only` 已成功接入并完成 `50 epoch`：
   - `mAP50 = 0.32081`
   - `mAP50-95 = 0.18771`

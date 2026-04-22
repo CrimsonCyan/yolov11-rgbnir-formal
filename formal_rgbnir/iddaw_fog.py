@@ -16,10 +16,12 @@ TRAINABLE_MODES = {
     "input_fusion",
     "light_gate",
     "bifpn_only",
+    "bifpn_only_yolo11s",
     "attention_only",
     "full_proposed",
     "full_proposed_residual",
     "full_proposed_residual_v2",
+    "full_proposed_residual_v2_yolo11s",
 }
 
 
@@ -68,10 +70,12 @@ def build_dataset_yaml(mode: str) -> Path:
         "input_fusion",
         "light_gate",
         "bifpn_only",
+        "bifpn_only_yolo11s",
         "attention_only",
         "full_proposed",
         "full_proposed_residual",
         "full_proposed_residual_v2",
+        "full_proposed_residual_v2_yolo11s",
         "decision_fusion",
     }:
         train = "visible/train"
@@ -108,10 +112,12 @@ def experiment_name(mode: str) -> str:
         "input_fusion": "iddaw-yolo11n-input-fusion",
         "light_gate": "iddaw-yolo11n-rgbnir-light-gate",
         "bifpn_only": "iddaw-yolo11n-rgbnir-bifpn-only",
+        "bifpn_only_yolo11s": "iddaw-yolo11s-rgbnir-bifpn-only",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
         "full_proposed_residual": "iddaw-yolo11n-rgbnir-full-proposed-residual",
         "full_proposed_residual_v2": "iddaw-yolo11n-rgbnir-full-proposed-residual-v2",
+        "full_proposed_residual_v2_yolo11s": "iddaw-yolo11s-rgbnir-full-proposed-residual-v2",
         "decision_fusion": "iddaw-yolo11n-decision-fusion",
     }
     if mode not in names:
@@ -137,6 +143,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_gate.yaml").resolve())
     if mode == "bifpn_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_bifpn_only.yaml").resolve())
+    if mode == "bifpn_only_yolo11s":
+        return str((root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only.yaml").resolve())
     if mode == "attention_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_attention_only.yaml").resolve())
     if mode == "full_proposed":
@@ -145,6 +153,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed_residual.yaml").resolve())
     if mode == "full_proposed_residual_v2":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_full_proposed_residual_v2.yaml").resolve())
+    if mode == "full_proposed_residual_v2_yolo11s":
+        return str((root / "configs" / "models" / "yolo11s_rgbnir_full_proposed_residual_v2.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -158,10 +168,12 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
         "input_fusion",
         "light_gate",
         "bifpn_only",
+        "bifpn_only_yolo11s",
         "attention_only",
         "full_proposed",
         "full_proposed_residual",
         "full_proposed_residual_v2",
+        "full_proposed_residual_v2_yolo11s",
         "decision_fusion",
     }:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
@@ -178,10 +190,12 @@ def train_batch_for(mode: str) -> int:
         "input_fusion": 96,
         "light_gate": 48,
         "bifpn_only": 48,
+        "bifpn_only_yolo11s": 24,
         "attention_only": 48,
         "full_proposed": 48,
         "full_proposed_residual": 48,
         "full_proposed_residual_v2": 48,
+        "full_proposed_residual_v2_yolo11s": 24,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -198,10 +212,12 @@ def workers_for(mode: str) -> int:
         "input_fusion": 12,
         "light_gate": 10,
         "bifpn_only": 10,
+        "bifpn_only_yolo11s": 10,
         "attention_only": 10,
         "full_proposed": 10,
         "full_proposed_residual": 10,
         "full_proposed_residual_v2": 10,
+        "full_proposed_residual_v2_yolo11s": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -250,10 +266,12 @@ def common_predict_kwargs(mode: str) -> dict[str, object]:
             "input_fusion",
             "light_gate",
             "bifpn_only",
+        "bifpn_only_yolo11s",
             "attention_only",
             "full_proposed",
             "full_proposed_residual",
             "full_proposed_residual_v2",
+            "full_proposed_residual_v2_yolo11s",
             "decision_fusion",
         }
         else "nir/val"
