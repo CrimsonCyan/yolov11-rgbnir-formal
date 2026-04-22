@@ -7,6 +7,7 @@ from pathlib import Path
 
 CATEGORY_NAMES_7 = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 CATEGORY_NAMES_6_PERSONMERGE = ["person", "motorcycle", "car", "truck", "bus", "autorickshaw"]
+CATEGORY_NAMES = CATEGORY_NAMES_7
 DEFAULT_PAIRS = ["visible", "nir"]
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
@@ -42,7 +43,7 @@ def category_names_for_mode(mode: str) -> list[str]:
     return CATEGORY_NAMES_6_PERSONMERGE if mode in PERSONMERGE_MODES else CATEGORY_NAMES_7
 
 
-def resolve_dataset_root(mode: str) -> Path:
+def resolve_dataset_root(mode: str = "rgbnir") -> Path:
     if mode in PERSONMERGE_MODES:
         env_root = os.getenv("IDDAW_YOLO_ROOT_6CLS_PERSONMERGE")
         candidates = [

@@ -10,7 +10,7 @@ import torch
 from ultralytics import YOLO
 
 from .box_ops import xywh_to_xyxy
-from .iddaw_fog import CATEGORY_NAMES, DEFAULT_PAIRS, latest_weights_for, mode_specific_kwargs, resolve_dataset_root
+from .iddaw import CATEGORY_NAMES, DEFAULT_PAIRS, latest_weights_for, mode_specific_kwargs, resolve_dataset_root
 from .metrics import build_eval_targets, evaluate_predictions
 from .nms import batched_nms
 

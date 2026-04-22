@@ -9,7 +9,7 @@ if str(ROOT) not in sys.path:
 
 from ultralytics import YOLO
 
-from formal_rgbnir.iddaw_fog import build_dataset_yaml, common_train_kwargs, mode_specific_kwargs, model_config_for
+from formal_rgbnir.iddaw import build_dataset_yaml, common_train_kwargs, mode_specific_kwargs, model_config_for
 
 
 if __name__ == "__main__":

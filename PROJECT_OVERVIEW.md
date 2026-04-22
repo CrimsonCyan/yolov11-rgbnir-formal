@@ -50,7 +50,7 @@
 
 这里放项目级公共逻辑，而不是训练入口。
 
-- `formal_rgbnir/iddaw_fog.py`
+- `formal_rgbnir/iddaw.py`
   - 解析数据根目录
   - 动态生成运行时 dataset yaml
   - 统一定义 `rgb / nir / rgbnir` 三种模式

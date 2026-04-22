@@ -8,7 +8,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from formal_rgbnir.decision_fusion import run_decision_fusion, save_decision_fusion_outputs
-from formal_rgbnir.iddaw_fog import experiment_name, experiment_project_dir
+from formal_rgbnir.iddaw import experiment_name, experiment_project_dir
 
 
 if __name__ == "__main__":

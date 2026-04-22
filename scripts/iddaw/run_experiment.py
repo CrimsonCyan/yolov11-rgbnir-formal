@@ -16,7 +16,7 @@ from ultralytics import RTDETR, YOLO
 from ultralytics.utils import SETTINGS
 
 from formal_rgbnir.decision_fusion import run_decision_fusion, save_decision_fusion_outputs
-from formal_rgbnir.iddaw_fog import (
+from formal_rgbnir.iddaw import (
     build_dataset_yaml,
     common_predict_kwargs,
     common_train_kwargs,
