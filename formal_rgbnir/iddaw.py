@@ -261,9 +261,11 @@ def common_train_kwargs(
     device: str = "0",
     val_interval: int = 1,
     imgsz: int = 640,
+    optimizer: str | None = None,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
+    optimizer_name = optimizer or os.getenv("OPTIMIZER", "SGD")
     return {
         "cache": "ram",
         "imgsz": imgsz,
@@ -273,7 +275,7 @@ def common_train_kwargs(
         "close_mosaic": 5,
         "workers": workers_for(mode),
         "device": device,
-        "optimizer": "SGD",
+        "optimizer": optimizer_name,
         "project": "runs/IDD_AW",
         "name": experiment_name(mode),
     }

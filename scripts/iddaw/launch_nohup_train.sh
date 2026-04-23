@@ -20,6 +20,7 @@ export WANDB_ENABLED="${WANDB_ENABLED:-0}"
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
+export OPTIMIZER="${OPTIMIZER:-SGD}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
     DATASET_TAG="6-class-personmerge"
@@ -81,6 +82,7 @@ wandb_group=${WANDB_GROUP:-}
 wandb_tags=${WANDB_TAGS:-}
 val_interval=$VAL_INTERVAL
 imgsz=$IMGSZ
+optimizer=$OPTIMIZER
 started_at=$STAMP
 command=${CMD[*]}
 EOF

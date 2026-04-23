@@ -48,6 +48,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 - `WANDB_CONSOLE=off`，默认不上传高频 stdout/console 流
 - `VAL_INTERVAL=1`，默认每个 epoch 验证一次
 - `IDDAW_CLASS_SCHEMA=6cls_personmerge`，默认训练使用 6 类口径
+- `OPTIMIZER=SGD`，默认使用 SGD；可通过环境变量覆盖为 `Adam/AdamW` 等 Ultralytics 支持的优化器
 - 自动生成 `stdout.log / pid / meta` 三类远端日志文件
 - 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
 
@@ -212,7 +213,8 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | `rgb_yolo11s` | `iddaw-yolo11s-rgb7` | `80 epoch` | 已完成 | `0.69330` | `0.48334` | `0.53782` | `0.36051` | 官方 YOLO11s RGB-only 基线 |
 | `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge2` | `80 epoch` | 已完成 | `0.66588` | `0.53652` | `0.57578` | `0.39398` | 6 类口径，`rider -> person` 后的 YOLO11s RGB-only |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
-| `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 双流 plain baseline |
+| `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
+| `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
 | `input_fusion` | `iddaw-yolo11n-input-fusion` | `50 epoch` | 已完成 | `0.55391` | `0.42494` | `0.44575` | `0.27876` | 4 通道输入级融合 |
 | `attention_only` | `iddaw-yolo11n-rgbnir-attention-only3` | `50 epoch` | 已完成 | `0.65444` | `0.43345` | `0.48363` | `0.30789` | `QualityAwareFusion` |
 | `bifpn_only` | `iddaw-yolo11n-rgbnir-bifpn-only3` | `50 epoch` | 已完成 | `0.68079` | `0.46012` | `0.51515` | `0.33616` | 当前 50 epoch 最强基线 |
@@ -371,10 +373,13 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 合并规则：旧 `rider` 统一并入 `person`
 - 已完成关键模型：
   - `rgb_yolo11s_6cls_personmerge`：`80 epoch`
+  - `rgbnir`（默认 6 类口径）：`100 epoch, imgsz=800`
 - 已完成 run：
   - `iddaw-yolo11s-rgb-6cls-personmerge2`
+  - `iddaw-yolo11n-rgbnir-plain-6cls-personmerge`
 - W\&B：
   - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/ou6tiufd`
+  - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/5es3st3o`
 - 正式结果（`best.pt`）：
   - `Precision = 0.66588`
   - `Recall = 0.53652`
@@ -396,6 +401,49 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `latest_bifpn_only_yolo11s_6cls_personmerge.stdout.log`
   - `latest_full_proposed_residual_v2_yolo11s_6cls_personmerge.stdout.log`
 
+#### 6 类 `rgbnir plain`（`imgsz=800`, `100 epoch`）结果
+
+- SGD 版 run：`iddaw-yolo11n-rgbnir-plain-6cls-personmerge`
+- SGD 版结果目录：`runs/IDD_AW/iddaw-yolo11n-rgbnir-plain-6cls-personmerge`
+- SGD 版 W\&B run：`5es3st3o`
+- SGD 版 `best.pt`：
+  - `Precision = 0.643`
+  - `Recall = 0.539`
+  - `mAP50 = 0.572`
+  - `mAP50-95 = 0.385`
+
+- Adam 版 run：`iddaw-yolo11n-rgbnir-plain-6cls-personmerge2`
+- Adam 版结果目录：`runs/IDD_AW/iddaw-yolo11n-rgbnir-plain-6cls-personmerge2`
+- Adam 版 W\&B run：`jvhe9jh7`
+- Adam 版 `best.pt`：
+  - `Precision = 0.715`
+  - `Recall = 0.544`
+  - `mAP50 = 0.612`
+  - `mAP50-95 = 0.415`
+- Adam 版主要类别表现：
+  - `person`: `mAP50 = 0.468`, `mAP50-95 = 0.227`
+  - `motorcycle`: `mAP50 = 0.444`, `mAP50-95 = 0.201`
+  - `car`: `mAP50 = 0.865`, `mAP50-95 = 0.646`
+  - `truck`: `mAP50 = 0.584`, `mAP50-95 = 0.427`
+  - `bus`: `mAP50 = 0.638`, `mAP50-95 = 0.488`
+  - `autorickshaw`: `mAP50 = 0.673`, `mAP50-95 = 0.498`
+
+- Adam 相对 SGD 的变化：
+  - `Precision +0.072`
+  - `Recall +0.005`
+  - `mAP50 +0.040`
+  - `mAP50-95 +0.030`
+
+- Adam 与 6 类 `YOLO11s RGB-only`（`0.57578 / 0.39398`）对比：
+  - `mAP50 +0.03622`
+  - `mAP50-95 +0.02102`
+
+- 结果解读：
+  - 在默认 6 类口径和 `800×800` 输入下，将优化器从 `SGD` 切换为 `Adam` 后，双流 plain 的总体指标出现了明确提升，并首次稳定超过当前 6 类 `YOLO11s RGB-only`。
+  - 这次提升主要来自整体优化质量改善和中大目标类提升，其中 `truck`、`bus`、`car` 的提升更明显。
+  - 对最关键的小目标类别，`person` 相比 SGD 仍有小幅提升（`0.450 -> 0.468`），但 `motorcycle` 基本持平（`0.447 -> 0.444`），说明 `Adam` 并没有从根本上解决最小目标类别的检测短板。
+  - 当前结论是：`6 类 + 800×800 + RGBNIR plain + Adam` 已经足以把 plain 路线推到一个比 6 类强 RGB-only 更高的水平，但如果目标是继续改善 `motorcycle` 等小目标，后续仍需要更强结构或更高分辨率策略。
+
 ## 7. 当前可直接引用的结论
 
 - 当前 `70 epoch` 趋势测试下，`bifpn_only` 仍是现有最强内部路线：
@@ -408,6 +456,10 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `mAP50 = 0.57578`
   - `mAP50-95 = 0.39398`
   - 说明 `person/rider` 的类别边界不清确实是当前数据口径中的一个实质问题
+- 在相同 6 类口径和 `800×800` 输入下，`RGB-NIR plain + Adam` 当前达到：
+  - `mAP50 = 0.612`
+  - `mAP50-95 = 0.415`
+  - 说明 `RGB+NIR` 在更干净的类别定义与更合适的优化器下，已经能稳定超过当前 6 类强 RGB-only 基线
 - 当前正式 `YOLO11n Proposed` 为 `full_proposed_residual_v2`：
   - `mAP50 = 0.52312`
   - `mAP50-95 = 0.34447`
@@ -417,6 +469,9 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 与 `YOLO11s RGB-only` 对比：
   - 二者都在 `mAP50` 上略高于 `RGB-only`，但 `mAP50-95` 都略低
   - 当前尚不足以证明在更强 RGB-only 基线下形成全面稳定优势
+- 但就当前 6 类并行实验来看：
+  - `RGB-NIR plain` 在 `Adam + 800×800` 下已经超过 6 类 `YOLO11s RGB-only`
+  - 因而下一步更值得验证的是：在相同 6 类口径下，`BiFPN-only` 和 `Proposed` 是否还能进一步扩大这一优势
 - 外部 RGB 单模基线 `RT-DETR-R18 RGB-only` 已成功接入并完成 `50 epoch`：
   - `mAP50 = 0.32081`
   - `mAP50-95 = 0.18771`
