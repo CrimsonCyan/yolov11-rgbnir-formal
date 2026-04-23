@@ -272,7 +272,7 @@ def common_train_kwargs(
         "epochs": epochs,
         "val_interval": max(int(val_interval), 1),
         "batch": train_batch_for(mode),
-        "close_mosaic": 5,
+        "close_mosaic": 10,
         "workers": workers_for(mode),
         "device": device,
         "optimizer": optimizer_name,

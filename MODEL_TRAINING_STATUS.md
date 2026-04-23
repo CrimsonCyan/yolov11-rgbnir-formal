@@ -106,7 +106,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 - 输入尺寸：`640`
 - 优化器：`SGD`
 - 数据缓存：`cache=ram`
-- `close_mosaic=5`
+- `close_mosaic=10`
 - 设备：`device=0`
 - 项目目录：`runs/IDD_AW`
 - 脚本默认验证频率：`val_interval=1`
