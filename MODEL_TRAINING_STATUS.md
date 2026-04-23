@@ -138,7 +138,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `YOLO11n Proposed`，已完成 `80 epoch` |
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
 | `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
-| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 下一步待启动 `70 epoch` |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `1 epoch` 冒烟，`100 epoch` 正式训练进行中 |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
@@ -464,6 +464,62 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 但这次提升主要来自 `truck / bus / autorickshaw` 等中大目标类别，`person / motorcycle` 两个更关键的小目标类别没有同步提升，甚至相对 `BiFPN-only` 还有轻微回落。
   - 这说明当前问题已经不再是 `P5` 是否过度融合，而是 `NIR` 深层语义分支仍可能过重，导致它在高层语义上带来的噪声大于收益。
   - 基于这个结果，当前主线不再继续沿残差质量感知方向加结构，而是切到 `BiFPN-only + Light NIR branch`：保留 plain concat 与 `BiFPN` 骨架，只压缩 `NIR` 的深层语义容量，再测试是否能把整体收益转移到 `person / motorcycle`。
+
+### 6.11 `YOLO11s BiFPN-only + Light NIR branch` 当前状态
+
+- 当前主线 mode：`bifpn_only_light_nir_yolo11s_6cls_personmerge`
+- 结构定义：
+  - RGB 分支保持完整 `YOLO11s` backbone
+  - NIR 分支保留 `P3` 路径
+  - `P4/P5` 的 NIR 深层语义通道压缩后，再通过 `1x1 Conv` 投影回 RGB 对齐尺度
+  - 融合方式保持 `plain Concat + BiFPN`，不再引入残差质量感知融合
+
+#### `1 epoch` 冒烟结果
+
+- 当前 run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge`
+- 日志：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_yolo11s_6cls_personmerge_e1_20260424_001758.stdout.log`
+- meta：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_yolo11s_6cls_personmerge_e1_20260424_001758.meta`
+- 运行配置：
+  - `imgsz=640`
+  - `optimizer=SGD`
+  - `batch=24`
+  - `WANDB_ENABLED=0`
+- 模型规模：
+  - build summary：`14,167,414` parameters / `51.72 GFLOPs`
+  - fused summary：`14,148,598` parameters / `51.30 GFLOPs`
+- `best.pt` 验证指标：
+  - `Precision = 0.000860`
+  - `Recall = 0.0474`
+  - `mAP50 = 0.000519`
+  - `mAP50-95 = 0.000158`
+- 冒烟结论：
+  - 训练、验证、`best.pt/last.pt` 导出均正常完成
+  - mode 注册、数据集 YAML 生成、日志与 `meta` 落盘都正常
+  - 指标仍是随机初始化后一轮训练的正常低水平，可作为结构可跑通验证
+
+#### `100 epoch` 正式训练状态
+
+- 当前 run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge2`
+- 当前状态：训练中
+- PID：`1345642`
+- 已运行时长（记录时）：`05:24`
+- 日志：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_yolo11s_6cls_personmerge_e100_20260424_002035.stdout.log`
+- meta：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_yolo11s_6cls_personmerge_e100_20260424_002035.meta`
+- `latest_*` 软链接：已更新到本次 `100 epoch` run
+- 训练配置：
+  - `imgsz=640`
+  - `optimizer=SGD`
+  - `batch=24`
+  - `WANDB_ENABLED=1`
+  - `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+- W&B：
+  - run id：`ktdlbshk`
+  - run 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/ktdlbshk`
+- 当前日志状态：
+  - W&B 已成功初始化
+  - 训练已进入第 `1/100` 个 epoch
+  - 尚未出现 `OOM`、shape mismatch 或数据读取错误
 
 #### 6 类 `rgbnir plain`（`imgsz=800`, `100 epoch`）结果
 
