@@ -44,7 +44,10 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 
 通过脚本后台训练时，当前默认行为为：
 
-- `WANDB_ENABLED=0`，如需在线可视化需显式设为 `1`
+- `WANDB_ENABLED` 会按训练类型自动切换：
+  - `epochs <= 1` 的冒烟训练默认 `0`
+  - `epochs > 1` 的正式长训练默认 `1`
+  - 若显式传入环境变量 `WANDB_ENABLED=0/1`，则以显式设置为准
 - `WANDB_CONSOLE=off`，默认不上传高频 stdout/console 流
 - `VAL_INTERVAL=1`，默认每个 epoch 验证一次
 - `IDDAW_CLASS_SCHEMA=6cls_personmerge`，默认训练使用 6 类口径
@@ -96,8 +99,10 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual` | `configs/models/yolo11n_rgbnir_full_proposed_residual.yaml` | `ResidualQualityAwareFusion + BiFPN` 组合版历史路线 |
 | `full_proposed_residual_v2` | `configs/models/yolo11n_rgbnir_full_proposed_residual_v2.yaml` | 当前正式 `Proposed`：`ResidualQualityAwareFusionV2 + BiFPN` |
 | `bifpn_only_yolo11s` | `configs/models/yolo11s_rgbnir_bifpn_only.yaml` | `YOLO11s` 版双流 `BiFPN-only` |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch`：保留 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道并投影回融合尺度后做 plain concat |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
+| `proposed_lite_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_light_nir_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite + Light NIR branch`：保持 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道后再投影回融合尺度 |
 | `decision_fusion` | `formal_rgbnir/decision_fusion.py` | 离线结果级融合：读取 `rgb` 与 `nir` 权重，推理后做 batched NMS 融合 |
 
 ## 4. 统一训练参数与设置
@@ -133,9 +138,11 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前 `YOLO11n Proposed`，已完成 `80 epoch` |
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
 | `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
-| `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 下一步待启动 `70 epoch` |
+| `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
+| `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
-| `bifpn_only_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已启动 `70 epoch` |
+| `bifpn_only_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `50 epoch` |
 
 补充：
 
@@ -215,6 +222,8 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | `rgb` | `iddaw-yolo11n-rgb2` | `50 epoch` | 已完成 | `0.58182` | `0.41056` | `0.43404` | `0.27339` | 官方 YOLO11 RGB-only 基线 |
 | `rgb_yolo11s` | `iddaw-yolo11s-rgb7` | `80 epoch` | 已完成 | `0.69330` | `0.48334` | `0.53782` | `0.36051` | 官方 YOLO11s RGB-only 基线 |
 | `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge2` | `80 epoch` | 已完成 | `0.66588` | `0.53652` | `0.57578` | `0.39398` | 6 类口径，`rider -> person` 后的 YOLO11s RGB-only |
+| `bifpn_only_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge2` | `50 epoch` | 已完成 | `0.69297` | `0.51787` | `0.58269` | `0.39173` | 6 类口径下当前已完成的 YOLO11s BiFPN-only 对照 |
+| `proposed_lite_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3` | `70 epoch` | 已完成 | `0.76323` | `0.50914` | `0.59353` | `0.39896` | 6 类口径下 `P3/P4` 质量感知 + `P5 plain concat` 的 Proposed-Lite |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -377,12 +386,18 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 已完成关键模型：
   - `rgb_yolo11s_6cls_personmerge`：`80 epoch`
   - `rgbnir`（默认 6 类口径）：`100 epoch, imgsz=800`
+  - `bifpn_only_yolo11s_6cls_personmerge`：`50 epoch`
+  - `proposed_lite_yolo11s_6cls_personmerge`：`70 epoch`
 - 已完成 run：
   - `iddaw-yolo11s-rgb-6cls-personmerge2`
   - `iddaw-yolo11n-rgbnir-plain-6cls-personmerge`
+  - `iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge2`
+  - `iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3`
 - W\&B：
   - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/ou6tiufd`
   - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/5es3st3o`
+  - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/6b8alwxd`
+  - `https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/3ai9kzz3`
 - 正式结果（`best.pt`）：
   - `Precision = 0.66588`
   - `Recall = 0.53652`
@@ -396,13 +411,59 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 结果解读：
   - 将 `rider` 并入 `person` 后，总体 `Recall` 与两档 AP 都有明确提升，说明原 7 类口径下 `person/rider` 的类别边界确实在污染监督质量。
   - 但按类结果看，`person`（`mAP50=0.370`）和 `motorcycle`（`mAP50=0.397`）仍明显弱于 `car` 等中大目标，说明仅靠类别合并还不足以彻底解决小目标检测问题。
-  - 因此这条结果支持继续推进 6 类并行方案下的 `BiFPN-only` 与 `Proposed`，再判断标签口径改善能否在双模态模型上继续带来稳定增益。
-- 后续关键模型：
-  - `bifpn_only_yolo11s_6cls_personmerge`：`70 epoch`
+  - 因此 6 类口径已经足够作为下一阶段 `YOLO11s RGB-NIR` 主线，后续重点不再是标签合并本身，而是结构是否能把增益真正送到 `person/motorcycle` 这类小目标。
+- 待补齐关键模型：
+  - `bifpn_only_light_nir_yolo11s_6cls_personmerge`：`70 epoch`
   - `full_proposed_residual_v2_yolo11s_6cls_personmerge`：`70 epoch`
-- 对应日志：
+- 当前对应日志：
   - `latest_bifpn_only_yolo11s_6cls_personmerge.stdout.log`
-  - `latest_full_proposed_residual_v2_yolo11s_6cls_personmerge.stdout.log`
+  - `latest_proposed_lite_yolo11s_6cls_personmerge.stdout.log`
+
+### 6.10 `YOLO11s Proposed-Lite` 6 类 70 epoch 结果
+
+- 当前正式完成 run：`iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3`
+- W&B run：`3ai9kzz3`
+- 当前模型规模：
+  - `16,787,554` parameters
+  - `54.68 GFLOPs`
+- `best.pt` 最终验证指标：
+  - `Precision = 0.76323`
+  - `Recall = 0.50914`
+  - `mAP50 = 0.59353`
+  - `mAP50-95 = 0.39896`
+- `last` epoch 指标：
+  - `Precision = 0.70273`
+  - `Recall = 0.53047`
+  - `mAP50 = 0.58620`
+  - `mAP50-95 = 0.39439`
+- `best.pt` 按类结果：
+  - `person`: `mAP50 = 0.409`, `mAP50-95 = 0.193`
+  - `motorcycle`: `mAP50 = 0.417`, `mAP50-95 = 0.189`
+  - `car`: `mAP50 = 0.840`, `mAP50-95 = 0.613`
+  - `truck`: `mAP50 = 0.571`, `mAP50-95 = 0.403`
+  - `bus`: `mAP50 = 0.635`, `mAP50-95 = 0.487`
+  - `autorickshaw`: `mAP50 = 0.690`, `mAP50-95 = 0.508`
+- 与 `rgb_yolo11s_6cls_personmerge` 对比：
+  - `YOLO11s RGB-only 6 类`：`0.57578 / 0.39398`
+  - `YOLO11s RGB-NIR Proposed-Lite`：`0.59353 / 0.39896`
+  - 差值：`mAP50 +0.01775`，`mAP50-95 +0.00498`
+- 与当前已完成的 `bifpn_only_yolo11s_6cls_personmerge` 对比：
+  - `YOLO11s RGB-NIR BiFPN-only 6 类`：`0.58269 / 0.39173`
+  - `YOLO11s RGB-NIR Proposed-Lite`：`0.59353 / 0.39896`
+  - 差值：`mAP50 +0.01084`，`mAP50-95 +0.00723`
+- 与 `bifpn_only_yolo11s_6cls_personmerge` 的关键类别对比：
+  - `person`: `0.443 / 0.212 -> 0.409 / 0.193`
+  - `motorcycle`: `0.427 / 0.190 -> 0.417 / 0.189`
+  - `car`: `0.853 / 0.627 -> 0.840 / 0.613`
+  - `truck`: `0.543 / 0.383 -> 0.571 / 0.403`
+  - `bus`: `0.559 / 0.432 -> 0.635 / 0.487`
+  - `autorickshaw`: `0.671 / 0.506 -> 0.690 / 0.508`
+- 结果解读：
+  - `Proposed-Lite` 已经证明“`P3/P4` 保留质量感知、`P5` 回退 plain concat”这条方向是成立的。至少在当前 `YOLO11s + 6 类 + 640 + SGD` 配方下，它整体上已经同时超过 `RGB-only` 和当前已完成的 `BiFPN-only` 6 类对照。
+  - 但这次提升主要来自 `truck / bus / autorickshaw` 等中大目标类别，`person / motorcycle` 两个更关键的小目标类别没有同步提升，甚至相对 `BiFPN-only` 还有轻微回落。
+  - 这说明当前问题已经不再是 `P5` 是否过度融合，而是 `NIR` 深层语义分支仍可能过重，导致它在高层语义上带来的噪声大于收益。
+  - 基于这个结果，当前主线不再继续沿残差质量感知方向加结构，而是切到 `BiFPN-only + Light NIR branch`：保留 plain concat 与 `BiFPN` 骨架，只压缩 `NIR` 的深层语义容量，再测试是否能把整体收益转移到 `person / motorcycle`。
 
 #### 6 类 `rgbnir plain`（`imgsz=800`, `100 epoch`）结果
 
@@ -458,6 +519,14 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 在 6 类 `person+rider` 合并口径下，`YOLO11s RGB-only` 进一步提升到：
   - `mAP50 = 0.57578`
   - `mAP50-95 = 0.39398`
+- 在当前已完成的 `YOLO11s RGB-NIR` 6 类对照里，`Proposed-Lite` 是目前整体最强的一条已完成路线：
+  - `Proposed-Lite`（70 epoch）：`mAP50 = 0.59353`，`mAP50-95 = 0.39896`
+  - `BiFPN-only`（50 epoch）：`mAP50 = 0.58269`，`mAP50-95 = 0.39173`
+  - `YOLO11s RGB-only 6 类`（80 epoch）：`mAP50 = 0.57578`，`mAP50-95 = 0.39398`
+- 但 `Proposed-Lite` 的收益还没有落到最关键的小目标类别上：
+  - 相比 `BiFPN-only`，`person` 从 `0.443 / 0.212` 降到 `0.409 / 0.193`
+  - `motorcycle` 从 `0.427 / 0.190` 降到 `0.417 / 0.189`
+  - 因此下一步主线不应继续加重跨模态融合，而应优先验证 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 这条更干净的 `BiFPN-only + 轻 NIR branch` 路线。
   - 说明 `person/rider` 的类别边界不清确实是当前数据口径中的一个实质问题
 - 在相同 6 类口径和 `800×800` 输入下，`RGB-NIR plain + Adam` 当前达到：
   - `mAP50 = 0.612`

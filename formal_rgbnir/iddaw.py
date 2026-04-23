@@ -14,8 +14,10 @@ LEGACY_CLASS_SCHEMA = "7cls"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_yolo11s_6cls_personmerge",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
     "proposed_lite_yolo11s_6cls_personmerge",
+    "proposed_lite_light_nir_yolo11s_6cls_personmerge",
 }
 TRAINABLE_MODES = {
     "rgb",
@@ -29,6 +31,7 @@ TRAINABLE_MODES = {
     "bifpn_only",
     "bifpn_only_yolo11s",
     "bifpn_only_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_yolo11s_6cls_personmerge",
     "attention_only",
     "full_proposed",
     "full_proposed_residual",
@@ -36,6 +39,7 @@ TRAINABLE_MODES = {
     "full_proposed_residual_v2_yolo11s",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
     "proposed_lite_yolo11s_6cls_personmerge",
+    "proposed_lite_light_nir_yolo11s_6cls_personmerge",
 }
 
 
@@ -138,6 +142,7 @@ def experiment_name(mode: str) -> str:
         "bifpn_only": "iddaw-yolo11n-rgbnir-bifpn-only",
         "bifpn_only_yolo11s": "iddaw-yolo11s-rgbnir-bifpn-only",
         "bifpn_only_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge",
+        "bifpn_only_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
         "full_proposed_residual": "iddaw-yolo11n-rgbnir-full-proposed-residual",
@@ -145,6 +150,7 @@ def experiment_name(mode: str) -> str:
         "full_proposed_residual_v2_yolo11s": "iddaw-yolo11s-rgbnir-full-proposed-residual-v2",
         "full_proposed_residual_v2_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-full-proposed-residual-v2-6cls-personmerge",
         "proposed_lite_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge",
+        "proposed_lite_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-proposed-lite-light-nir-p34-6cls-personmerge",
         "decision_fusion": "iddaw-yolo11n-decision-fusion",
     }
     if mode not in names:
@@ -178,6 +184,10 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / config).resolve())
     if mode == "bifpn_only_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only_6cls_personmerge.yaml").resolve())
+    if mode == "bifpn_only_light_nir_yolo11s_6cls_personmerge":
+        return str(
+            (root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml").resolve()
+        )
     if mode == "attention_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_attention_only.yaml").resolve())
     if mode == "full_proposed":
@@ -197,6 +207,10 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / "yolo11s_rgbnir_full_proposed_residual_v2_6cls_personmerge.yaml").resolve())
     if mode == "proposed_lite_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml").resolve())
+    if mode == "proposed_lite_light_nir_yolo11s_6cls_personmerge":
+        return str(
+            (root / "configs" / "models" / "yolo11s_rgbnir_proposed_lite_light_nir_p34_6cls_personmerge.yaml").resolve()
+        )
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -223,6 +237,7 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only": 48,
         "bifpn_only_yolo11s": 24,
         "bifpn_only_yolo11s_6cls_personmerge": 24,
+        "bifpn_only_light_nir_yolo11s_6cls_personmerge": 24,
         "attention_only": 48,
         "full_proposed": 48,
         "full_proposed_residual": 48,
@@ -230,6 +245,7 @@ def train_batch_for(mode: str) -> int:
         "full_proposed_residual_v2_yolo11s": 24,
         "full_proposed_residual_v2_yolo11s_6cls_personmerge": 24,
         "proposed_lite_yolo11s_6cls_personmerge": 24,
+        "proposed_lite_light_nir_yolo11s_6cls_personmerge": 24,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -249,6 +265,7 @@ def workers_for(mode: str) -> int:
         "bifpn_only": 10,
         "bifpn_only_yolo11s": 10,
         "bifpn_only_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_yolo11s_6cls_personmerge": 10,
         "attention_only": 10,
         "full_proposed": 10,
         "full_proposed_residual": 10,
@@ -256,6 +273,7 @@ def workers_for(mode: str) -> int:
         "full_proposed_residual_v2_yolo11s": 10,
         "full_proposed_residual_v2_yolo11s_6cls_personmerge": 10,
         "proposed_lite_yolo11s_6cls_personmerge": 10,
+        "proposed_lite_light_nir_yolo11s_6cls_personmerge": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")

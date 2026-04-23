@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|bifpn_only_light_nir_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge|proposed_lite_light_nir_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
@@ -16,7 +16,15 @@ if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerg
   export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"
 fi
 export PYTHONUNBUFFERED=1
-export WANDB_ENABLED="${WANDB_ENABLED:-0}"
+if [[ -z "${WANDB_ENABLED+x}" ]]; then
+  if [[ "$EPOCHS" -le 1 ]]; then
+    export WANDB_ENABLED=0
+  else
+    export WANDB_ENABLED=1
+  fi
+else
+  export WANDB_ENABLED
+fi
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
