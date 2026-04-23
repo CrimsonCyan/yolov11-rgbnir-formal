@@ -15,6 +15,7 @@ PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
+    "proposed_lite_yolo11s_6cls_personmerge",
 }
 TRAINABLE_MODES = {
     "rgb",
@@ -34,6 +35,7 @@ TRAINABLE_MODES = {
     "full_proposed_residual_v2",
     "full_proposed_residual_v2_yolo11s",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
+    "proposed_lite_yolo11s_6cls_personmerge",
 }
 
 
@@ -142,6 +144,7 @@ def experiment_name(mode: str) -> str:
         "full_proposed_residual_v2": "iddaw-yolo11n-rgbnir-full-proposed-residual-v2",
         "full_proposed_residual_v2_yolo11s": "iddaw-yolo11s-rgbnir-full-proposed-residual-v2",
         "full_proposed_residual_v2_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-full-proposed-residual-v2-6cls-personmerge",
+        "proposed_lite_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge",
         "decision_fusion": "iddaw-yolo11n-decision-fusion",
     }
     if mode not in names:
@@ -192,6 +195,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "configs" / "models" / config).resolve())
     if mode == "full_proposed_residual_v2_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_full_proposed_residual_v2_6cls_personmerge.yaml").resolve())
+    if mode == "proposed_lite_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml").resolve())
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -224,6 +229,7 @@ def train_batch_for(mode: str) -> int:
         "full_proposed_residual_v2": 48,
         "full_proposed_residual_v2_yolo11s": 24,
         "full_proposed_residual_v2_yolo11s_6cls_personmerge": 24,
+        "proposed_lite_yolo11s_6cls_personmerge": 24,
     }
     if mode not in batches:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -249,6 +255,7 @@ def workers_for(mode: str) -> int:
         "full_proposed_residual_v2": 10,
         "full_proposed_residual_v2_yolo11s": 10,
         "full_proposed_residual_v2_yolo11s_6cls_personmerge": 10,
+        "proposed_lite_yolo11s_6cls_personmerge": 10,
     }
     if mode not in workers:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -262,16 +269,18 @@ def common_train_kwargs(
     val_interval: int = 1,
     imgsz: int = 640,
     optimizer: str | None = None,
+    batch: int | None = None,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
     optimizer_name = optimizer or os.getenv("OPTIMIZER", "SGD")
+    train_batch = batch if batch and batch > 0 else train_batch_for(mode)
     return {
         "cache": "ram",
         "imgsz": imgsz,
         "epochs": epochs,
         "val_interval": max(int(val_interval), 1),
-        "batch": train_batch_for(mode),
+        "batch": train_batch,
         "close_mosaic": 10,
         "workers": workers_for(mode),
         "device": device,
@@ -281,12 +290,12 @@ def common_train_kwargs(
     }
 
 
-def common_val_kwargs(mode: str, imgsz: int = 640) -> dict[str, object]:
-    batch = 16 if mode == "decision_fusion" else train_batch_for(mode)
+def common_val_kwargs(mode: str, imgsz: int = 640, batch: int | None = None) -> dict[str, object]:
+    val_batch = batch if batch and batch > 0 else (16 if mode == "decision_fusion" else train_batch_for(mode))
     return {
         "split": "val",
         "imgsz": imgsz,
-        "batch": batch,
+        "batch": val_batch,
         "project": "runs/IDD_AW_VAL",
         "name": experiment_name(mode),
     }

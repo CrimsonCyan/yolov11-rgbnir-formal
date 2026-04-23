@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
@@ -21,6 +21,7 @@ export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
 export OPTIMIZER="${OPTIMIZER:-SGD}"
+export BATCH="${BATCH:-}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
     DATASET_TAG="6-class-personmerge"
@@ -53,7 +54,12 @@ CMD=(
   --imgsz "$IMGSZ"
   --val-interval "$VAL_INTERVAL"
   --device "$DEVICE"
+  --optimizer "$OPTIMIZER"
 )
+
+if [[ -n "$BATCH" ]]; then
+  CMD+=(--batch "$BATCH")
+fi
 
 if [[ -n "$RESUME_CKPT" ]]; then
   CMD+=(--resume "$RESUME_CKPT")
@@ -83,6 +89,7 @@ wandb_tags=${WANDB_TAGS:-}
 val_interval=$VAL_INTERVAL
 imgsz=$IMGSZ
 optimizer=$OPTIMIZER
+batch=${BATCH:-}
 started_at=$STAMP
 command=${CMD[*]}
 EOF

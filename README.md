@@ -45,7 +45,15 @@ python scripts/iddaw/run_experiment.py --mode rgbnir --task train --epochs 1
 ```powershell
 python scripts/iddaw/run_experiment.py --mode input_fusion --task train --epochs 1
 python scripts/iddaw/run_experiment.py --mode light_gate --task train --epochs 1
+python scripts/iddaw/run_experiment.py --mode proposed_lite_yolo11s_6cls_personmerge --task train --epochs 1
 python scripts/iddaw/run_experiment.py --mode decision_fusion --task val
+```
+
+统一入口现在支持可选覆盖：
+
+```powershell
+python scripts/iddaw/run_experiment.py --mode proposed_lite_yolo11s_6cls_personmerge --task train --epochs 70 --imgsz 640 --optimizer SGD --batch 24
+python scripts/iddaw/run_experiment.py --mode rgb_yolo11s_6cls_personmerge --task train --epochs 100 --imgsz 800 --optimizer Adam --batch 16
 ```
 
 ## 远端 nohup 训练

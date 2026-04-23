@@ -87,6 +87,7 @@ def parse_args() -> argparse.Namespace:
             "full_proposed_residual_v2",
             "full_proposed_residual_v2_yolo11s",
             "full_proposed_residual_v2_yolo11s_6cls_personmerge",
+            "proposed_lite_yolo11s_6cls_personmerge",
             "decision_fusion",
         ],
         required=True,
@@ -101,6 +102,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nir-weights", default="", help="NIR checkpoint for decision fusion.")
     parser.add_argument("--split", default="val", choices=["train", "val"], help="Dataset split for decision fusion.")
     parser.add_argument("--device", default="0")
+    parser.add_argument("--optimizer", default="", help="Optional optimizer override for train, e.g. SGD or Adam.")
+    parser.add_argument("--batch", type=int, default=0, help="Optional batch override for train/val.")
     return parser.parse_args()
 
 
@@ -140,7 +143,15 @@ def main() -> None:
             model = model_cls(args.resume)
             model.train(
                 data=data_yaml,
-                **common_train_kwargs(args.mode, extra_epochs, args.device, args.val_interval, args.imgsz),
+                **common_train_kwargs(
+                    args.mode,
+                    extra_epochs,
+                    args.device,
+                    args.val_interval,
+                    args.imgsz,
+                    optimizer=args.optimizer or None,
+                    batch=args.batch or None,
+                ),
                 **mode_kwargs,
             )
             return
@@ -148,7 +159,15 @@ def main() -> None:
         model = model_cls(model_config_for(args.mode))
         model.train(
             data=data_yaml,
-            **common_train_kwargs(args.mode, args.epochs, args.device, args.val_interval, args.imgsz),
+            **common_train_kwargs(
+                args.mode,
+                args.epochs,
+                args.device,
+                args.val_interval,
+                args.imgsz,
+                optimizer=args.optimizer or None,
+                batch=args.batch or None,
+            ),
             **mode_kwargs,
         )
         return
@@ -158,7 +177,7 @@ def main() -> None:
 
     model = model_cls(args.weights)
     if args.task == "val":
-        model.val(data=data_yaml, **common_val_kwargs(args.mode, args.imgsz), **mode_kwargs)
+        model.val(data=data_yaml, **common_val_kwargs(args.mode, args.imgsz, batch=args.batch or None), **mode_kwargs)
         return
 
     model.predict(**common_predict_kwargs(args.mode, args.imgsz), **mode_kwargs)
