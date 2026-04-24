@@ -751,7 +751,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/20zojg1d`
   - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
   - 状态：外部中断，远端已无该训练进程；日志最后可见约 `14/100`，不纳入公平主表。
-- 当前重启 run：
+- 外部中断/失败记录：
   - mode：`rgb_yolo11s_6cls_personmerge`
   - run：`iddaw-yolo11s-rgb-6cls-personmerge5`
   - 远端 pid：`6662`
@@ -760,7 +760,13 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - W&B run：`a6ve6pep`
   - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/a6ve6pep`
   - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
-  - 启动状态：已完成 Ultralytics 初始化、W&B 建连与 AMP check；已进入 `4/100` epoch，GPU 显存约 `8.6G`，暂未出现 OOM、Traceback 或 NaN。
+  - 状态：运行到 `5/100` 后失败，不纳入公平主表。
+  - 错误：`RuntimeError: CUDA error: unspecified launch failure`
+  - 伴随现象：随后 `nvidia-smi` 报 `Unable to determine the device handle for GPU0: 0000:01:00.0: Unknown Error`，判断为 GPU/驱动层异常，不是单纯 batch/OOM 问题。
+- 当前处理建议：
+  - 先恢复 `4_3090` 的 GPU 可见性，至少要求 `nvidia-smi` 正常显示 RTX 3090 后再重启训练。
+  - GPU 恢复后继续同配方从头跑：`rgb_yolo11s_6cls_personmerge`, `imgsz=800`, `Adam`, `batch=20`, `100 epoch`。
+  - 如果 GPU 恢复后仍复现 launch failure，再把 batch 同步降到 `16` 作为稳定性排查，而不是直接改变优化器或输入尺寸。
 - 第二优先级：如果 RGB-only 高配方仍低于 `BiFPN-only + Light NIR branch`，则把这两条作为最终主表核心对照，并围绕 `person / motorcycle` 展开小目标分析。
 - 第三优先级：如果显存和时间允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
 - 暂不建议继续推进 `ResidualQualityAwareFusionV2` 或 `Proposed-Lite + light NIR`，因为当前结果已经说明更轻的 NIR 深层分支比更复杂的残差质量感知更稳。
