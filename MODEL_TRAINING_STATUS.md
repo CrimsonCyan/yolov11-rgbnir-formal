@@ -741,7 +741,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/7o4m6xnq`
   - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
   - 状态：外部中断，远端已无该训练进程；日志最后可见约 `16/100`，不纳入公平主表。
-- 当前重启 run：
+- 外部中断记录：
   - mode：`rgb_yolo11s_6cls_personmerge`
   - run：`iddaw-yolo11s-rgb-6cls-personmerge4`
   - 远端 pid：`6536`
@@ -750,7 +750,17 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - W&B run：`20zojg1d`
   - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/20zojg1d`
   - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
-  - 启动状态：已完成 Ultralytics 初始化与 AMP check，已进入 `1/100` epoch；GPU 显存约 `8.7G`，暂未出现 OOM、Traceback 或 NaN。
+  - 状态：外部中断，远端已无该训练进程；日志最后可见约 `14/100`，不纳入公平主表。
+- 当前重启 run：
+  - mode：`rgb_yolo11s_6cls_personmerge`
+  - run：`iddaw-yolo11s-rgb-6cls-personmerge5`
+  - 远端 pid：`6662`
+  - 日志：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260424_224647.stdout.log`
+  - meta：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260424_224647.meta`
+  - W&B run：`a6ve6pep`
+  - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/a6ve6pep`
+  - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
+  - 启动状态：已完成 Ultralytics 初始化、W&B 建连与 AMP check；已进入 `4/100` epoch，GPU 显存约 `8.6G`，暂未出现 OOM、Traceback 或 NaN。
 - 第二优先级：如果 RGB-only 高配方仍低于 `BiFPN-only + Light NIR branch`，则把这两条作为最终主表核心对照，并围绕 `person / motorcycle` 展开小目标分析。
 - 第三优先级：如果显存和时间允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
 - 暂不建议继续推进 `ResidualQualityAwareFusionV2` 或 `Proposed-Lite + light NIR`，因为当前结果已经说明更轻的 NIR 深层分支比更复杂的残差质量感知更稳。
