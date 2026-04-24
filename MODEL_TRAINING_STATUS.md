@@ -569,6 +569,74 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `motorcycle` 的 `mAP50` 从 `0.417` 回升到 `0.434`，但 `mAP50-95` 仍只有 `0.183`，低于原始 `BiFPN-only` 的 `0.190` 和 plain Adam 的 `0.201`。
   - 当前最主要的剩余问题不是整体框架有效性，而是小目标高 IoU 定位质量仍偏弱。
 
+#### `100 epoch` 高配方确认结果（`imgsz=800`, `Adam`）
+
+- 当前 run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge5`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge5`
+- 日志：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_yolo11s_6cls_personmerge_e100_20260424_165228.stdout.log`
+- meta：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_yolo11s_6cls_personmerge_e100_20260424_165228.meta`
+- W&B run：`78q6hoxl`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/78q6hoxl`
+- 运行配置：
+  - `imgsz=800`
+  - `optimizer=Adam`
+  - `batch=20`
+  - `epochs=100`
+  - `WANDB_ENABLED=1`
+  - `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+- 模型规模：
+  - fused summary：`14,148,598` parameters / `80.15 GFLOPs`
+- 训练完成状态：
+  - `100 epochs completed in 1.575 hours`
+  - `results.csv` 共 `100` 个 epoch
+  - `best.pt` 与 `last.pt` 均已导出并完成 optimizer strip
+
+- `best.pt` 复验指标：
+  - `Precision = 0.76181`
+  - `Recall = 0.60168`
+  - `mAP50 = 0.66055`
+  - `mAP50-95 = 0.47087`
+- `results.csv` 最优 epoch：
+  - epoch `99`
+  - `Precision = 0.76375`
+  - `Recall = 0.59856`
+  - `mAP50 = 0.66068`
+  - `mAP50-95 = 0.47102`
+- epoch `100` 指标：
+  - `Precision = 0.76175`
+  - `Recall = 0.59842`
+  - `mAP50 = 0.66027`
+  - `mAP50-95 = 0.47022`
+
+- `best.pt` 主要类别表现：
+  - `person`: `mAP50 = 0.502`, `mAP50-95 = 0.255`
+  - `motorcycle`: `mAP50 = 0.522`, `mAP50-95 = 0.243`
+  - `car`: `mAP50 = 0.884`, `mAP50-95 = 0.679`
+  - `truck`: `mAP50 = 0.630`, `mAP50-95 = 0.474`
+  - `bus`: `mAP50 = 0.715`, `mAP50-95 = 0.611`
+  - `autorickshaw`: `mAP50 = 0.709`, `mAP50-95 = 0.564`
+
+- 与同结构 `640 + SGD` 正式结果（`0.60467 / 0.41390`）对比：
+  - `mAP50 +0.05588`
+  - `mAP50-95 +0.05697`
+  - `person`: `0.431 / 0.207 -> 0.502 / 0.255`
+  - `motorcycle`: `0.434 / 0.183 -> 0.522 / 0.243`
+- 与 `RGB-NIR plain + Adam + 800`（`0.612 / 0.415`）对比：
+  - `mAP50 +0.04855`
+  - `mAP50-95 +0.05587`
+  - `person`: `0.468 / 0.227 -> 0.502 / 0.255`
+  - `motorcycle`: `0.444 / 0.201 -> 0.522 / 0.243`
+- 与当前 6 类 `YOLO11s RGB-only`（`0.57578 / 0.39398`）对比：
+  - `mAP50 +0.08477`
+  - `mAP50-95 +0.07689`
+  - 注意：该对比仍不是最终公平主表，因为 RGB-only 还未按 `800 + Adam + 100 epoch + batch=20` 同配方重跑。
+
+- 结果解读：
+  - `800 + Adam` 高配方显著放大了 Light NIR 结构的收益，且提升不再只集中在中大目标。
+  - `person` 与 `motorcycle` 同时超过 `RGB-NIR plain + Adam + 800`，说明 `BiFPN + Light NIR branch` 对小目标定位质量是正向的。
+  - 当前主线可以暂定为 `YOLO11s + BiFPN-only + Light NIR branch`，不需要回到 `ResidualQualityAwareFusionV2` 方向。
+  - 下一步必须补同配方 `YOLO11s RGB-only 6cls`，否则不能把 `RGB-NIR 优于 RGB-only` 写成论文主表结论。
+
 #### 6 类 `rgbnir plain`（`imgsz=800`, `100 epoch`）结果
 
 - SGD 版 run：`iddaw-yolo11n-rgbnir-plain-6cls-personmerge`
@@ -621,7 +689,8 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `mAP50 = 0.57578`
   - `mAP50-95 = 0.39398`
 - 在当前已完成的 `YOLO11s RGB-NIR` 6 类对照里，`BiFPN-only + Light NIR branch` 是目前整体最强的一条已完成路线：
-  - `BiFPN-only + Light NIR branch`（100 epoch, batch=32）：`mAP50 = 0.60467`，`mAP50-95 = 0.41390`
+  - `BiFPN-only + Light NIR branch`（100 epoch, `800 + Adam + batch=20`）：`mAP50 = 0.66055`，`mAP50-95 = 0.47087`
+  - `BiFPN-only + Light NIR branch`（100 epoch, `640 + SGD + batch=32`）：`mAP50 = 0.60467`，`mAP50-95 = 0.41390`
   - `Proposed-Lite`（70 epoch）：`mAP50 = 0.59353`，`mAP50-95 = 0.39896`
   - `BiFPN-only`（50 epoch）：`mAP50 = 0.58269`，`mAP50-95 = 0.39173`
   - `YOLO11s RGB-only 6 类`（80 epoch）：`mAP50 = 0.57578`，`mAP50-95 = 0.39398`
@@ -636,7 +705,8 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 在相同 6 类口径和 `800×800` 输入下，`RGB-NIR plain + Adam` 当前达到：
   - `mAP50 = 0.612`
   - `mAP50-95 = 0.415`
-  - `BiFPN-only + Light NIR branch` 在 `640 + SGD` 下已经接近该高配方 plain 结果，仅低 `mAP50 0.00733`、`mAP50-95 0.00110`
+  - `BiFPN-only + Light NIR branch` 在同为 `800 + Adam` 的高配方下达到 `mAP50 = 0.66055`、`mAP50-95 = 0.47087`
+  - 相对 `RGB-NIR plain + Adam + 800`：`mAP50 +0.04855`，`mAP50-95 +0.05587`
 - 当前正式 `YOLO11n Proposed` 为 `full_proposed_residual_v2`：
   - `mAP50 = 0.52312`
   - `mAP50-95 = 0.34447`
@@ -648,7 +718,8 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 当前尚不足以证明在更强 RGB-only 基线下形成全面稳定优势
 - 但就当前 6 类并行实验来看：
   - `RGB-NIR plain` 在 `Adam + 800×800` 下已经超过 6 类 `YOLO11s RGB-only`
-  - 因而下一步更值得验证的是：在相同 6 类口径下，`BiFPN-only` 和 `Proposed` 是否还能进一步扩大这一优势
+  - `BiFPN-only + Light NIR branch` 在 `Adam + 800×800` 下进一步扩大了 RGB-NIR 优势
+  - 当前唯一缺口是同配方 `YOLO11s RGB-only 6cls` 尚未补齐，因此最终主表仍需等待公平基线结果
 - 外部 RGB 单模基线 `RT-DETR-R18 RGB-only` 已成功接入并完成 `50 epoch`：
   - `mAP50 = 0.32081`
   - `mAP50-95 = 0.18771`
@@ -659,8 +730,28 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 
 ## 8. 下一步执行方案
 
-- 第一优先级：跑 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的高配方确认实验，建议 `imgsz=800`、`Adam`、`100 epoch`，batch 从 `16` 或 `20` 起步，目标是判断 Light NIR 能否超过 `RGB-NIR plain + Adam + 800`。
-- 第二优先级：补一条同配方 `YOLO11s RGB-only 6cls` 高配方基线，建议 `imgsz=800`、`Adam`、`100 epoch`，用于论文主表公平比较。
-- 第三优先级：如果显存允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
+- 第一优先级：补一条同配方 `YOLO11s RGB-only 6cls` 高配方基线，固定 `imgsz=800`、`Adam`、`100 epoch`、`batch=20`，用于论文主表公平比较。
+- 外部中断记录：
+  - mode：`rgb_yolo11s_6cls_personmerge`
+  - run：`iddaw-yolo11s-rgb-6cls-personmerge3`
+  - 远端 pid：`5406`
+  - 日志：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260424_190154.stdout.log`
+  - meta：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260424_190154.meta`
+  - W&B run：`7o4m6xnq`
+  - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/7o4m6xnq`
+  - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
+  - 状态：外部中断，远端已无该训练进程；日志最后可见约 `16/100`，不纳入公平主表。
+- 当前重启 run：
+  - mode：`rgb_yolo11s_6cls_personmerge`
+  - run：`iddaw-yolo11s-rgb-6cls-personmerge4`
+  - 远端 pid：`6536`
+  - 日志：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260424_195713.stdout.log`
+  - meta：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260424_195713.meta`
+  - W&B run：`20zojg1d`
+  - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/20zojg1d`
+  - 启动配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`WANDB_ENABLED=1`
+  - 启动状态：已完成 Ultralytics 初始化与 AMP check，已进入 `1/100` epoch；GPU 显存约 `8.7G`，暂未出现 OOM、Traceback 或 NaN。
+- 第二优先级：如果 RGB-only 高配方仍低于 `BiFPN-only + Light NIR branch`，则把这两条作为最终主表核心对照，并围绕 `person / motorcycle` 展开小目标分析。
+- 第三优先级：如果显存和时间允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
 - 暂不建议继续推进 `ResidualQualityAwareFusionV2` 或 `Proposed-Lite + light NIR`，因为当前结果已经说明更轻的 NIR 深层分支比更复杂的残差质量感知更稳。
 - 后续论文主线建议写成：`YOLO11s + BiFPN + Light NIR branch`，贡献点聚焦于多尺度融合与 NIR 深层语义轻量化，而不是残差质量感知注意力。
