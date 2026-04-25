@@ -143,7 +143,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
 | `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `32` | `10` | 已完成 `100 epoch` |
-| `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `16` | `10` | 待冒烟；小目标 P2 四尺度检测头 |
+| `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过冒烟；小目标 P2 四尺度检测头 |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
@@ -733,7 +733,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 不改数据导出和类别映射
 - 预期收益：
   - 提升 `person`、`motorcycle` 的召回和高 IoU 定位质量
-  - 代价是 `imgsz=800` 下显存和训练时间上升，因此默认 batch 暂定为 `16`
+  - 代价是 `imgsz=800` 下显存和训练时间上升；为保持高配方公平比较，正式训练 batch 固定为 `20`
 
 ## 7. 当前可直接引用的结论
 
@@ -795,7 +795,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 配方：`imgsz=640`、`optimizer=SGD`、`batch=16`、`epochs=1`、`close_mosaic=20`、`WANDB_ENABLED=0`
 - P2 小目标分支正式候选配置：
   - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
-  - 配方：`imgsz=800`、`optimizer=Adam`、`batch=16`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
+  - 配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
 - 第二优先级：按新默认 `close_mosaic=20` 重跑 `bifpn_only_yolo11s_6cls_personmerge`，用于确认原始 BiFPN-only 在更长 no-mosaic 阶段下是否能接近或超过 `Light NIR branch`。
 - 原始 BiFPN-only 待启动配置：
   - mode：`bifpn_only_yolo11s_6cls_personmerge`

@@ -245,7 +245,7 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_yolo11s": 24,
         "bifpn_only_yolo11s_6cls_personmerge": 24,
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 24,
-        "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 16,
+        "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 20,
         "attention_only": 48,
         "full_proposed": 48,
         "full_proposed_residual": 48,
