@@ -228,9 +228,10 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `rgb_yolo11s` | `iddaw-yolo11s-rgb7` | `80 epoch` | 已完成 | `0.69330` | `0.48334` | `0.53782` | `0.36051` | 官方 YOLO11s RGB-only 基线 |
 | `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge8` | `100 epoch, imgsz=800, Adam, batch=20` | 已完成 | `0.70245` | `0.55279` | `0.61056` | `0.42368` | 6 类口径高配方 RGB-only 公平基线，`rider -> person` |
 | `bifpn_only_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge2` | `50 epoch` | 已完成 | `0.69297` | `0.51787` | `0.58269` | `0.39173` | 6 类口径下当前已完成的 YOLO11s BiFPN-only 对照 |
+| `bifpn_only_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge4` | `100 epoch, imgsz=800, Adam, batch=20, close_mosaic=20` | 已完成 | `0.76313` | `0.58431` | `0.65825` | `0.47101` | 原始对称双分支 BiFPN-only 高配方，close_mosaic=20 后总体 `mAP50-95` 追平 Light NIR |
 | `proposed_lite_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3` | `70 epoch` | 已完成 | `0.76323` | `0.50914` | `0.59353` | `0.39896` | 6 类口径下 `P3/P4` 质量感知 + `P5 plain concat` 的 Proposed-Lite |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge4` | `100 epoch, batch=32` | 已完成 | `0.71556` | `0.55095` | `0.60467` | `0.41390` | 当前 `YOLO11s + RGB-NIR + 640 + SGD` 最强结果，Light NIR branch |
-| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge5` | `100 epoch, imgsz=800, Adam, batch=20` | 已完成 | `0.76181` | `0.60168` | `0.66055` | `0.47087` | 高配方 Light NIR branch，当前总体 `mAP50-95` 最强主线结果 |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge5` | `100 epoch, imgsz=800, Adam, batch=20` | 已完成 | `0.76181` | `0.60168` | `0.66055` | `0.47087` | 高配方 Light NIR branch，效率更优的主线候选 |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge4` | `100 epoch, imgsz=800, Adam, batch=20, device=0,1` | 已完成 | `0.75923` | `0.60991` | `0.67259` | `0.47049` | P2 检测头小目标增强，`person/motorcycle` 提升，但总体 `mAP50-95` 与无 P2 持平略低 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
@@ -930,7 +931,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 
 ### 9.4 下一步执行方案
 
-- 当前论文主线仍建议保持为 `YOLO11s + BiFPN-only + Light NIR branch`，因为它总体 `mAP50-95` 最高且结构更轻。
+- 当前论文主线仍建议保持为 `YOLO11s + BiFPN-only + Light NIR branch`，因为它在接近最优总体精度的同时结构更轻。
 - P2 作为“小目标增强分支”保留为消融/扩展实验，不建议直接替代主线结构，除非论文重点转向 `person / motorcycle` 小目标。
 - 下一轮优先补齐 `bifpn_only_yolo11s_6cls_personmerge` 在 `imgsz=800 + Adam + batch=20 + close_mosaic=20` 下的正式结果，用来回答 close_mosaic=20 是否会让原始 BiFPN-only 接近 Light NIR。
 - 如果继续优化小目标，优先方向不是再加更深 head，而是做更轻的 P2 或检测损失/分配策略消融，例如：减小 P2 通道、只对 P2 使用更轻 `C3k2`、或尝试更适合小目标的 label assignment / NMS 参数；这些需要单独阶段验证。
@@ -941,3 +942,76 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `BiFPN-only + Light NIR branch`
   - `BiFPN-only + Light NIR branch + P2 head`
 
+## 10. 2026-04-26 原始 BiFPN-only close_mosaic=20 正式结果
+
+### 10.1 `YOLO11s BiFPN-only` 高配方结果
+
+- mode：`bifpn_only_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge4`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge4`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_yolo11s_6cls_personmerge_e100_20260425_231536.stdout.log`
+- meta：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_yolo11s_6cls_personmerge_e100_20260425_231536.meta`
+- W&B run：`l88vy639`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/l88vy639`
+- 运行配置：
+  - `imgsz=800`
+  - `optimizer=Adam`
+  - `batch=20`
+  - `device=0`
+  - `epochs=100`
+  - `close_mosaic=20`
+  - `WANDB_ENABLED=1`
+  - `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+- 模型规模：
+  - build summary：`16,475,766` parameters / `54.82 GFLOPs`
+  - fused summary：`16,455,798` parameters / `84.98 GFLOPs`
+- 训练完成状态：
+  - `results.csv` 共 `100` 个 epoch
+  - `best.pt` 与 `last.pt` 均已导出并完成 optimizer strip
+  - 单卡 `batch=20` 稳定完成，训练峰值显存约 `16GB`
+
+- `results.csv` 最优 epoch：
+  - epoch `99`
+  - `Precision = 0.76313`
+  - `Recall = 0.58431`
+  - `mAP50 = 0.65825`
+  - `mAP50-95 = 0.47101`
+- epoch `100` 指标：
+  - `Precision = 0.75689`
+  - `Recall = 0.59181`
+  - `mAP50 = 0.65544`
+  - `mAP50-95 = 0.46930`
+- W&B summary：
+  - `mAP50 = 0.65846`
+  - `mAP50-95 = 0.47092`
+  - `model/GFLOPs = 0`，该 run 启动时仍使用旧版 GFLOPs logger；代码已在后续提交中修复，后续 run 应以日志 summary 和修复后的 W&B 记录为准。
+- `best.pt` 复验主要类别表现：
+  - `person`: `mAP50 = 0.512`, `mAP50-95 = 0.267`
+  - `motorcycle`: `mAP50 = 0.525`, `mAP50-95 = 0.246`
+  - `car`: `mAP50 = 0.877`, `mAP50-95 = 0.684`
+  - `truck`: `mAP50 = 0.609`, `mAP50-95 = 0.456`
+  - `bus`: `mAP50 = 0.726`, `mAP50-95 = 0.616`
+  - `autorickshaw`: `mAP50 = 0.701`, `mAP50-95 = 0.557`
+
+### 10.2 与 Light NIR / P2 对比
+
+- 与 `BiFPN-only + Light NIR branch` 高配方结果（`0.66055 / 0.47087`）对比：
+  - 总体 `mAP50 -0.00230`
+  - 总体 `mAP50-95 +0.00014`
+  - 参数量更高：`16.48M` vs `14.17M`
+  - 小目标略高于 Light NIR：`person 0.512 / 0.267` vs `0.502 / 0.255`，`motorcycle 0.525 / 0.246` vs `0.522 / 0.243`
+- 与 `BiFPN-only + Light NIR branch + P2 head` 结果（`0.67259 / 0.47049`）对比：
+  - 总体 `mAP50 -0.01434`
+  - 总体 `mAP50-95 +0.00052`
+  - 小目标明显低于 P2：`person 0.512 / 0.267` vs `0.554 / 0.290`，`motorcycle 0.525 / 0.246` vs `0.581 / 0.280`
+- 与同配方 6 类 `YOLO11s RGB-only` 高配方基线（`0.61056 / 0.42368`）对比：
+  - 总体 `mAP50 +0.04769`
+  - 总体 `mAP50-95 +0.04733`
+
+### 10.3 结果解读与下一步
+
+- `close_mosaic=20` 对原始 BiFPN-only 的收益明显，使其总体 `mAP50-95` 追平当前 Light NIR 主线。
+- 但原始 BiFPN-only 仍是完整对称 NIR 分支，参数量高于 Light NIR；在效率和论文结构简洁性上，Light NIR 仍更适合作为主线。
+- P2 的价值仍集中在 `person / motorcycle` 小目标增强；如果论文主表以总体 `mAP50-95` 排序，P2 不应替代主线；如果强调小目标分析，P2 可以作为专项消融。
+- 当前推荐主表结论更新为：`RGB-NIR + BiFPN` 是主要增益来源，`Light NIR branch` 在几乎不损失总体精度的前提下降低冗余，`P2 head` 进一步提升小目标但不提升总体 `mAP50-95`。
+- 下一步如果继续训练，应优先补同配方 `RGB-only close_mosaic=20`，否则当前 `RGB-only` 基线仍是 `close_mosaic=10`，和新一批 `close_mosaic=20` 结果存在一个训练策略变量差异。
