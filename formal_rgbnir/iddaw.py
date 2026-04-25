@@ -293,13 +293,14 @@ def common_train_kwargs(
         raise ValueError(f"Mode does not support training: {mode}")
     optimizer_name = optimizer or os.getenv("OPTIMIZER", "SGD")
     train_batch = batch if batch and batch > 0 else train_batch_for(mode)
+    close_mosaic = int(os.getenv("CLOSE_MOSAIC", "20"))
     return {
         "cache": "ram",
         "imgsz": imgsz,
         "epochs": epochs,
         "val_interval": max(int(val_interval), 1),
         "batch": train_batch,
-        "close_mosaic": 10,
+        "close_mosaic": close_mosaic,
         "workers": workers_for(mode),
         "device": device,
         "optimizer": optimizer_name,

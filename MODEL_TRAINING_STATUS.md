@@ -8,14 +8,15 @@
 4. 训练日志与结果存放位置
 5. 当前最新训练状态及结果
 
-更新时间：`2026-04-23`
+更新时间：`2026-04-25`
 
 ## 1. 工程与数据根
 
 - formal 工程目录：`E:\毕设\code\yolov11-rgbnir-formal`
-- 远端工程目录：`/home/lym/lvyanhu/code/yolov11-rgbnir-formal`
-- 当前正式数据根：`/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir`
-- 并行 6 类数据根：`/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+- 远端工程目录：`/home/lvyanhu/code/yolov11-rgbnir-formal`
+- 当前正式数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+- 7 类历史数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir`
+- 6 类数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
 - 数据协议：
   - 数据集：`IDD-AW all-weather`
   - 模态：`RGB / NIR`
@@ -52,6 +53,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 - `VAL_INTERVAL=1`，默认每个 epoch 验证一次
 - `IDDAW_CLASS_SCHEMA=6cls_personmerge`，默认训练使用 6 类口径
 - `OPTIMIZER=SGD`，默认使用 SGD；可通过环境变量覆盖为 `Adam/AdamW` 等 Ultralytics 支持的优化器
+- `CLOSE_MOSAIC=20`，默认在最后 20 个 epoch 关闭 mosaic；可通过环境变量覆盖
 - 自动生成 `stdout.log / pid / meta` 三类远端日志文件
 - 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
 
@@ -60,7 +62,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 当前 formal 工程已支持“从 `last.pt` 继续补足到目标总 epoch”的模式。示例：
 
 ```bash
-bash scripts/iddaw/launch_nohup_train.sh rgbnir 70 0 /home/lym/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW/iddaw-yolo11n-rgbnir-plain2/weights/last.pt
+bash scripts/iddaw/launch_nohup_train.sh rgbnir 70 0 /home/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW/iddaw-yolo11n-rgbnir-plain2/weights/last.pt
 ```
 
 说明：
@@ -112,12 +114,13 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 - 输入尺寸：`640`
 - 优化器：`SGD`
 - 数据缓存：`cache=ram`
-- `close_mosaic=10`
+- `close_mosaic=20`
 - 设备：`device=0`
 - 项目目录：`runs/IDD_AW`
 - 脚本默认验证频率：`val_interval=1`
 - 脚本默认 W\&B console：`WANDB_CONSOLE=off`
 - 统一入口支持可选覆盖：`--optimizer`、`--batch`
+- 历史结果若未单独说明，默认仍按当时配置 `close_mosaic=10` 解释；`2026-04-25` 之后的新训练默认切到 `20`
 
 ### 4.2 模式级差异
 
@@ -156,7 +159,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 统一目录：
 
 ```text
-/home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw
+/home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw
 ```
 
 每次训练会生成：
@@ -176,7 +179,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 统一目录：
 
 ```text
-/home/lym/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW
+/home/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW
 ```
 
 其中每个 run 一般包含：
@@ -192,25 +195,25 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 查看 RGBNIR plain 最新日志：
 
 ```bash
-ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgbnir.stdout.log"
+ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgbnir.stdout.log"
 ```
 
 查看 BiFPN-only 最新日志：
 
 ```bash
-ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_bifpn_only.stdout.log"
+ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_bifpn_only.stdout.log"
 ```
 
 查看 RT-DETR 最新日志：
 
 ```bash
-ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgb_rtdetr.stdout.log"
+ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgb_rtdetr.stdout.log"
 ```
 
 查看 70 epoch 续训队列总日志：
 
 ```bash
-ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/resume70_queue.stdout.log"
+ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/resume70_queue.stdout.log"
 ```
 
 ## 6. 当前最新训练状态与结果
@@ -221,7 +224,7 @@ ssh 4_3090 "tail -f /home/lym/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/idd
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `iddaw-yolo11n-rgb2` | `50 epoch` | 已完成 | `0.58182` | `0.41056` | `0.43404` | `0.27339` | 官方 YOLO11 RGB-only 基线 |
 | `rgb_yolo11s` | `iddaw-yolo11s-rgb7` | `80 epoch` | 已完成 | `0.69330` | `0.48334` | `0.53782` | `0.36051` | 官方 YOLO11s RGB-only 基线 |
-| `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge2` | `80 epoch` | 已完成 | `0.66588` | `0.53652` | `0.57578` | `0.39398` | 6 类口径，`rider -> person` 后的 YOLO11s RGB-only |
+| `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge8` | `100 epoch, imgsz=800, Adam, batch=20` | 已完成 | `0.70245` | `0.55279` | `0.61056` | `0.42368` | 6 类口径高配方 RGB-only 公平基线，`rider -> person` |
 | `bifpn_only_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge2` | `50 epoch` | 已完成 | `0.69297` | `0.51787` | `0.58269` | `0.39173` | 6 类口径下当前已完成的 YOLO11s BiFPN-only 对照 |
 | `proposed_lite_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3` | `70 epoch` | 已完成 | `0.76323` | `0.50914` | `0.59353` | `0.39896` | 6 类口径下 `P3/P4` 质量感知 + `P5 plain concat` 的 Proposed-Lite |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge4` | `100 epoch, batch=32` | 已完成 | `0.71556` | `0.55095` | `0.60467` | `0.41390` | 当前 `YOLO11s + RGB-NIR + 640 + SGD` 最强结果，Light NIR branch |
@@ -626,16 +629,49 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `mAP50-95 +0.05587`
   - `person`: `0.468 / 0.227 -> 0.502 / 0.255`
   - `motorcycle`: `0.444 / 0.201 -> 0.522 / 0.243`
-- 与当前 6 类 `YOLO11s RGB-only`（`0.57578 / 0.39398`）对比：
-  - `mAP50 +0.08477`
-  - `mAP50-95 +0.07689`
-  - 注意：该对比仍不是最终公平主表，因为 RGB-only 还未按 `800 + Adam + 100 epoch + batch=20` 同配方重跑。
+- 与同配方 6 类 `YOLO11s RGB-only` 高配方基线（`0.61056 / 0.42368`）对比：
+  - `mAP50 +0.04999`
+  - `mAP50-95 +0.04719`
+  - `Precision +0.05936`
+  - `Recall +0.04889`
 
 - 结果解读：
   - `800 + Adam` 高配方显著放大了 Light NIR 结构的收益，且提升不再只集中在中大目标。
   - `person` 与 `motorcycle` 同时超过 `RGB-NIR plain + Adam + 800`，说明 `BiFPN + Light NIR branch` 对小目标定位质量是正向的。
   - 当前主线可以暂定为 `YOLO11s + BiFPN-only + Light NIR branch`，不需要回到 `ResidualQualityAwareFusionV2` 方向。
-  - 下一步必须补同配方 `YOLO11s RGB-only 6cls`，否则不能把 `RGB-NIR 优于 RGB-only` 写成论文主表结论。
+  - 同配方 `YOLO11s RGB-only 6cls` 已补齐，当前可以把 `BiFPN-only + Light NIR branch` 与 RGB-only 的公平高配方对比作为论文主表候选。
+
+#### 6 类 `YOLO11s RGB-only` 高配方确认结果（`imgsz=800`, `Adam`）
+
+- 当前 run：`iddaw-yolo11s-rgb-6cls-personmerge8`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgb-6cls-personmerge8`
+- 日志：`/home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/rgb_yolo11s_6cls_personmerge_e100_20260425_161538.stdout.log`
+- W&B run：`0qo46dus`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/0qo46dus`
+- 运行配置：
+  - `imgsz=800`
+  - `optimizer=Adam`
+  - `batch=20`
+  - `epochs=100`
+  - `close_mosaic=10`
+  - `WANDB_ENABLED=1`
+  - `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+- 训练完成状态：
+  - `results.csv` 共 `100` 个 epoch
+  - `best.pt` 与 `last.pt` 均已导出
+  - `results.csv` 最优 epoch 为 `100`
+- `best.pt` / epoch `100` 指标：
+  - `Precision = 0.70245`
+  - `Recall = 0.55279`
+  - `mAP50 = 0.61056`
+  - `mAP50-95 = 0.42368`
+- 与同配方 `BiFPN-only + Light NIR branch`（`0.66055 / 0.47087`）对比：
+  - `mAP50 -0.04999`
+  - `mAP50-95 -0.04719`
+- 结果解读：
+  - 该结果补齐了此前缺失的公平高配方 RGB-only 基线。
+  - 在相同 `6cls personmerge + YOLO11s + imgsz=800 + Adam + batch=20 + 100 epoch` 下，当前 RGB-NIR Light NIR 主线已经稳定超过 RGB-only。
+  - 需要注意这条 RGB-only 仍使用历史默认 `close_mosaic=10`，而后续新训练默认切到 `close_mosaic=20`；如果 close_mosaic 增益继续明确，最终主表应以同一 close_mosaic 设置重新确认。
 
 #### 6 类 `rgbnir plain`（`imgsz=800`, `100 epoch`）结果
 
@@ -685,9 +721,9 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 当前 RGB-only 基线中，`YOLO11s RGB-only` 已成为更强单模基线：
   - `YOLO11s RGB-only`（80 epoch）：`mAP50 = 0.53782`，`mAP50-95 = 0.36051`
   - `YOLO11n RGB-only`（50 epoch）：`mAP50 = 0.43404`，`mAP50-95 = 0.27339`
-- 在 6 类 `person+rider` 合并口径下，`YOLO11s RGB-only` 进一步提升到：
-  - `mAP50 = 0.57578`
-  - `mAP50-95 = 0.39398`
+- 在 6 类 `person+rider` 合并口径下，`YOLO11s RGB-only` 高配方基线已经补齐：
+  - `YOLO11s RGB-only`（100 epoch, `800 + Adam + batch=20`）：`mAP50 = 0.61056`
+  - `YOLO11s RGB-only`（100 epoch, `800 + Adam + batch=20`）：`mAP50-95 = 0.42368`
 - 在当前已完成的 `YOLO11s RGB-NIR` 6 类对照里，`BiFPN-only + Light NIR branch` 是目前整体最强的一条已完成路线：
   - `BiFPN-only + Light NIR branch`（100 epoch, `800 + Adam + batch=20`）：`mAP50 = 0.66055`，`mAP50-95 = 0.47087`
   - `BiFPN-only + Light NIR branch`（100 epoch, `640 + SGD + batch=32`）：`mAP50 = 0.60467`，`mAP50-95 = 0.41390`
@@ -719,7 +755,8 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 但就当前 6 类并行实验来看：
   - `RGB-NIR plain` 在 `Adam + 800×800` 下已经超过 6 类 `YOLO11s RGB-only`
   - `BiFPN-only + Light NIR branch` 在 `Adam + 800×800` 下进一步扩大了 RGB-NIR 优势
-  - 当前唯一缺口是同配方 `YOLO11s RGB-only 6cls` 尚未补齐，因此最终主表仍需等待公平基线结果
+  - 同配方 `YOLO11s RGB-only 6cls` 已补齐：`mAP50 = 0.61056`，`mAP50-95 = 0.42368`
+  - `BiFPN-only + Light NIR branch` 相对同配方 RGB-only：`mAP50 +0.04999`，`mAP50-95 +0.04719`
 - 外部 RGB 单模基线 `RT-DETR-R18 RGB-only` 已成功接入并完成 `50 epoch`：
   - `mAP50 = 0.32081`
   - `mAP50-95 = 0.18771`
@@ -730,7 +767,14 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 
 ## 8. 下一步执行方案
 
-- 第一优先级：补一条同配方 `YOLO11s RGB-only 6cls` 高配方基线，固定 `imgsz=800`、`Adam`、`100 epoch`、`batch=20`，用于论文主表公平比较。
+- 第一优先级：按新默认 `close_mosaic=20` 重跑 `bifpn_only_yolo11s_6cls_personmerge`，用于确认原始 BiFPN-only 在更长 no-mosaic 阶段下是否能接近或超过 `Light NIR branch`。
+- 本轮待启动配置：
+  - mode：`bifpn_only_yolo11s_6cls_personmerge`
+  - 远端：`ssh lyh`
+  - 工程目录：`/home/lvyanhu/code/yolov11-rgbnir-formal`
+  - 数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+  - 配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
+- 已完成补齐：同配方 `YOLO11s RGB-only 6cls` 高配方基线已完成，run 为 `iddaw-yolo11s-rgb-6cls-personmerge8`，指标为 `mAP50 = 0.61056`、`mAP50-95 = 0.42368`。
 - 外部中断记录：
   - mode：`rgb_yolo11s_6cls_personmerge`
   - run：`iddaw-yolo11s-rgb-6cls-personmerge3`
@@ -767,7 +811,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 先恢复 `4_3090` 的 GPU 可见性，至少要求 `nvidia-smi` 正常显示 RTX 3090 后再重启训练。
   - GPU 恢复后继续同配方从头跑：`rgb_yolo11s_6cls_personmerge`, `imgsz=800`, `Adam`, `batch=20`, `100 epoch`。
   - 如果 GPU 恢复后仍复现 launch failure，再把 batch 同步降到 `16` 作为稳定性排查，而不是直接改变优化器或输入尺寸。
-- 第二优先级：如果 RGB-only 高配方仍低于 `BiFPN-only + Light NIR branch`，则把这两条作为最终主表核心对照，并围绕 `person / motorcycle` 展开小目标分析。
+- 第二优先级：若本轮 `close_mosaic=20` 的原始 `BiFPN-only` 仍低于 `BiFPN-only + Light NIR branch`，则把 `RGB-only` 与 `BiFPN-only + Light NIR branch` 作为最终主表核心对照，并围绕 `person / motorcycle` 展开小目标分析。
 - 第三优先级：如果显存和时间允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
 - 暂不建议继续推进 `ResidualQualityAwareFusionV2` 或 `Proposed-Lite + light NIR`，因为当前结果已经说明更轻的 NIR 深层分支比更复杂的残差质量感知更稳。
 - 后续论文主线建议写成：`YOLO11s + BiFPN + Light NIR branch`，贡献点聚焦于多尺度融合与 NIR 深层语义轻量化，而不是残差质量感知注意力。

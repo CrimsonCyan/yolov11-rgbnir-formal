@@ -7,9 +7,9 @@ DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-/home/lym/anaconda3/envs/visnir-exp/bin/python}"
-DEFAULT_DATA_ROOT="/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
-DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/home/lym/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
+PYTHON_BIN="${PYTHON_BIN:-/home/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
+DEFAULT_DATA_ROOT="/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
+DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
 export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
 if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
@@ -30,6 +30,7 @@ export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
 export OPTIMIZER="${OPTIMIZER:-SGD}"
 export BATCH="${BATCH:-}"
+export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
     DATASET_TAG="6-class-personmerge"
@@ -98,6 +99,7 @@ val_interval=$VAL_INTERVAL
 imgsz=$IMGSZ
 optimizer=$OPTIMIZER
 batch=${BATCH:-}
+close_mosaic=$CLOSE_MOSAIC
 started_at=$STAMP
 command=${CMD[*]}
 EOF
