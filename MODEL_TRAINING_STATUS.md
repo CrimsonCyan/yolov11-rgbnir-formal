@@ -734,6 +734,17 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 预期收益：
   - 提升 `person`、`motorcycle` 的召回和高 IoU 定位质量
   - 代价是 `imgsz=800` 下显存和训练时间上升；为保持高配方公平比较，正式训练 batch 固定为 `20`
+- 当前正式 run：
+  - run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge3`
+  - 远端 pid：`12954`
+  - 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2_yolo11s_6cls_personmerge_e100_20260425_183313.stdout.log`
+  - meta：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2_yolo11s_6cls_personmerge_e100_20260425_183313.meta`
+  - W&B run：`hdgwzcf4`
+  - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/hdgwzcf4`
+  - 配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
+  - 启动检查：已进入 `2/100`，训练峰值显存约 `22.5G/24G`，当前未见 OOM、shape mismatch、NaN 或 W&B 登录问题
+- 废弃 run：
+  - `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge2` 使用 `batch=18` 启动后被手动停止，不纳入对照结果
 
 ## 7. 当前可直接引用的结论
 
