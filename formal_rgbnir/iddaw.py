@@ -15,6 +15,7 @@ PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
     "proposed_lite_yolo11s_6cls_personmerge",
     "proposed_lite_light_nir_yolo11s_6cls_personmerge",
@@ -32,6 +33,7 @@ TRAINABLE_MODES = {
     "bifpn_only_yolo11s",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
     "attention_only",
     "full_proposed",
     "full_proposed_residual",
@@ -143,6 +145,7 @@ def experiment_name(mode: str) -> str:
         "bifpn_only_yolo11s": "iddaw-yolo11s-rgbnir-bifpn-only",
         "bifpn_only_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge",
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge",
+        "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
         "full_proposed_residual": "iddaw-yolo11n-rgbnir-full-proposed-residual",
@@ -187,6 +190,10 @@ def model_config_for(mode: str) -> str:
     if mode == "bifpn_only_light_nir_yolo11s_6cls_personmerge":
         return str(
             (root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml").resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge":
+        return str(
+            (root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only_light_nir_p2_6cls_personmerge.yaml").resolve()
         )
     if mode == "attention_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_attention_only.yaml").resolve())
@@ -238,6 +245,7 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_yolo11s": 24,
         "bifpn_only_yolo11s_6cls_personmerge": 24,
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 24,
+        "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 16,
         "attention_only": 48,
         "full_proposed": 48,
         "full_proposed_residual": 48,
@@ -266,6 +274,7 @@ def workers_for(mode: str) -> int:
         "bifpn_only_yolo11s": 10,
         "bifpn_only_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 10,
         "attention_only": 10,
         "full_proposed": 10,
         "full_proposed_residual": 10,

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|bifpn_only_light_nir_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge|proposed_lite_light_nir_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|bifpn_only_light_nir_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge|proposed_lite_light_nir_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-/home/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
-DEFAULT_DATA_ROOT="/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
-DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
+PYTHON_BIN="${PYTHON_BIN:-/data1/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
+DEFAULT_DATA_ROOT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
+DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
 export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
 if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then

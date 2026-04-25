@@ -13,10 +13,10 @@
 ## 1. 工程与数据根
 
 - formal 工程目录：`E:\毕设\code\yolov11-rgbnir-formal`
-- 远端工程目录：`/home/lvyanhu/code/yolov11-rgbnir-formal`
-- 当前正式数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
-- 7 类历史数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir`
-- 6 类数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+- 远端工程目录：`/data1/lvyanhu/code/yolov11-rgbnir-formal`
+- 当前正式数据根：`/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+- 7 类历史数据根：`/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir`
+- 6 类数据根：`/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
 - 数据协议：
   - 数据集：`IDD-AW all-weather`
   - 模态：`RGB / NIR`
@@ -62,7 +62,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 当前 formal 工程已支持“从 `last.pt` 继续补足到目标总 epoch”的模式。示例：
 
 ```bash
-bash scripts/iddaw/launch_nohup_train.sh rgbnir 70 0 /home/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW/iddaw-yolo11n-rgbnir-plain2/weights/last.pt
+bash scripts/iddaw/launch_nohup_train.sh rgbnir 70 0 /data1/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW/iddaw-yolo11n-rgbnir-plain2/weights/last.pt
 ```
 
 说明：
@@ -102,6 +102,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2` | `configs/models/yolo11n_rgbnir_full_proposed_residual_v2.yaml` | 当前正式 `Proposed`：`ResidualQualityAwareFusionV2 + BiFPN` |
 | `bifpn_only_yolo11s` | `configs/models/yolo11s_rgbnir_bifpn_only.yaml` | `YOLO11s` 版双流 `BiFPN-only` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch`：保留 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道并投影回融合尺度后做 plain concat |
+| `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_p2_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + P2 head`：保持三尺度 BiFPN 不变，额外加入 stride=4 的 P2 小目标检测分支 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_light_nir_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite + Light NIR branch`：保持 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道后再投影回融合尺度 |
@@ -142,6 +143,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s Proposed`，已完成 `70 epoch` |
 | `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `32` | `10` | 已完成 `100 epoch` |
+| `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `16` | `10` | 待冒烟；小目标 P2 四尺度检测头 |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
@@ -159,7 +161,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 统一目录：
 
 ```text
-/home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw
+/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw
 ```
 
 每次训练会生成：
@@ -179,7 +181,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 统一目录：
 
 ```text
-/home/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW
+/data1/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW
 ```
 
 其中每个 run 一般包含：
@@ -195,25 +197,25 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 查看 RGBNIR plain 最新日志：
 
 ```bash
-ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgbnir.stdout.log"
+ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgbnir.stdout.log"
 ```
 
 查看 BiFPN-only 最新日志：
 
 ```bash
-ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_bifpn_only.stdout.log"
+ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_bifpn_only.stdout.log"
 ```
 
 查看 RT-DETR 最新日志：
 
 ```bash
-ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgb_rtdetr.stdout.log"
+ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/latest_rgb_rtdetr.stdout.log"
 ```
 
 查看 70 epoch 续训队列总日志：
 
 ```bash
-ssh lyh "tail -f /home/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/resume70_queue.stdout.log"
+ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/resume70_queue.stdout.log"
 ```
 
 ## 6. 当前最新训练状态与结果
@@ -716,6 +718,23 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 对最关键的小目标类别，`person` 相比 SGD 仍有小幅提升（`0.450 -> 0.468`），但 `motorcycle` 基本持平（`0.447 -> 0.444`），说明 `Adam` 并没有从根本上解决最小目标类别的检测短板。
   - 当前结论是：`6 类 + 800×800 + RGBNIR plain + Adam` 已经足以把 plain 路线推到一个比 6 类强 RGB-only 更高的水平，但如果目标是继续改善 `motorcycle` 等小目标，后续仍需要更强结构或更高分辨率策略。
 
+### 6.12 `YOLO11s BiFPN-only + Light NIR branch + P2 head` 待验证方向
+
+- 新增 mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+- 新增配置：`configs/models/yolo11s_rgbnir_bifpn_only_light_nir_p2_6cls_personmerge.yaml`
+- 结构目的：
+  - 针对当前 `person / motorcycle` 小目标高 IoU 定位质量偏弱的问题，新增 stride=4 的 `P2` 检测分支
+  - 保持现有 `P3/P4/P5 -> BiFPN(256, repeat=2)` 不变，避免同时改动 BiFPN 算子
+  - 在 head 侧将 `P3` top-down 特征上采样到 `P2`，再与 RGB/NIR 浅层 `P2` 特征拼接细化
+  - Detect 从原三尺度 `P3/P4/P5` 改为四尺度 `P2/P3/P4/P5`
+- 实现边界：
+  - 不回到 `ResidualQualityAwareFusionV2`
+  - 不新增更深 backbone
+  - 不改数据导出和类别映射
+- 预期收益：
+  - 提升 `person`、`motorcycle` 的召回和高 IoU 定位质量
+  - 代价是 `imgsz=800` 下显存和训练时间上升，因此默认 batch 暂定为 `16`
+
 ## 7. 当前可直接引用的结论
 
 - 当前 RGB-only 基线中，`YOLO11s RGB-only` 已成为更强单模基线：
@@ -767,12 +786,22 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 
 ## 8. 下一步执行方案
 
-- 第一优先级：按新默认 `close_mosaic=20` 重跑 `bifpn_only_yolo11s_6cls_personmerge`，用于确认原始 BiFPN-only 在更长 no-mosaic 阶段下是否能接近或超过 `Light NIR branch`。
-- 本轮待启动配置：
+- 第一优先级：验证新增 `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`，用于直接针对 `person / motorcycle` 小目标低精度问题做结构验证。
+- P2 小目标分支冒烟配置：
+  - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+  - 远端：`ssh lyh`
+  - 工程目录：`/data1/lvyanhu/code/yolov11-rgbnir-formal`
+  - 数据根：`/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+  - 配方：`imgsz=640`、`optimizer=SGD`、`batch=16`、`epochs=1`、`close_mosaic=20`、`WANDB_ENABLED=0`
+- P2 小目标分支正式候选配置：
+  - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+  - 配方：`imgsz=800`、`optimizer=Adam`、`batch=16`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
+- 第二优先级：按新默认 `close_mosaic=20` 重跑 `bifpn_only_yolo11s_6cls_personmerge`，用于确认原始 BiFPN-only 在更长 no-mosaic 阶段下是否能接近或超过 `Light NIR branch`。
+- 原始 BiFPN-only 待启动配置：
   - mode：`bifpn_only_yolo11s_6cls_personmerge`
   - 远端：`ssh lyh`
-  - 工程目录：`/home/lvyanhu/code/yolov11-rgbnir-formal`
-  - 数据根：`/home/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
+  - 工程目录：`/data1/lvyanhu/code/yolov11-rgbnir-formal`
+  - 数据根：`/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
   - 配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
 - 已完成补齐：同配方 `YOLO11s RGB-only 6cls` 高配方基线已完成，run 为 `iddaw-yolo11s-rgb-6cls-personmerge8`，指标为 `mAP50 = 0.61056`、`mAP50-95 = 0.42368`。
 - 外部中断记录：
@@ -811,7 +840,7 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - 先恢复 `4_3090` 的 GPU 可见性，至少要求 `nvidia-smi` 正常显示 RTX 3090 后再重启训练。
   - GPU 恢复后继续同配方从头跑：`rgb_yolo11s_6cls_personmerge`, `imgsz=800`, `Adam`, `batch=20`, `100 epoch`。
   - 如果 GPU 恢复后仍复现 launch failure，再把 batch 同步降到 `16` 作为稳定性排查，而不是直接改变优化器或输入尺寸。
-- 第二优先级：若本轮 `close_mosaic=20` 的原始 `BiFPN-only` 仍低于 `BiFPN-only + Light NIR branch`，则把 `RGB-only` 与 `BiFPN-only + Light NIR branch` 作为最终主表核心对照，并围绕 `person / motorcycle` 展开小目标分析。
-- 第三优先级：如果显存和时间允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
+- 第三优先级：若本轮 `P2` 对 `person / motorcycle` 没有明确提升，回退到 `BiFPN-only + Light NIR branch` 作为最终结构，不继续扩大四尺度 head。
+- 第四优先级：如果显存和时间允许，再补 `bifpn_only_light_nir_yolo11s_6cls_personmerge` 的 `imgsz=800 + SGD` 消融，用来区分收益来自结构、分辨率还是优化器。
 - 暂不建议继续推进 `ResidualQualityAwareFusionV2` 或 `Proposed-Lite + light NIR`，因为当前结果已经说明更轻的 NIR 深层分支比更复杂的残差质量感知更稳。
 - 后续论文主线建议写成：`YOLO11s + BiFPN + Light NIR branch`，贡献点聚焦于多尺度融合与 NIR 深层语义轻量化，而不是残差质量感知注意力。
