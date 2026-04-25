@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|bifpn_only_light_nir_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge|proposed_lite_light_nir_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
+MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|rgbnir|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|bifpn_only_light_nir_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2_yolo11s_6cls_personmerge|rgbnir_light_nir_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge|proposed_lite_light_nir_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
