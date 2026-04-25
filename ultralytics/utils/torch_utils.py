@@ -356,7 +356,7 @@ def model_info_for_loggers(trainer):
     else:  # only return PyTorch times from most recent validation
         results = {
             "model/parameters": get_num_params(trainer.model),
-            "model/GFLOPs": round(get_flops(trainer.model), 3),
+            "model/GFLOPs": round(get_flops(trainer.model, getattr(trainer.args, "imgsz", 640)), 3),
         }
     results["model/speed_PyTorch(ms)"] = round(trainer.validator.speed["inference"], 3)
     return results
@@ -382,6 +382,37 @@ def model_info_for_loggers(trainer):
 #     except Exception:
 #         return 0.0
 
+def _get_model_input_channels(model, parameter):
+    """Resolve model input channels for FLOPs profiling, including multi-modal YAML models."""
+    yaml = getattr(model, "yaml", {}) or {}
+    ch = yaml.get("ch") if isinstance(yaml, dict) else None
+    if isinstance(ch, (list, tuple)):
+        ch = ch[0]
+    try:
+        return int(ch)
+    except (TypeError, ValueError):
+        return int(parameter.shape[1])
+
+
+def _resolve_flops_imgsz(model, imgsz):
+    """Resolve image size from explicit args or trainer-attached model args."""
+    model_args = getattr(model, "args", None)
+    if isinstance(model_args, dict):
+        imgsz = model_args.get("imgsz", imgsz)
+    elif model_args is not None:
+        imgsz = getattr(model_args, "imgsz", imgsz)
+
+    if isinstance(imgsz, str):
+        parts = [x for x in imgsz.replace(",", " ").split() if x]
+        imgsz = [int(float(x)) for x in parts] if parts else [640, 640]
+    elif not isinstance(imgsz, (list, tuple)):
+        imgsz = [imgsz, imgsz]
+    elif len(imgsz) == 1:
+        imgsz = [imgsz[0], imgsz[0]]
+
+    return [int(imgsz[0]), int(imgsz[1])]
+
+
 def get_flops(model, imgsz=640):
     """Return a YOLO model's FLOPs."""
     if not thop:
@@ -390,20 +421,16 @@ def get_flops(model, imgsz=640):
     try:
         model = de_parallel(model)
         p = next(model.parameters())
-        ch = int(model.yaml['ch'])
-        imgsz = model.args['imgsz'] if hasattr(model, 'args') else imgsz
-        if not isinstance(imgsz, list):
-            imgsz = [imgsz, imgsz]  # expand if int/float
+        ch = _get_model_input_channels(model, p)
+        imgsz = _resolve_flops_imgsz(model, imgsz)
         try:
-            # Use stride size for input tensor
+            # Use stride size for input tensor.
             stride = max(int(model.stride.max()), 32) if hasattr(model, "stride") else 32  # max stride
-            # im = torch.empty((1, p.shape[1], stride, stride), device=p.device)  # input image in BCHW format
             im = torch.empty((1, ch, stride, stride), device=p.device)  # input image in BCHW format
             flops = thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1e9 * 2  # stride GFLOPs
             return flops * imgsz[0] / stride * imgsz[1] / stride  # imgsz GFLOPs
         except Exception:
-            # Use actual image size for input tensor (i.e. required for RTDETR models)
-            # im = torch.empty((1, p.shape[1], *imgsz), device=p.device)  # input image in BCHW format
+            # Use actual image size for input tensor (i.e. required for RTDETR models).
             im = torch.empty((1, ch, *imgsz), device=p.device)  # input image in BCHW format
             return thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1e9 * 2  # imgsz GFLOPs
     except Exception:
