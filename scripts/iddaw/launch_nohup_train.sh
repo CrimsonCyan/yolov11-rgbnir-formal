@@ -30,6 +30,7 @@ export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
 export OPTIMIZER="${OPTIMIZER:-SGD}"
 export BATCH="${BATCH:-}"
+export LR0="${LR0:-}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
@@ -70,6 +71,10 @@ if [[ -n "$BATCH" ]]; then
   CMD+=(--batch "$BATCH")
 fi
 
+if [[ -n "$LR0" ]]; then
+  CMD+=(--lr0 "$LR0")
+fi
+
 if [[ -n "$RESUME_CKPT" ]]; then
   CMD+=(--resume "$RESUME_CKPT")
 fi
@@ -99,6 +104,7 @@ val_interval=$VAL_INTERVAL
 imgsz=$IMGSZ
 optimizer=$OPTIMIZER
 batch=${BATCH:-}
+lr0=${LR0:-}
 close_mosaic=$CLOSE_MOSAIC
 started_at=$STAMP
 command=${CMD[*]}

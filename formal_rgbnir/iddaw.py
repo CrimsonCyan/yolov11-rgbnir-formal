@@ -297,13 +297,14 @@ def common_train_kwargs(
     imgsz: int = 640,
     optimizer: str | None = None,
     batch: int | None = None,
+    lr0: float | None = None,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
     optimizer_name = optimizer or os.getenv("OPTIMIZER", "SGD")
     train_batch = batch if batch and batch > 0 else train_batch_for(mode)
     close_mosaic = int(os.getenv("CLOSE_MOSAIC", "20"))
-    return {
+    kwargs = {
         "cache": "ram",
         "imgsz": imgsz,
         "epochs": epochs,
@@ -316,6 +317,9 @@ def common_train_kwargs(
         "project": "runs/IDD_AW",
         "name": experiment_name(mode),
     }
+    if lr0 is not None:
+        kwargs["lr0"] = lr0
+    return kwargs
 
 
 def common_val_kwargs(mode: str, imgsz: int = 640, batch: int | None = None) -> dict[str, object]:

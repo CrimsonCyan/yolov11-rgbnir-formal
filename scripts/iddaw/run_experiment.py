@@ -107,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="0")
     parser.add_argument("--optimizer", default="", help="Optional optimizer override for train, e.g. SGD or Adam.")
     parser.add_argument("--batch", type=int, default=0, help="Optional batch override for train/val.")
+    parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train.")
     return parser.parse_args()
 
 
@@ -154,6 +155,7 @@ def main() -> None:
                     args.imgsz,
                     optimizer=args.optimizer or None,
                     batch=args.batch or None,
+                    lr0=args.lr0 or None,
                 ),
                 **mode_kwargs,
             )
@@ -170,6 +172,7 @@ def main() -> None:
                 args.imgsz,
                 optimizer=args.optimizer or None,
                 batch=args.batch or None,
+                lr0=args.lr0 or None,
             ),
             **mode_kwargs,
         )
