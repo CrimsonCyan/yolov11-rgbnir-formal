@@ -104,6 +104,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_yolo11s` | `configs/models/yolo11s_rgbnir_bifpn_only.yaml` | `YOLO11s` 版双流 `BiFPN-only` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch`：保留 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道并投影回融合尺度后做 plain concat |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_p2_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + P2 head`：保持三尺度 BiFPN 不变，额外加入 stride=4 的 P2 小目标检测分支 |
+| `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + true P2-P5 BiFPN`：将 P2 输入纳入 BiFPN 双向融合，检测头只保留每尺度直接细化 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -1084,3 +1085,40 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 当前主线仍定为 `YOLO11s + BiFPN + Light NIR branch`：它在总体精度、参数效率和结构解释性之间最稳。
 - 若继续追小目标，下一步应围绕 `P2 head` 做轻量化消融，而不是更换优化器：优先试 `P2-lite`，例如降低 P2 通道、减少 P2 分支 C3k2 深度，目标是保留 `person/motorcycle` 增益，同时减少对中大目标的副作用。
 - 最终主表建议使用 `Adam + close_mosaic=20` 口径；`AdamW/lr0=0.001` 作为“优化器未带来增益”的负向消融记录即可。
+
+## 12. 2026-04-26 P2-P5 BiFPN 结构改造
+
+### 12.1 新增模式
+
+- 新增 mode：`bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge`
+- 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_6cls_personmerge.yaml`
+- 结构基线：基于 `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` 修改，而不是基于残差质量感知路线。
+
+### 12.2 结构变化
+
+- 旧 `P2 head` 版本：`P3/P4/P5` 先进三尺度 `BiFPN`，`P2` 只在检测头通过上采样后额外拼接进入 Detect。
+- 新 `P2-P5 BiFPN` 版本：`P2/P3/P4/P5` 同时进入 `BiFPNP2P5`，执行 top-down 与 bottom-up 双向融合，再对四个输出尺度分别做轻量 `C3k2` refine 后送入 `Detect`。
+- `BiFPN` 内部卷积同步改为 depthwise separable conv，并修复旧三尺度 `BiFPN` 中 `P5` bottom-up 节点重复融合原始 `P5` 的问题。
+- 本轮仍保持 `RGB full branch + Light NIR branch`，不引入 residual quality fusion、reflectance branch 或额外 attention。
+
+### 12.3 待验证命令
+
+冒烟：
+
+```bash
+WANDB_ENABLED=0 BATCH=20 OPTIMIZER=Adam IMGSZ=800 CLOSE_MOSAIC=20 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge 1 0
+```
+
+长训：
+
+```bash
+WANDB_ENABLED=1 BATCH=20 OPTIMIZER=Adam IMGSZ=800 CLOSE_MOSAIC=20 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge 100 0
+```
+
+### 12.4 评价重点
+
+- 第一优先：总体 `mAP50-95` 是否不低于当前 `P2 head` 与 `Light NIR` 主线。
+- 第二优先：`person` 与 `motorcycle` 的 `mAP50-95` 是否保留 P2 小目标增益。
+- 第三优先：参数量与 GFLOPs 是否可接受；若显著增大但小目标收益不明显，则不进入主线。

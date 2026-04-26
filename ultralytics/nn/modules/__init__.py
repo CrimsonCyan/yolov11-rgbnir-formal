@@ -66,6 +66,7 @@ from .block import (
 )
 from .conv import (
     BiFPN,
+    BiFPNP2P5,
     CBAM,
     ChannelAttention,
     Concat,
@@ -83,6 +84,7 @@ from .conv import (
     Index,
     LightConv,
     RepConv,
+    SeparableConvBlock,
     SpatialAttention,Silence,SilenceChannel,ChannelToNumber,NumberToChannel,ZeroConv2d,ZeroConv1d,
     TransformerFusionBlock, NiNfusion,
 
@@ -123,6 +125,8 @@ __all__ = (
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
     "BiFPN",
+    "BiFPNP2P5",
+    "SeparableConvBlock",
     "TransformerLayer",
     "TransformerBlock",
     "MLPBlock",

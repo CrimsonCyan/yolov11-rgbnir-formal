@@ -83,6 +83,7 @@ def parse_args() -> argparse.Namespace:
             "bifpn_only_yolo11s_6cls_personmerge",
             "bifpn_only_light_nir_yolo11s_6cls_personmerge",
             "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
+            "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge",
             "rgbnir_light_nir_yolo11s_6cls_personmerge",
             "attention_only",
             "full_proposed",

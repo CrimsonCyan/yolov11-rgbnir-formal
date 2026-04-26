@@ -27,6 +27,8 @@ __all__ = (
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
     "BiFPN",
+    "BiFPNP2P5",
+    "SeparableConvBlock",
     'TransformerFusionBlock','NiNfusion',
     "RepConv",
     "Index",
@@ -567,6 +569,36 @@ class WeightedFeatureFusion(nn.Module):
         return fused
 
 
+class SeparableConvBlock(nn.Module):
+    """Depthwise separable conv used after each BiFPN weighted fusion node."""
+
+    def __init__(self, channels, act=True):
+        super().__init__()
+        self.depthwise = nn.Conv2d(
+            channels,
+            channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=channels,
+            bias=False,
+        )
+        self.pointwise = nn.Conv2d(channels, channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.bn = nn.BatchNorm2d(channels)
+        self.act = Conv.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+
+    def forward(self, x):
+        return self.act(self.bn(self.pointwise(self.depthwise(x))))
+
+
+def _downsample_like(x, target):
+    """Downsample by 2 and align to target spatial size if an odd input size appears."""
+    x = F.max_pool2d(x, kernel_size=2, stride=2)
+    if x.shape[-2:] != target.shape[-2:]:
+        x = F.interpolate(x, size=target.shape[-2:], mode="nearest")
+    return x
+
+
 class BiFPNBlock(nn.Module):
     """Minimal 3-scale BiFPN block for P3/P4/P5 features."""
 
@@ -575,24 +607,23 @@ class BiFPNBlock(nn.Module):
         self.p4_td_fuse = WeightedFeatureFusion(2)
         self.p3_td_fuse = WeightedFeatureFusion(2)
         self.p4_out_fuse = WeightedFeatureFusion(3)
-        self.p5_out_fuse = WeightedFeatureFusion(3)
+        self.p5_out_fuse = WeightedFeatureFusion(2)
 
-        self.p4_td_conv = Conv(channels, channels, 3, 1)
-        self.p3_out_conv = Conv(channels, channels, 3, 1)
-        self.p4_out_conv = Conv(channels, channels, 3, 1)
-        self.p5_out_conv = Conv(channels, channels, 3, 1)
+        self.p4_td_conv = SeparableConvBlock(channels)
+        self.p3_out_conv = SeparableConvBlock(channels)
+        self.p4_out_conv = SeparableConvBlock(channels)
+        self.p5_out_conv = SeparableConvBlock(channels)
 
     def forward(self, features):
         if len(features) != 3:
             raise ValueError(f"BiFPNBlock expects 3 feature maps, got {len(features)}")
         p3, p4, p5 = features
 
-        p5_td = p5
-        p4_td = self.p4_td_conv(self.p4_td_fuse([p4, F.interpolate(p5_td, size=p4.shape[-2:], mode="nearest")]))
+        p4_td = self.p4_td_conv(self.p4_td_fuse([p4, F.interpolate(p5, size=p4.shape[-2:], mode="nearest")]))
         p3_out = self.p3_out_conv(self.p3_td_fuse([p3, F.interpolate(p4_td, size=p3.shape[-2:], mode="nearest")]))
 
-        p4_out = self.p4_out_conv(self.p4_out_fuse([p4, p4_td, F.max_pool2d(p3_out, kernel_size=2, stride=2)]))
-        p5_out = self.p5_out_conv(self.p5_out_fuse([p5, p5_td, F.max_pool2d(p4_out, kernel_size=2, stride=2)]))
+        p4_out = self.p4_out_conv(self.p4_out_fuse([p4, p4_td, _downsample_like(p3_out, p4)]))
+        p5_out = self.p5_out_conv(self.p5_out_fuse([p5, _downsample_like(p4_out, p5)]))
         return [p3_out, p4_out, p5_out]
 
 
@@ -609,6 +640,59 @@ class BiFPN(nn.Module):
     def forward(self, x):
         if len(x) != 3:
             raise ValueError(f"BiFPN expects 3 feature maps, got {len(x)}")
+        features = [proj(feature) for proj, feature in zip(self.input_proj, x)]
+        for block in self.blocks:
+            features = block(features)
+        return features
+
+
+class BiFPNBlockP2P5(nn.Module):
+    """EfficientDet-style bidirectional BiFPN block for P2/P3/P4/P5 features."""
+
+    def __init__(self, channels):
+        super().__init__()
+        self.p4_td_fuse = WeightedFeatureFusion(2)
+        self.p3_td_fuse = WeightedFeatureFusion(2)
+        self.p2_out_fuse = WeightedFeatureFusion(2)
+        self.p3_out_fuse = WeightedFeatureFusion(3)
+        self.p4_out_fuse = WeightedFeatureFusion(3)
+        self.p5_out_fuse = WeightedFeatureFusion(2)
+
+        self.p4_td_conv = SeparableConvBlock(channels)
+        self.p3_td_conv = SeparableConvBlock(channels)
+        self.p2_out_conv = SeparableConvBlock(channels)
+        self.p3_out_conv = SeparableConvBlock(channels)
+        self.p4_out_conv = SeparableConvBlock(channels)
+        self.p5_out_conv = SeparableConvBlock(channels)
+
+    def forward(self, features):
+        if len(features) != 4:
+            raise ValueError(f"BiFPNBlockP2P5 expects 4 feature maps, got {len(features)}")
+        p2, p3, p4, p5 = features
+
+        p4_td = self.p4_td_conv(self.p4_td_fuse([p4, F.interpolate(p5, size=p4.shape[-2:], mode="nearest")]))
+        p3_td = self.p3_td_conv(self.p3_td_fuse([p3, F.interpolate(p4_td, size=p3.shape[-2:], mode="nearest")]))
+        p2_out = self.p2_out_conv(self.p2_out_fuse([p2, F.interpolate(p3_td, size=p2.shape[-2:], mode="nearest")]))
+
+        p3_out = self.p3_out_conv(self.p3_out_fuse([p3, p3_td, _downsample_like(p2_out, p3)]))
+        p4_out = self.p4_out_conv(self.p4_out_fuse([p4, p4_td, _downsample_like(p3_out, p4)]))
+        p5_out = self.p5_out_conv(self.p5_out_fuse([p5, _downsample_like(p4_out, p5)]))
+        return [p2_out, p3_out, p4_out, p5_out]
+
+
+class BiFPNP2P5(nn.Module):
+    """BiFPN wrapper with input projection and repeated P2/P3/P4/P5 fusion."""
+
+    def __init__(self, in_channels, out_channels, repeats=2):
+        super().__init__()
+        if len(in_channels) != 4:
+            raise ValueError(f"BiFPNP2P5 expects 4 input channels, got {len(in_channels)}")
+        self.input_proj = nn.ModuleList([Conv(c, out_channels, 1, 1) for c in in_channels])
+        self.blocks = nn.ModuleList([BiFPNBlockP2P5(out_channels) for _ in range(repeats)])
+
+    def forward(self, x):
+        if len(x) != 4:
+            raise ValueError(f"BiFPNP2P5 expects 4 feature maps, got {len(x)}")
         features = [proj(feature) for proj, feature in zip(self.input_proj, x)]
         for block in self.blocks:
             features = block(features)
