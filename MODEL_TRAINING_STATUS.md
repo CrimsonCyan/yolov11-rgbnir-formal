@@ -1122,3 +1122,13 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_
 - 第一优先：总体 `mAP50-95` 是否不低于当前 `P2 head` 与 `Light NIR` 主线。
 - 第二优先：`person` 与 `motorcycle` 的 `mAP50-95` 是否保留 P2 小目标增益。
 - 第三优先：参数量与 GFLOPs 是否可接受；若显著增大但小目标收益不明显，则不进入主线。
+
+### 12.5 当前构建验证
+
+- 本地 `py_compile` 已通过：`ultralytics/nn/modules/conv.py`、`ultralytics/nn/modules/__init__.py`、`ultralytics/nn/tasks.py`、`formal_rgbnir/iddaw.py`、`scripts/iddaw/run_experiment.py`。
+- 本地 YOLO 构建未执行完成，原因是当前本地 Python 缺少 `cv2`；远端 `visnir-exp` 环境已完成实际构建验证。
+- 远端构建结果：
+  - Detect stride：`[4.0, 8.0, 16.0, 32.0]`
+  - Detect 输入尺度数：`4`
+  - 模型规模：`536 layers / 9,268,004 parameters / 40.06 GFLOPs @ 640`
+- 该规模低于此前 `P2 head` 版本，主要原因是新配置不再使用 YOLO head 的多次上采样/下采样重融合，而是在 `BiFPNP2P5` 后直接对四个尺度做轻量 refine。
