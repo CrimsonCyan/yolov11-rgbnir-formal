@@ -8,7 +8,7 @@
 4. 训练日志与结果存放位置
 5. 当前最新训练状态及结果
 
-更新时间：`2026-04-25`
+更新时间：`2026-04-26`
 
 ## 1. 工程与数据根
 
@@ -53,6 +53,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 - `VAL_INTERVAL=1`，默认每个 epoch 验证一次
 - `IDDAW_CLASS_SCHEMA=6cls_personmerge`，默认训练使用 6 类口径
 - `OPTIMIZER=SGD`，默认使用 SGD；可通过环境变量覆盖为 `Adam/AdamW` 等 Ultralytics 支持的优化器
+- `LR0` 可选覆盖初始学习率；若不设置则使用 Ultralytics 默认学习率
 - `CLOSE_MOSAIC=20`，默认在最后 20 个 epoch 关闭 mosaic；可通过环境变量覆盖
 - 自动生成 `stdout.log / pid / meta` 三类远端日志文件
 - 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
@@ -103,6 +104,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_yolo11s` | `configs/models/yolo11s_rgbnir_bifpn_only.yaml` | `YOLO11s` 版双流 `BiFPN-only` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch`：保留 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道并投影回融合尺度后做 plain concat |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_p2_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + P2 head`：保持三尺度 BiFPN 不变，额外加入 stride=4 的 P2 小目标检测分支 |
+| `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_light_nir_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite + Light NIR branch`：保持 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道后再投影回融合尺度 |
@@ -144,6 +146,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `32` | `10` | 已完成 `100 epoch` |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过冒烟；小目标 P2 四尺度检测头 |
+| `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
@@ -232,6 +235,9 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `proposed_lite_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-proposed-lite-p34-6cls-personmerge3` | `70 epoch` | 已完成 | `0.76323` | `0.50914` | `0.59353` | `0.39896` | 6 类口径下 `P3/P4` 质量感知 + `P5 plain concat` 的 Proposed-Lite |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge4` | `100 epoch, batch=32` | 已完成 | `0.71556` | `0.55095` | `0.60467` | `0.41390` | 当前 `YOLO11s + RGB-NIR + 640 + SGD` 最强结果，Light NIR branch |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge5` | `100 epoch, imgsz=800, Adam, batch=20` | 已完成 | `0.76181` | `0.60168` | `0.66055` | `0.47087` | 高配方 Light NIR branch，效率更优的主线候选 |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge6` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=20` | 已完成 | `0.75772` | `0.57149` | `0.64335` | `0.46029` | AdamW/lr0 消融；低于 Adam 主线 |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge7` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | 已完成 | `0.72128` | `0.58693` | `0.63484` | `0.44939` | close_mosaic=10 消融；低于 close_mosaic=20 |
+| `rgbnir_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | 已完成 | `0.73076` | `0.55552` | `0.61771` | `0.42634` | Light NIR plain baseline，不带 BiFPN |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge4` | `100 epoch, imgsz=800, Adam, batch=20, device=0,1` | 已完成 | `0.75923` | `0.60991` | `0.67259` | `0.47049` | P2 检测头小目标增强，`person/motorcycle` 提升，但总体 `mAP50-95` 与无 P2 持平略低 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
@@ -1015,3 +1021,66 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - P2 的价值仍集中在 `person / motorcycle` 小目标增强；如果论文主表以总体 `mAP50-95` 排序，P2 不应替代主线；如果强调小目标分析，P2 可以作为专项消融。
 - 当前推荐主表结论更新为：`RGB-NIR + BiFPN` 是主要增益来源，`Light NIR branch` 在几乎不损失总体精度的前提下降低冗余，`P2 head` 进一步提升小目标但不提升总体 `mAP50-95`。
 - 下一步如果继续训练，应优先补同配方 `RGB-only close_mosaic=20`，否则当前 `RGB-only` 基线仍是 `close_mosaic=10`，和新一批 `close_mosaic=20` 结果存在一个训练策略变量差异。
+
+## 11. 2026-04-26 AdamW/lr0=0.001 与 close_mosaic 消融结果
+
+### 11.1 已完成 run 汇总
+
+三条训练均在 `ssh lyh`、`/data1/lvyanhu/code/yolov11-rgbnir-formal` 下完成，数据根为 `/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`。
+
+| 模式 | run | 配方 | best epoch | P | R | mAP50 | mAP50-95 | W&B |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge6` | `800, AdamW, lr0=0.001, batch=20, close_mosaic=20` | `99` | `0.75772` | `0.57149` | `0.64335` | `0.46029` | `nb3mdkmj` |
+| `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge7` | `800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | `100` | `0.72128` | `0.58693` | `0.63484` | `0.44939` | `3ka6dtkb` |
+| `rgbnir_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge` | `800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | `99` | `0.73076` | `0.55552` | `0.61771` | `0.42634` | `tm1bfkzu` |
+
+对应日志：
+
+- `bifpn_only_light_nir_yolo11s_6cls_personmerge_e100_20260426_031128.stdout.log`
+- `bifpn_only_light_nir_yolo11s_6cls_personmerge_e100_20260426_043645.stdout.log`
+- `rgbnir_light_nir_yolo11s_6cls_personmerge_e100_20260426_062145.stdout.log`
+
+### 11.2 best.pt 类别表现
+
+`BiFPN + Light NIR, AdamW, close_mosaic=20`：
+
+- `person`: `mAP50 = 0.478`, `mAP50-95 = 0.247`
+- `motorcycle`: `mAP50 = 0.501`, `mAP50-95 = 0.233`
+- `car`: `mAP50 = 0.866`, `mAP50-95 = 0.668`
+- `truck`: `mAP50 = 0.586`, `mAP50-95 = 0.458`
+- `bus`: `mAP50 = 0.709`, `mAP50-95 = 0.594`
+- `autorickshaw`: `mAP50 = 0.720`, `mAP50-95 = 0.560`
+
+`BiFPN + Light NIR, AdamW, close_mosaic=10`：
+
+- `person`: `mAP50 = 0.483`, `mAP50-95 = 0.243`
+- `motorcycle`: `mAP50 = 0.487`, `mAP50-95 = 0.225`
+- `car`: `mAP50 = 0.870`, `mAP50-95 = 0.659`
+- `truck`: `mAP50 = 0.563`, `mAP50-95 = 0.436`
+- `bus`: `mAP50 = 0.690`, `mAP50-95 = 0.567`
+- `autorickshaw`: `mAP50 = 0.717`, `mAP50-95 = 0.564`
+
+`RGB-NIR + Light NIR plain, AdamW, close_mosaic=10`：
+
+- `person`: `mAP50 = 0.467`, `mAP50-95 = 0.228`
+- `motorcycle`: `mAP50 = 0.452`, `mAP50-95 = 0.197`
+- `car`: `mAP50 = 0.859`, `mAP50-95 = 0.635`
+- `truck`: `mAP50 = 0.588`, `mAP50-95 = 0.435`
+- `bus`: `mAP50 = 0.643`, `mAP50-95 = 0.532`
+- `autorickshaw`: `mAP50 = 0.700`, `mAP50-95 = 0.532`
+
+### 11.3 结果分析
+
+- `AdamW + lr0=0.001` 没有超过此前 `Adam + close_mosaic=20` 的 Light NIR 主线：`0.64335 / 0.46029` 低于 `0.66055 / 0.47087`。
+- 在同为 `AdamW + lr0=0.001 + batch=20` 下，`close_mosaic=20` 明显优于 `close_mosaic=10`：`mAP50 +0.00851`，`mAP50-95 +0.01090`。
+- 在同为 `AdamW + lr0=0.001 + close_mosaic=10` 下，`BiFPN` 相对 Light NIR plain 仍有明确收益：`mAP50 +0.01713`，`mAP50-95 +0.02305`。
+- Light NIR plain 的模型更轻：`11.91M parameters / 47.07 GFLOPs`；BiFPN + Light NIR 为 `14.15M parameters / 80.15 GFLOPs`。但精度差距说明 BiFPN 仍是当前结构主增益来源。
+- 小目标上，`BiFPN + Light NIR + AdamW close_mosaic=10` 的 `person/motorcycle` 仍明显低于 P2 head：`person 0.483/0.243`、`motorcycle 0.487/0.225`，而 P2 为 `0.554/0.290`、`0.581/0.280`。
+
+### 11.4 下一步计划
+
+- 当前不建议把主优化器切到 `AdamW + lr0=0.001`；论文主线结果继续以 `Adam + close_mosaic=20` 为主。
+- 当前不建议回退到 `close_mosaic=10`；后续高配方统一保持 `close_mosaic=20`，除非专门做训练策略消融。
+- 当前主线仍定为 `YOLO11s + BiFPN + Light NIR branch`：它在总体精度、参数效率和结构解释性之间最稳。
+- 若继续追小目标，下一步应围绕 `P2 head` 做轻量化消融，而不是更换优化器：优先试 `P2-lite`，例如降低 P2 通道、减少 P2 分支 C3k2 深度，目标是保留 `person/motorcycle` 增益，同时减少对中大目标的副作用。
+- 最终主表建议使用 `Adam + close_mosaic=20` 口径；`AdamW/lr0=0.001` 作为“优化器未带来增益”的负向消融记录即可。
