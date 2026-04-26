@@ -248,6 +248,7 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge7` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | 已完成 | `0.72128` | `0.58693` | `0.63484` | `0.44939` | close_mosaic=10 消融；低于 close_mosaic=20 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | 已完成 | `0.73076` | `0.55552` | `0.61771` | `0.42634` | Light NIR plain baseline，不带 BiFPN |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge4` | `100 epoch, imgsz=800, Adam, batch=20, device=0,1` | 已完成 | `0.75923` | `0.60991` | `0.67259` | `0.47049` | P2 检测头小目标增强，`person/motorcycle` 提升，但总体 `mAP50-95` 与无 P2 持平略低 |
+| `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge5` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.72686` | `0.58771` | `0.64462` | `0.44502` | P2 head 同配方复核；明显低于 close_mosaic=20 版本，不作为主结果 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge3` | `100 epoch, imgsz=640, Adam, batch=20, close_mosaic=20` | 已完成 | `0.76438` | `0.58118` | `0.66597` | `0.45832` | true P2-P5 BiFPN 单卡结果；`800 + batch20` 单卡 OOM，因此不能与 800 高配方直接公平比较 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge5` | `150 epoch, imgsz=800, AdamW, lr0=0.001, cos_lr=True, batch=20, device=0,1` | 已完成 | `0.71407` | `0.56201` | `0.61474` | `0.42033` | true P2-P5 BiFPN 高分辨率稳定配方；明显低于 P2 head / Light NIR 主线，暂不晋级 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge6` | `150 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.73999` | `0.55773` | `0.63204` | `0.44113` | true P2-P5 BiFPN 的 Adam/lr0/close_mosaic=15 复核；优于 AdamW+cos，但仍低于 P2 head / Light NIR 主线 |
@@ -1430,3 +1431,84 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_
   - 判断 true P2-P5 路线之前的退化是否来自 `192` 宽度不足。
   - 如果 c256 仍无法超过 `P2 head` 或无 P2 的 Light NIR 主线，则停止 true P2-P5 方向。
   - 如果 plain c256 有效而 OA gate c256 无效，说明瓶颈在 BiFPN 宽度而不是 NIR gate。
+
+### 12.10 `P2 head + close_mosaic=15` 复核结果
+
+- mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge5`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge5`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2_yolo11s_6cls_personmerge_e100_20260426_225144.stdout.log`
+- meta：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2_yolo11s_6cls_personmerge_e100_20260426_225144.meta`
+- W&B run：`8lavg7mj`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/8lavg7mj`
+- 运行配置：
+  - `imgsz=800`
+  - `optimizer=Adam`
+  - `lr0=0.001`
+  - `batch=20`
+  - `device=0,1`
+  - `epochs=100`
+  - `close_mosaic=15`
+  - `cos_lr=False`
+  - `WANDB_ENABLED=1`
+  - `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+- 模型规模：
+  - `10,223,642` parameters
+  - W&B 记录 `model/GFLOPs = 61.399`
+  - best.pt 复验日志 summary：`427 layers / 10,206,410 parameters / 60.60 GFLOPs`
+- 训练完成状态：
+  - `100` epoch 完成
+  - `best.pt` 与 `last.pt` 均已导出
+  - `results.csv` 共 `100` 个 epoch
+
+- `results.csv` 最优 epoch：
+  - epoch `99`
+  - `Precision = 0.72686`
+  - `Recall = 0.58771`
+  - `mAP50 = 0.64462`
+  - `mAP50-95 = 0.44502`
+- `results.csv` 最后 epoch：
+  - epoch `100`
+  - `Precision = 0.70301`
+  - `Recall = 0.59609`
+  - `mAP50 = 0.64083`
+  - `mAP50-95 = 0.44485`
+- W&B summary：
+  - `Precision = 0.72470`
+  - `Recall = 0.58781`
+  - `mAP50 = 0.64426`
+  - `model/GFLOPs = 61.399`
+  - `model/parameters = 10223642`
+- `best.pt` 复验主要类别表现：
+  - `person`: `mAP50 = 0.504`, `mAP50-95 = 0.250`
+  - `motorcycle`: `mAP50 = 0.519`, `mAP50-95 = 0.232`
+  - `car`: `mAP50 = 0.879`, `mAP50-95 = 0.663`
+  - `truck`: `mAP50 = 0.582`, `mAP50-95 = 0.433`
+  - `bus`: `mAP50 = 0.648`, `mAP50-95 = 0.534`
+  - `autorickshaw`: `mAP50 = 0.734`, `mAP50-95 = 0.555`
+
+#### 12.10.1 对比分析
+
+- 相比此前 `P2 head + close_mosaic=20`（`mAP50 = 0.67259`，`mAP50-95 = 0.47049`）：
+  - `mAP50 -0.02797`
+  - `mAP50-95 -0.02547`
+  - `person`: `0.554 / 0.290 -> 0.504 / 0.250`
+  - `motorcycle`: `0.581 / 0.280 -> 0.519 / 0.232`
+  - 说明 `close_mosaic=15` 对当前 P2 head 不如 `close_mosaic=20` 稳定。
+- 相比 `P2-P5 + OA gate`（`mAP50 = 0.63013`，`mAP50-95 = 0.43517`）：
+  - `mAP50 +0.01449`
+  - `mAP50-95 +0.00985`
+  - 但 `person/motorcycle` 的 `mAP50-95 = 0.250 / 0.232` 仍没有接近此前 P2 head 的 `0.290 / 0.280`。
+- 相比无 P2 的 `BiFPN + Light NIR branch` 主线（`mAP50 = 0.66055`，`mAP50-95 = 0.47087`）：
+  - `mAP50 -0.01593`
+  - `mAP50-95 -0.02585`
+
+#### 12.10.2 结论
+
+- `P2 head` 的有效版本仍是此前 `close_mosaic=20` 结果，不是本轮 `close_mosaic=15` 复核。
+- 当前结果强化了一个结论：小目标收益不仅来自 P2 检测头结构，也明显依赖更长的 no-mosaic 阶段。
+- 后续若继续训练 P2 系列，应回到 `close_mosaic=20`；如果为了和 `P2-P5/OA gate` 的 `close_mosaic=15` 对齐，只能作为诊断结果，不适合作为最终主表。
+- c256 队列异常原因：
+  - `formal_rgbnir/iddaw.py` 已注册新增 c256 mode，但 `scripts/iddaw/run_experiment.py` 的 argparse choices 仍是旧的静态列表。
+  - 第一次队列启动 `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` 后被 argparse 拒绝，日志中报 `invalid choice`。
+  - 修复方案：`run_experiment.py` 改为直接使用 `TRAINABLE_MODES | {"decision_fusion"}` 生成 choices，避免以后新增 mode 时再次漏改入口。
