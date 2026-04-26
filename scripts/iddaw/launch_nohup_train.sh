@@ -16,6 +16,7 @@ if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerg
   export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"
 fi
 export PYTHONUNBUFFERED=1
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 if [[ -z "${WANDB_ENABLED+x}" ]]; then
   if [[ "$EPOCHS" -le 1 ]]; then
     export WANDB_ENABLED=0
