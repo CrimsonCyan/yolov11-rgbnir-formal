@@ -31,6 +31,7 @@ export IMGSZ="${IMGSZ:-640}"
 export OPTIMIZER="${OPTIMIZER:-SGD}"
 export BATCH="${BATCH:-}"
 export LR0="${LR0:-}"
+export COS_LR="${COS_LR:-0}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
@@ -75,6 +76,10 @@ if [[ -n "$LR0" ]]; then
   CMD+=(--lr0 "$LR0")
 fi
 
+if [[ "$COS_LR" == "1" || "$COS_LR" == "true" || "$COS_LR" == "True" ]]; then
+  CMD+=(--cos-lr)
+fi
+
 if [[ -n "$RESUME_CKPT" ]]; then
   CMD+=(--resume "$RESUME_CKPT")
 fi
@@ -105,6 +110,7 @@ imgsz=$IMGSZ
 optimizer=$OPTIMIZER
 batch=${BATCH:-}
 lr0=${LR0:-}
+cos_lr=$COS_LR
 close_mosaic=$CLOSE_MOSAIC
 started_at=$STAMP
 command=${CMD[*]}

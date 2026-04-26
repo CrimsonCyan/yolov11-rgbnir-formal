@@ -54,6 +54,7 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 - `IDDAW_CLASS_SCHEMA=6cls_personmerge`，默认训练使用 6 类口径
 - `OPTIMIZER=SGD`，默认使用 SGD；可通过环境变量覆盖为 `Adam/AdamW` 等 Ultralytics 支持的优化器
 - `LR0` 可选覆盖初始学习率；若不设置则使用 Ultralytics 默认学习率
+- `COS_LR=1` 可选启用 Ultralytics cosine learning rate schedule；默认关闭
 - `CLOSE_MOSAIC=20`，默认在最后 20 个 epoch 关闭 mosaic；可通过环境变量覆盖
 - 自动生成 `stdout.log / pid / meta` 三类远端日志文件
 - 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
@@ -123,7 +124,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 - 项目目录：`runs/IDD_AW`
 - 脚本默认验证频率：`val_interval=1`
 - 脚本默认 W\&B console：`WANDB_CONSOLE=off`
-- 统一入口支持可选覆盖：`--optimizer`、`--batch`
+- 统一入口支持可选覆盖：`--optimizer`、`--batch`、`--lr0`、`--cos-lr`
 - 历史结果若未单独说明，默认仍按当时配置 `close_mosaic=10` 解释；`2026-04-25` 之后的新训练默认切到 `20`
 
 ### 4.2 模式级差异
@@ -147,6 +148,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `full_proposed_residual_v2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 待启动 `70 epoch` |
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `32` | `10` | 已完成 `100 epoch` |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过冒烟；小目标 P2 四尺度检测头 |
+| `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -240,6 +242,7 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge7` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | 已完成 | `0.72128` | `0.58693` | `0.63484` | `0.44939` | close_mosaic=10 消融；低于 close_mosaic=20 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge` | `100 epoch, imgsz=800, AdamW, lr0=0.001, batch=20, close_mosaic=10` | 已完成 | `0.73076` | `0.55552` | `0.61771` | `0.42634` | Light NIR plain baseline，不带 BiFPN |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge4` | `100 epoch, imgsz=800, Adam, batch=20, device=0,1` | 已完成 | `0.75923` | `0.60991` | `0.67259` | `0.47049` | P2 检测头小目标增强，`person/motorcycle` 提升，但总体 `mAP50-95` 与无 P2 持平略低 |
+| `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge3` | `100 epoch, imgsz=640, Adam, batch=20, close_mosaic=20` | 已完成 | `0.76438` | `0.58118` | `0.66597` | `0.45832` | true P2-P5 BiFPN 单卡结果；`800 + batch20` 单卡 OOM，因此不能与 800 高配方直接公平比较 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -756,6 +759,49 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 - 废弃 run：
   - `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge2` 使用 `batch=18` 启动后被手动停止，不纳入对照结果
 
+### 6.13 `YOLO11s BiFPN-only + Light NIR branch + true P2-P5 BiFPN` 完成结果
+
+- mode：`bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge`
+- 配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_6cls_personmerge.yaml`
+- 结构目的：
+  - 将 `P2` 不只放到检测头，而是作为第四个尺度输入纳入 BiFPN 双向融合
+  - BiFPN 输入为 `P2/P3/P4/P5`，Detect 输出 stride 为 `[4, 8, 16, 32]`
+  - 保持 `Light NIR branch`，不回到残差质量感知融合路线
+- 训练 run：
+  - run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge3`
+  - 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge_e100_20260426_142953.stdout.log`
+  - W&B run：`nei0onrv`
+  - W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/nei0onrv`
+  - 配方：`imgsz=640`、`optimizer=Adam`、`lr0=0.01`、`batch=20`、`epochs=100`、`close_mosaic=20`、`device=0`
+  - 备注：单卡尝试 `imgsz=800 + batch=20` 时 OOM，因此本轮实际降为 `640`；该结果不能与 `800` 高配方结果做严格公平比较
+- best epoch：
+  - epoch：`96`
+  - `Precision = 0.76438`
+  - `Recall = 0.58118`
+  - `mAP50 = 0.66597`
+  - `mAP50-95 = 0.45832`
+- final epoch：
+  - epoch：`100`
+  - `Precision = 0.74373`
+  - `Recall = 0.59813`
+  - `mAP50 = 0.66329`
+  - `mAP50-95 = 0.45457`
+- best.pt 最终验证类别指标：
+  - `person`: `mAP50 = 0.524`, `mAP50-95 = 0.264`
+  - `motorcycle`: `mAP50 = 0.523`, `mAP50-95 = 0.233`
+  - `car`: `mAP50 = 0.884`, `mAP50-95 = 0.669`
+  - `truck`: `mAP50 = 0.596`, `mAP50-95 = 0.438`
+  - `bus`: `mAP50 = 0.721`, `mAP50-95 = 0.561`
+  - `autorickshaw`: `mAP50 = 0.750`, `mAP50-95 = 0.580`
+- 结果分析：
+  - 在 `640` 输入下，true P2-P5 BiFPN 已达到 `mAP50 = 0.66597`，接近 `800 + Adam` 的 Light NIR 主线 `0.66055`，说明 P2-P5 融合对目标发现能力有实际帮助。
+  - `mAP50-95 = 0.45832` 低于 `800 + Adam` 的 Light NIR 主线 `0.47087` 和 P2 head 版本 `0.47049`，但这里分辨率不同，不能直接判定结构更弱。
+  - 小目标类别上，`person/motorcycle` 的 `mAP50-95` 分别为 `0.264 / 0.233`，明显高于早期 Light NIR 主线记录中的 `0.207 / 0.183`，说明加入 P2 路线对小目标定位质量是有效方向。
+  - 这轮训练暴露的主要问题不是结构是否可用，而是配方不统一：`Adam + lr0=0.01` 对 Adam 偏高，且 `640` 分辨率与此前高配方 `800` 不可比。
+- 当前结论：
+  - true P2-P5 BiFPN 值得继续验证，但下一轮必须使用双卡跑 `imgsz=800`，否则无法与现有高配方主线公平比较。
+  - 下一轮不建议继续沿 `Adam + lr0=0.01`，应切到 `AdamW + lr0=0.001 + cos_lr=True`，降低高分辨率长训的震荡风险。
+
 ## 7. 当前可直接引用的结论
 
 - 当前 RGB-only 基线中，`YOLO11s RGB-only` 已成为更强单模基线：
@@ -766,6 +812,8 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `YOLO11s RGB-only`（100 epoch, `800 + Adam + batch=20`）：`mAP50-95 = 0.42368`
 - 在当前已完成的 `YOLO11s RGB-NIR` 6 类对照里，`BiFPN-only + Light NIR branch` 是目前整体最强的一条已完成路线：
   - `BiFPN-only + Light NIR branch`（100 epoch, `800 + Adam + batch=20`）：`mAP50 = 0.66055`，`mAP50-95 = 0.47087`
+  - `BiFPN-only + Light NIR branch + P2 head`（100 epoch, `800 + Adam + batch=20, device=0,1`）：`mAP50 = 0.67259`，`mAP50-95 = 0.47049`
+  - `BiFPN-only + Light NIR branch + true P2-P5 BiFPN`（100 epoch, `640 + Adam + batch=20`）：`mAP50 = 0.66597`，`mAP50-95 = 0.45832`
   - `BiFPN-only + Light NIR branch`（100 epoch, `640 + SGD + batch=32`）：`mAP50 = 0.60467`，`mAP50-95 = 0.41390`
   - `Proposed-Lite`（70 epoch）：`mAP50 = 0.59353`，`mAP50-95 = 0.39896`
   - `BiFPN-only`（50 epoch）：`mAP50 = 0.58269`，`mAP50-95 = 0.39173`
@@ -777,7 +825,8 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
   - `motorcycle` 从 `0.417 / 0.189` 变为 `0.434 / 0.183`
 - 当前小目标结论：
   - 轻量 NIR 分支能恢复 `person / motorcycle` 的部分 `mAP50`，但 `motorcycle` 的 `mAP50-95` 仍偏弱。
-  - 当前瓶颈已经从“是否要复杂跨模态注意力”转向“小目标高 IoU 定位质量”。
+  - P2 系列对 `person / motorcycle` 有明确改善信号；true P2-P5 BiFPN 在 `640` 下已达到 `person/motorcycle mAP50-95 = 0.264 / 0.233`。
+  - 当前瓶颈已经从“是否要复杂跨模态注意力”转向“小目标高 IoU 定位质量”和“高分辨率下的稳定优化配方”。
 - 在相同 6 类口径和 `800×800` 输入下，`RGB-NIR plain + Adam` 当前达到：
   - `mAP50 = 0.612`
   - `mAP50-95 = 0.415`
@@ -807,16 +856,14 @@ bash scripts/iddaw/launch_nohup_train.sh rgb_rtdetr 70 0 /home/lym/lvyanhu/code/
 
 ## 8. 下一步执行方案
 
-- 第一优先级：验证新增 `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`，用于直接针对 `person / motorcycle` 小目标低精度问题做结构验证。
-- P2 小目标分支冒烟配置：
-  - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+- 第一优先级：用双卡补齐 `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` 的高分辨率公平验证，用于判断 true P2-P5 BiFPN 是否能在 `800` 输入下超过现有 `P2 head` 与 `Light NIR` 主线。
+- true P2-P5 BiFPN 双卡正式候选配置：
+  - mode：`bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge`
   - 远端：`ssh lyh`
   - 工程目录：`/data1/lvyanhu/code/yolov11-rgbnir-formal`
   - 数据根：`/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge`
-  - 配方：`imgsz=640`、`optimizer=SGD`、`batch=16`、`epochs=1`、`close_mosaic=20`、`WANDB_ENABLED=0`
-- P2 小目标分支正式候选配置：
-  - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
-  - 配方：`imgsz=800`、`optimizer=Adam`、`batch=20`、`epochs=100`、`close_mosaic=20`、`WANDB_ENABLED=1`
+  - 配方：`imgsz=800`、`optimizer=AdamW`、`lr0=0.001`、`cos_lr=True`、`batch=20`、`epochs=150`、`close_mosaic=20`、`device=0,1`、`WANDB_ENABLED=1`
+  - 目的：消除上一轮 `640` 分辨率和 `Adam lr0=0.01` 的配方干扰，直接与 `800` 高配方主线比较。
 - 第二优先级：按新默认 `close_mosaic=20` 重跑 `bifpn_only_yolo11s_6cls_personmerge`，用于确认原始 BiFPN-only 在更长 no-mosaic 阶段下是否能接近或超过 `Light NIR branch`。
 - 原始 BiFPN-only 待启动配置：
   - mode：`bifpn_only_yolo11s_6cls_personmerge`

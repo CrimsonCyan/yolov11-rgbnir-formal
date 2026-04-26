@@ -314,6 +314,7 @@ def common_train_kwargs(
     optimizer: str | None = None,
     batch: int | None = None,
     lr0: float | None = None,
+    cos_lr: bool = False,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
@@ -333,6 +334,8 @@ def common_train_kwargs(
         "project": "runs/IDD_AW",
         "name": experiment_name(mode),
     }
+    if cos_lr:
+        kwargs["cos_lr"] = True
     if lr0 is not None:
         kwargs["lr0"] = lr0
     return kwargs

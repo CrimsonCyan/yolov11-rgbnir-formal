@@ -110,6 +110,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--optimizer", default="", help="Optional optimizer override for train, e.g. SGD or Adam.")
     parser.add_argument("--batch", type=int, default=0, help="Optional batch override for train/val.")
     parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train.")
+    parser.add_argument("--cos-lr", action="store_true", help="Use cosine learning rate schedule for train.")
     return parser.parse_args()
 
 
@@ -158,6 +159,7 @@ def main() -> None:
                     optimizer=args.optimizer or None,
                     batch=args.batch or None,
                     lr0=args.lr0 or None,
+                    cos_lr=args.cos_lr,
                 ),
                 **mode_kwargs,
             )
@@ -175,6 +177,7 @@ def main() -> None:
                 optimizer=args.optimizer or None,
                 batch=args.batch or None,
                 lr0=args.lr0 or None,
+                cos_lr=args.cos_lr,
             ),
             **mode_kwargs,
         )
