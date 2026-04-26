@@ -17,7 +17,9 @@ PERSONMERGE_MODES = {
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge",
     "rgbnir_light_nir_yolo11s_6cls_personmerge",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
     "proposed_lite_yolo11s_6cls_personmerge",
@@ -38,7 +40,9 @@ TRAINABLE_MODES = {
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge",
     "rgbnir_light_nir_yolo11s_6cls_personmerge",
     "attention_only",
     "full_proposed",
@@ -153,7 +157,9 @@ def experiment_name(mode: str) -> str:
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge",
         "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge",
         "rgbnir_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
@@ -208,6 +214,10 @@ def model_config_for(mode: str) -> str:
         return str(
             (root / "configs" / "models" / "yolo11s_rgbnir_bifpn_p2p5_light_nir_6cls_personmerge.yaml").resolve()
         )
+    if mode == "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge":
+        return str(
+            (root / "configs" / "models" / "yolo11s_rgbnir_bifpn_p2p5_light_nir_c256_6cls_personmerge.yaml").resolve()
+        )
     if mode == "bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge":
         return str(
             (
@@ -215,6 +225,15 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_c256_6cls_personmerge.yaml"
             ).resolve()
         )
     if mode == "rgbnir_light_nir_yolo11s_6cls_personmerge":
@@ -271,7 +290,9 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 24,
         "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge": 20,
         "rgbnir_light_nir_yolo11s_6cls_personmerge": 24,
         "attention_only": 48,
         "full_proposed": 48,
@@ -303,7 +324,9 @@ def workers_for(mode: str) -> int:
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge": 10,
         "rgbnir_light_nir_yolo11s_6cls_personmerge": 10,
         "attention_only": 10,
         "full_proposed": 10,
