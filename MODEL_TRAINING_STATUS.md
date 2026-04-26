@@ -106,6 +106,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch`：保留 `P3` NIR 分支，压缩 `P4/P5` NIR 语义通道并投影回融合尺度后做 plain concat |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_only_light_nir_p2_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + P2 head`：保持三尺度 BiFPN 不变，额外加入 stride=4 的 P2 小目标检测分支 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + true P2-P5 BiFPN`：将 P2 输入纳入 BiFPN 双向融合，检测头只保留每尺度直接细化 |
+| `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + true P2-P5 BiFPN + Object-aware NIR gate`：仅在 `P2/P3` RGB-NIR 融合处用轻量 OA gate 调制 NIR，`P4/P5` 保持 plain concat |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -149,6 +150,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `32` | `10` | 已完成 `100 epoch` |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过冒烟；小目标 P2 四尺度检测头 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN |
+| `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 待验证；基于 true P2-P5 BiFPN，仅在 `P2/P3` 加 OA gate |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -1223,3 +1225,18 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_
   - Detect 输入尺度数：`4`
   - 模型规模：`536 layers / 9,268,004 parameters / 40.06 GFLOPs @ 640`
 - 该规模低于此前 `P2 head` 版本，主要原因是新配置不再使用 YOLO head 的多次上采样/下采样重融合，而是在 `BiFPNP2P5` 后直接对四个尺度做轻量 refine。
+
+### 12.6 Object-aware NIR gate 备选结构
+
+- 新增 mode：`bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge`
+- 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_6cls_personmerge.yaml`
+- 基线来源：基于 `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` 修改。
+- 修改动机：借鉴 `Object-Aware NIR-to-Visible Translation` 中“object-specific reflection + segmentation prior”思想，但不引入完整 NIR-to-VIS 翻译网络；在检测任务中只保留轻量对象感知 NIR 门控。
+- 结构变化：
+  - `P2/P3`：`Concat(RGB, NIR)` 替换为 `ObjectAwareNIRGateConcat(RGB, NIR)`，先用 NIR reflection cue 与 RGB context 预测 gate，再调制 NIR 后 concat。
+  - `P4/P5`：继续使用 plain concat，避免高语义层过度融合。
+  - `BiFPNP2P5`、四尺度 refine block 与 `Detect` 保持不变。
+- 验证重点：
+  - `person` 与 `motorcycle` 的 `mAP50-95` 是否超过当前 P2 head 结果。
+  - 总体 `mAP50-95` 是否不明显低于 `0.470`。
+  - 若 OA gate 不能改善小目标，则说明瓶颈更可能在样本/标注/assignment，而不是 P2/P3 的 NIR 融合选择。

@@ -23,6 +23,7 @@ __all__ = (
     "CBAM",
     "Concat",
     "ConcatGate",
+    "ObjectAwareNIRGateConcat",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
@@ -359,6 +360,58 @@ class ConcatGate(nn.Module):
     def forward(self, x):
         fused = torch.cat(x, self.d)
         return fused * self.gate(fused)
+
+
+class ObjectAwareNIRGateConcat(nn.Module):
+    """Gate NIR features with lightweight reflection cues before RGB/NIR concatenation."""
+
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4):
+        super().__init__()
+        if rgb_channels <= 0 or nir_channels <= 0:
+            raise ValueError(
+                f"ObjectAwareNIRGateConcat expects positive channels, got {rgb_channels} and {nir_channels}"
+            )
+        self.d = dimension
+        self.rgb_proj = Conv(rgb_channels, nir_channels, k=1, s=1) if rgb_channels != nir_channels else nn.Identity()
+        hidden = max(nir_channels // reduction, 8)
+        self.reflectance = nn.Sequential(
+            DWConv(nir_channels, nir_channels, k=3, s=1),
+            Conv(nir_channels, nir_channels, k=1, s=1),
+        )
+        cue_channels = nir_channels * 3
+        self.channel_gate = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, nir_channels, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.spatial_gate = nn.Sequential(
+            nn.Conv2d(cue_channels, hidden, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.gate_scale = nn.Parameter(torch.tensor(0.25, dtype=torch.float32))
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ObjectAwareNIRGateConcat expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape[0] != nir_feat.shape[0] or rgb_feat.shape[2:] != nir_feat.shape[2:]:
+            raise ValueError(
+                "ObjectAwareNIRGateConcat requires matching batch/spatial shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        reflectance = self.reflectance(nir_feat)
+        cues = torch.cat((rgb_context, reflectance, torch.abs(rgb_context - reflectance)), dim=1)
+        gate = self.channel_gate(cues) * self.spatial_gate(cues)
+        nir_weight = 1.0 + torch.tanh(self.gate_scale) * (gate - 0.5) * 2.0
+        return torch.cat((rgb_feat, nir_feat * nir_weight), dim=self.d)
 
 
 class QualityAwareFusion(nn.Module):
