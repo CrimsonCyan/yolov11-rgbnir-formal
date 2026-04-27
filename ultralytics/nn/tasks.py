@@ -330,7 +330,12 @@ class BaseModel(torch.nn.Module):
         if getattr(self, "criterion", None) is None:
             self.criterion = self.init_criterion()
 
-        preds = self.forward(batch["img"]) if preds is None else preds
+        if preds is None:
+            self._set_object_aware_gate_capture(self._has_object_aware_foreground_loss())
+            try:
+                preds = self.forward(batch["img"])
+            finally:
+                self._set_object_aware_gate_capture(False)
         loss, loss_items = self.criterion(preds, batch)
         det_loss = loss.detach()
         aux_loss = self._object_aware_foreground_loss(batch)
@@ -365,6 +370,12 @@ class BaseModel(torch.nn.Module):
             cached = any(float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0 for module in self.modules())
             self._has_oa_fg_loss = cached
         return cached
+
+    def _set_object_aware_gate_capture(self, enabled):
+        """Enable object-prior tensor capture only for real training forwards used by the aux loss."""
+        for module in self.modules():
+            if float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0:
+                module.capture_object_gate = bool(enabled)
 
     def _object_aware_foreground_loss(self, batch):
         """Add weak bbox supervision to object-prior maps exposed by foreground-aware OA modules."""

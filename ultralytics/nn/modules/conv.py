@@ -456,6 +456,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
         self.gate_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
         self.reflectance_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
         self.foreground_loss_weight = 0.0
+        self.capture_object_gate = False
         self.last_object_gate = None
 
     def forward(self, x):
@@ -484,7 +485,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.training and self.foreground_loss_weight > 0:
+        if self.training and self.foreground_loss_weight > 0 and self.capture_object_gate:
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
