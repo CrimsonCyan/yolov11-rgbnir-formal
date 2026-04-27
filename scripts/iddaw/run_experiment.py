@@ -37,6 +37,11 @@ def env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def safe_wandb_tag(tag: str, max_length: int = 64) -> str:
+    tag = tag.strip()
+    return tag if len(tag) <= max_length else tag[:max_length]
+
+
 def configure_wandb(mode: str) -> None:
     enabled = env_flag("WANDB_ENABLED", default=False)
     SETTINGS.update({"wandb": enabled})
@@ -53,7 +58,7 @@ def configure_wandb(mode: str) -> None:
     os.environ.setdefault("WANDB_PROJECT", "iddaw-rgbnir-formal")
     os.environ.setdefault("WANDB_GROUP", "iddaw_all_weather")
     dataset_tag = "6-class-personmerge" if len(category_names_for_mode(mode)) == 6 else "7-class"
-    os.environ.setdefault("WANDB_TAGS", f"{mode},all-weather,{dataset_tag}")
+    os.environ.setdefault("WANDB_TAGS", f"{safe_wandb_tag(mode)},all-weather,{dataset_tag}")
 
 
 def parse_args() -> argparse.Namespace:

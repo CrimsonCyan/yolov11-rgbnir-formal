@@ -40,9 +40,13 @@ if [[ "$WANDB_ENABLED" == "1" ]]; then
   else
     DATASET_TAG="7-class"
   fi
+  MODE_TAG="$MODE"
+  if [[ ${#MODE_TAG} -gt 64 ]]; then
+    MODE_TAG="${MODE_TAG:0:64}"
+  fi
   export WANDB_PROJECT="${WANDB_PROJECT:-iddaw-rgbnir-formal}"
   export WANDB_GROUP="${WANDB_GROUP:-iddaw_all_weather}"
-  export WANDB_TAGS="${WANDB_TAGS:-${MODE},all-weather,${DATASET_TAG}}"
+  export WANDB_TAGS="${WANDB_TAGS:-${MODE_TAG},all-weather,${DATASET_TAG}}"
 fi
 
 LOG_DIR="$ROOT/remote_logs/iddaw"
