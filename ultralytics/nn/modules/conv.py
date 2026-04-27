@@ -24,6 +24,7 @@ __all__ = (
     "Concat",
     "ConcatGate",
     "ObjectAwareNIRGateConcat",
+    "ObjectAwareReflectanceGateConcat",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
@@ -412,6 +413,83 @@ class ObjectAwareNIRGateConcat(nn.Module):
         gate = self.channel_gate(cues) * self.spatial_gate(cues)
         nir_weight = 1.0 + torch.tanh(self.gate_scale) * (gate - 0.5) * 2.0
         return torch.cat((rgb_feat, nir_feat * nir_weight), dim=self.d)
+
+
+class ObjectAwareReflectanceGateConcat(nn.Module):
+    """Retinex-style object-aware NIR gate with luminance, reflection, and object-prior cues."""
+
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4):
+        super().__init__()
+        if rgb_channels <= 0 or nir_channels <= 0:
+            raise ValueError(
+                f"ObjectAwareReflectanceGateConcat expects positive channels, got {rgb_channels} and {nir_channels}"
+            )
+        self.d = dimension
+        self.rgb_proj = Conv(rgb_channels, nir_channels, k=1, s=1) if rgb_channels != nir_channels else nn.Identity()
+        hidden = max(nir_channels // reduction, 8)
+
+        self.luminance = nn.Sequential(
+            DWConv(nir_channels, nir_channels, k=5, s=1),
+            Conv(nir_channels, nir_channels, k=1, s=1),
+        )
+        self.reflectance = nn.Sequential(
+            DWConv(nir_channels, nir_channels, k=3, s=1),
+            Conv(nir_channels, nir_channels, k=1, s=1),
+        )
+        cue_channels = nir_channels * 5
+        self.channel_gate = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, nir_channels, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.object_prior = nn.Sequential(
+            nn.Conv2d(cue_channels, hidden, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.cue_refine = Conv(nir_channels * 2, nir_channels, k=1, s=1)
+        self.gate_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
+        self.reflectance_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ObjectAwareReflectanceGateConcat expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape[0] != nir_feat.shape[0] or rgb_feat.shape[2:] != nir_feat.shape[2:]:
+            raise ValueError(
+                "ObjectAwareReflectanceGateConcat requires matching batch/spatial shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        nir_smooth = F.avg_pool2d(nir_feat, kernel_size=3, stride=1, padding=1)
+        luminance = self.luminance(nir_smooth)
+        reflectance = self.reflectance(nir_feat - nir_smooth)
+        cues = torch.cat(
+            (
+                rgb_context,
+                luminance,
+                reflectance,
+                torch.abs(rgb_context - luminance),
+                torch.abs(rgb_context - reflectance),
+            ),
+            dim=1,
+        )
+        object_gate = self.object_prior(cues)
+        channel_gate = self.channel_gate(cues)
+        selection_gate = channel_gate * object_gate
+
+        refined_cue = self.cue_refine(torch.cat((luminance, reflectance), dim=1))
+        gate_scale = torch.tanh(self.gate_scale)
+        reflectance_scale = torch.tanh(self.reflectance_scale)
+        nir_weight = 1.0 + gate_scale * (selection_gate - 0.5) * 2.0
+        nir_out = nir_feat * nir_weight + reflectance_scale * object_gate * (refined_cue - nir_feat)
+        return torch.cat((rgb_feat, nir_out), dim=self.d)
 
 
 class QualityAwareFusion(nn.Module):

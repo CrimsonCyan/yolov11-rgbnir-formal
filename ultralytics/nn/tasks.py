@@ -48,6 +48,7 @@ from ultralytics.nn.modules import (
     Concat,
     ConcatGate,
     ObjectAwareNIRGateConcat,
+    ObjectAwareReflectanceGateConcat,
     QualityAwareFusion,
     ResidualQualityAwareFusion,
     ResidualQualityAwareFusionV2,
@@ -1112,9 +1113,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m is ObjectAwareNIRGateConcat:
+        elif m in {ObjectAwareNIRGateConcat, ObjectAwareReflectanceGateConcat}:
             if not isinstance(f, list) or len(f) != 2:
-                raise ValueError(f"ObjectAwareNIRGateConcat expects exactly 2 inputs, got {f}")
+                raise ValueError(f"{m.__name__} expects exactly 2 inputs, got {f}")
             c2 = sum(ch[x] for x in f)
             args = [ch[f[0]], ch[f[1]], *args]
         elif m in {ConcatGate, QualityAwareFusion, ResidualQualityAwareFusion, ResidualQualityAwareFusionV2}:

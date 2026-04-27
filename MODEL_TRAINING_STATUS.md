@@ -110,6 +110,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN c256`：基于 true P2-P5，将 `BiFPNP2P5` 宽度设为 `256`，并将四个 Detect 前 refine head 的通道字面量设为 `256` |
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + true P2-P5 BiFPN + Object-aware NIR gate`：仅在 `P2/P3` RGB-NIR 融合处用轻量 OA gate 调制 NIR，`P4/P5` 保持 plain concat |
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + OA gate c256`：保留 `P2/P3` OA gate，同时将 `BiFPNP2P5` 宽度和四个 refine head 通道字面量设为 `256` |
+| `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_reflect_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + OA-Reflect gate c256`：以 plain c256 为基线，仅在 `P2/P3` 用 luminance/reflection/object-prior 三路 gate 调制 NIR，`P4/P5` 保持 plain concat |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -257,6 +258,7 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.68729` | `0.59268` | `0.63579` | `0.43961` | true P2-P5 BiFPN c256；mAP50 略升但 mAP50-95 低于 c192 Adam 版，未证明加宽有效 |
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.72876` | `0.56793` | `0.63061` | `0.43168` | 原生 `resume=True` 从 epoch 91 恢复到 100；低于 plain c256，OA gate c256 未显示优势 |
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge3` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.74477` | `0.62225` | `0.68654` | `0.47814` | `lr0=0.01` 复训显著提升，当前总体最强；需补 BiFPN-only 同 lr0 对照确认收益来源 |
+| `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.72568` | `0.62905` | `0.69135` | `0.47976` | plain c256 同配方对照；略优于 OA gate c256 且更轻，说明当前主要收益来自 true P2-P5 c256 + lr0=0.01 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -1765,3 +1767,116 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oagate_c256_y
 2. 如果它低于 `OA gate c256 lr0=0.01` 超过 `0.01 mAP50-95`，再实现 `Object-Aware Reflectance Gate`。
 3. 如果它与 OA gate c256 接近，则先跑 `true P2-P5 c192 + lr0=0.01`，判断能否降复杂度。
 4. 在上述对照完成前，不建议继续加新 head、加 P6、加完整翻译分支或引入额外损失。
+
+#### 12.13.4 plain true P2-P5 c256 + lr0=0.01 完成结果
+
+- mode：`bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge2`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge2`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge_e100_20260427_151357.stdout.log`
+- meta：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge_e100_20260427_151357.meta`
+- W&B run：`j8iwyb9q`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/j8iwyb9q`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出，`results.csv` 共 `100` 个 epoch
+- 模型规模：
+  - `resume_mode=none`
+  - `BiFPNP2P5` 参数为 `[[256, 512, 512, 512], 256, 2]`
+  - 模型不包含 `ObjectAwareNIRGateConcat`，P2/P3/P4/P5 融合前均为 plain `Concat`
+  - 训练构建 summary：`536 layers / 10,121,924 parameters / 54.57 GFLOPs`
+  - `best.pt` 复验日志：`414 layers / 10,104,516 parameters / 84.28 GFLOPs`
+  - W&B 记录：`10,121,924` parameters / `85.271` GFLOPs
+
+- `results.csv` 最优 epoch：
+  - epoch `92`
+  - `Precision = 0.72568`
+  - `Recall = 0.62905`
+  - `mAP50 = 0.69135`
+  - `mAP50-95 = 0.47976`
+- `results.csv` 最后 epoch：
+  - epoch `100`
+  - `Precision = 0.73373`
+  - `Recall = 0.61665`
+  - `mAP50 = 0.68457`
+  - `mAP50-95 = 0.47822`
+- `best.pt` 复验主要类别表现：
+  - `person`: `mAP50 = 0.561`, `mAP50-95 = 0.296`
+  - `motorcycle`: `mAP50 = 0.580`, `mAP50-95 = 0.275`
+  - `car`: `mAP50 = 0.888`, `mAP50-95 = 0.686`
+  - `truck`: `mAP50 = 0.636`, `mAP50-95 = 0.476`
+  - `bus`: `mAP50 = 0.669`, `mAP50-95 = 0.538`
+  - `autorickshaw`: `mAP50 = 0.815`, `mAP50-95 = 0.604`
+
+##### 12.13.4.1 对比结论
+
+- 相比 `OA gate c256 + lr0=0.01`（`mAP50 = 0.68654`，`mAP50-95 = 0.47814`）：
+  - `mAP50 +0.00481`
+  - `mAP50-95 +0.00162`
+  - `person`: `0.569 / 0.298 -> 0.561 / 0.296`
+  - `motorcycle`: `0.586 / 0.274 -> 0.580 / 0.275`
+  - 小目标基本持平，总体指标略高，且 plain c256 少约 `0.72M` 参数、约 `20.75` W&B GFLOPs。
+- 当前证据说明：`lr0=0.01` 与 true P2-P5 c256 是主要收益来源；现有 `ObjectAwareNIRGateConcat` 并没有在同配方下提供稳定额外增益。
+- Object-Aware 方向不应继续沿当前 gate 形式加重；如果继续，应改成更贴近 NIR-to-Visible 论文反射建模思想的 `Object-Aware Reflectance Gate`，而不是复用当前 gate。
+
+#### 12.13.5 当前基线与下一步方向修正
+
+- 当前基线固定为 `plain true P2-P5 c256 BiFPN`，即 `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`。
+- 暂不继续做 `c192` 宽度消融，后续所有结构改动都应在 `c256` 基线上做，避免主线再次发散。
+- plain c256 已略高于 OA gate c256，说明现有 `ObjectAwareNIRGateConcat` 的贡献不稳定，甚至可能因额外 gate 干扰强 BiFPN 的尺度融合。
+- 下一步优先补充两个内容：
+  - `BiFPN` 动态尺度边权重分析与可视化：读取 checkpoint 中每个 `WeightedFeatureFusion` 的归一化权重，观察 P2/P3/P4/P5 各融合节点实际依赖哪条路径，用于解释 true P2-P5 BiFPN 的有效性。
+  - `Object-Aware` 方向重做为 `OA-Reflect gate`：不再复用当前单一 reflection gate，而是在 P2/P3 引入 luminance cue、reflection cue 和 object-prior gate，保持 P4/P5 plain concat 与 c256 BiFPN 主体不变。
+
+#### 12.13.6 已新增：BiFPN 权重分析脚本
+
+- 新增脚本：`scripts/iddaw/analyze_bifpn_weights.py`
+- 功能：
+  - 加载 `best.pt` 或 `last.pt`
+  - 遍历模型中的 `WeightedFeatureFusion`
+  - 导出 `raw_weight`、`relu_weight`、`normalized_weight`
+  - 输出 `bifpn_weights.json`、`bifpn_weights.csv`
+  - 若环境安装 `matplotlib`，额外输出 `bifpn_weights.png`
+- 推荐对当前 c256 基线执行：
+
+```bash
+python scripts/iddaw/analyze_bifpn_weights.py \
+  --weights runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge2/weights/best.pt \
+  --out runs/analysis/bifpn_weights/c256_baseline_best \
+  --title "c256 true P2-P5 BiFPN baseline"
+```
+
+- 论文分析重点：
+  - `p2_out_fuse` 是否更依赖 `P2_in` 还是 `P3_td_up`
+  - `p3_out_fuse` 是否吸收了 `P2_out_down`
+  - `p4_out_fuse` 是否仍主要依赖原始 `P4_in`
+  - `p5_out_fuse` 是否从 `P4_out_down` 获益
+  - 两个 repeat block 的权重是否从浅层局部细节逐步转向深层语义路径
+
+#### 12.13.7 已新增：OA-Reflect c256 候选结构
+
+- 新增 mode：`bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge`
+- 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_reflect_c256_6cls_personmerge.yaml`
+- 新增模块：`ObjectAwareReflectanceGateConcat`
+- 结构保持：
+  - RGB full branch 不变
+  - Light NIR branch 不变
+  - `BiFPNP2P5([P2, P3, P4, P5], out_channels=256, repeats=2)` 不变
+  - 四尺度 refine head 通道仍为 `256`
+  - Detect head 不变
+- 唯一结构变化：
+  - `P2/P3`: `Concat(RGB, NIR)` 替换为 `ObjectAwareReflectanceGateConcat(RGB, NIR)`
+  - `P4/P5`: 继续使用 plain `Concat`
+- OA-Reflect 的实现意图：
+  - `luminance cue`: 对 NIR 特征做低频平滑后提取亮度/低照信息
+  - `reflection cue`: 使用 `NIR - smooth(NIR)` 提取高频材质/边缘响应
+  - `object prior gate`: 由 RGB context、luminance、reflection 及其差异预测空间目标先验
+  - `channel gate`: 估计每个 NIR 通道的有效性
+  - 输出采用残差式调制，使初始行为接近 plain concat，降低当前 OA gate 对强基线产生副作用的风险
+
+#### 12.13.8 下一轮执行计划
+
+1. 先在远端对 `scripts/iddaw/analyze_bifpn_weights.py` 跑当前 c256 基线 `best.pt`，把 `json/csv/png` 保存到 `runs/analysis/bifpn_weights/c256_baseline_best`。
+2. 做 `OA-Reflect c256` 冒烟测试，确认 `parse_model` 能按输入层通道正确构造 `ObjectAwareReflectanceGateConcat`，四尺度 Detect 正常。
+3. 若冒烟通过，再用同基线配方训练：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`。
+4. 判定标准仍以 plain c256 为唯一主基线：`OA-Reflect c256` 必须超过 `mAP50-95 = 0.47976`，并且 `person/motorcycle` 至少不退化，才进入论文主线。
+5. 如果 `OA-Reflect c256` 仍无收益，下一步不继续堆 gate，而是实现 box foreground mask 弱监督，让 object-aware 从隐式自学习变成检测框引导。
