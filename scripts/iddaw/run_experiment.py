@@ -56,16 +56,6 @@ def configure_wandb(mode: str) -> None:
     os.environ.setdefault("WANDB_TAGS", f"{mode},all-weather,{dataset_tag}")
 
 
-def completed_epochs_from_checkpoint(checkpoint_path: str) -> int:
-    run_dir = Path(checkpoint_path).resolve().parents[1]
-    results_csv = run_dir / "results.csv"
-    if results_csv.exists():
-        with results_csv.open("r", encoding="utf-8") as fh:
-            line_count = sum(1 for _ in fh)
-        return max(line_count - 1, 0)
-    return 0
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -77,7 +67,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--val-interval", type=int, default=1, help="Run validation every N epochs during training.")
-    parser.add_argument("--resume", default="", help="Checkpoint path to continue training from.")
+    parser.add_argument(
+        "--resume",
+        default="",
+        help="Checkpoint path for Ultralytics native resume=True recovery.",
+    )
     parser.add_argument("--weights", default="", help="Checkpoint path for val/predict.")
     parser.add_argument("--rgb-weights", default="", help="RGB checkpoint for decision fusion.")
     parser.add_argument("--nir-weights", default="", help="NIR checkpoint for decision fusion.")
@@ -113,22 +107,15 @@ def main() -> None:
     if args.task == "train":
         configure_wandb(args.mode)
         if args.resume:
-            completed_epochs = completed_epochs_from_checkpoint(args.resume)
-            extra_epochs = args.epochs - completed_epochs
-            if extra_epochs <= 0:
-                raise ValueError(
-                    f"Checkpoint already covers {completed_epochs} epochs, target total {args.epochs} is not larger"
-                )
-            print(
-                f"Continuing from checkpoint {args.resume}: completed_epochs={completed_epochs}, "
-                f"extra_epochs={extra_epochs}, target_total_epochs={args.epochs}, imgsz={args.imgsz}"
-            )
+            print(f"Resuming natively from checkpoint {args.resume} with Ultralytics resume=True")
             model = model_cls(args.resume)
+            # Native resume restores the original run state; Ultralytics only allows a few
+            # safety overrides such as imgsz, batch, device, and close_mosaic.
             model.train(
                 data=data_yaml,
                 **common_train_kwargs(
                     args.mode,
-                    extra_epochs,
+                    args.epochs,
                     args.device,
                     args.val_interval,
                     args.imgsz,
@@ -137,6 +124,7 @@ def main() -> None:
                     lr0=args.lr0 or None,
                     cos_lr=args.cos_lr,
                 ),
+                resume=True,
                 **mode_kwargs,
             )
             return

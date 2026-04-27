@@ -94,6 +94,7 @@ mode=$MODE
 epochs=$EPOCHS
 device=$DEVICE
 resume_ckpt=$RESUME_CKPT
+resume_mode=$([[ -n "$RESUME_CKPT" ]] && echo ultralytics_native || echo none)
 pid=$PID
 log_file=$LOG_FILE
 python_bin=$PYTHON_BIN

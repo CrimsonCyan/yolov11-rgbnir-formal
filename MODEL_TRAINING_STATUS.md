@@ -8,7 +8,7 @@
 4. 训练日志与结果存放位置
 5. 当前最新训练状态及结果
 
-更新时间：`2026-04-26`
+更新时间：`2026-04-27`
 
 ## 1. 工程与数据根
 
@@ -59,9 +59,9 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> <epochs> 0
 - 自动生成 `stdout.log / pid / meta` 三类远端日志文件
 - 自动维护 `latest_<mode>.*` 软链接，便于追踪当前最新 run
 
-### 2.3 从已完成 checkpoint 补训练到目标总 epoch
+### 2.3 从中断 checkpoint 原样恢复训练
 
-当前 formal 工程已支持“从 `last.pt` 继续补足到目标总 epoch”的模式。示例：
+当前 formal 工程的 `resume_ckpt` 使用 Ultralytics 原生 `resume=True`，用于异常中断后的原样恢复。示例：
 
 ```bash
 bash scripts/iddaw/launch_nohup_train.sh rgbnir 70 0 /data1/lvyanhu/code/yolov11-rgbnir-formal/runs/IDD_AW/iddaw-yolo11n-rgbnir-plain2/weights/last.pt
@@ -69,9 +69,10 @@ bash scripts/iddaw/launch_nohup_train.sh rgbnir 70 0 /data1/lvyanhu/code/yolov11
 
 说明：
 
-- 这里的 `70` 表示目标总轮数。
-- 若 checkpoint 已完成 `50` 轮，则脚本会自动再训练 `20` 轮。
-- 当前不是严格恢复优化器状态的 Ultralytics `resume`，而是基于 `last.pt` 继续训练剩余轮数。
+- 这里的 `resume_ckpt` 必须指向待恢复 run 的 `weights/last.pt`。
+- 原生 resume 会恢复 checkpoint 中保存的 optimizer、EMA、start epoch、原始训练参数和 mosaic 关闭阶段。
+- 入口传入的 `epochs / optimizer / lr0 / cos_lr` 不用于重新定义训练计划；Ultralytics 原生 resume 只允许覆盖 `imgsz / batch / device / close_mosaic` 等少量参数。
+- 若要在已完成 checkpoint 上额外微调若干 epoch，应另开新训练/微调流程，不再用异常恢复入口混用。
 
 ### 2.4 Decision-Fusion 离线评测入口
 
@@ -152,9 +153,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `32` | `10` | 已完成 `100 epoch` |
 | `bifpn_only_light_nir_p2_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过冒烟；小目标 P2 四尺度检测头 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN |
-| `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 待训练；true P2-P5 BiFPN c256 |
+| `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN c256 |
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；基于 true P2-P5 BiFPN，仅在 `P2/P3` 加 OA gate |
-| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 待训练；true P2-P5 BiFPN + P2/P3 OA gate c256 |
+| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 原始 run 中断于 epoch 91，中断前完整 CSV 到 epoch 90；已启动续训 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -253,6 +254,8 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge5` | `150 epoch, imgsz=800, AdamW, lr0=0.001, cos_lr=True, batch=20, device=0,1` | 已完成 | `0.71407` | `0.56201` | `0.61474` | `0.42033` | true P2-P5 BiFPN 高分辨率稳定配方；明显低于 P2 head / Light NIR 主线，暂不晋级 |
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge6` | `150 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.73999` | `0.55773` | `0.63204` | `0.44113` | true P2-P5 BiFPN 的 Adam/lr0/close_mosaic=15 复核；优于 AdamW+cos，但仍低于 P2 head / Light NIR 主线 |
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.70032` | `0.57634` | `0.63013` | `0.43517` | true P2-P5 + P2/P3 OA gate 诊断实验；小目标未改善，不建议继续强化 true P2-P5 |
+| `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.68729` | `0.59268` | `0.63579` | `0.43961` | true P2-P5 BiFPN c256；mAP50 略升但 mAP50-95 低于 c192 Adam 版，未证明加宽有效 |
+| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 中断于 epoch 91 | `0.75325` | `0.54912` | `0.62743` | `0.43061` | 续训前完整 CSV 到 epoch 90；低于 plain c256，OA gate c256 未显示优势 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -1512,3 +1515,94 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_
   - `formal_rgbnir/iddaw.py` 已注册新增 c256 mode，但 `scripts/iddaw/run_experiment.py` 的 argparse choices 仍是旧的静态列表。
   - 第一次队列启动 `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` 后被 argparse 拒绝，日志中报 `invalid choice`。
   - 修复方案：`run_experiment.py` 改为直接使用 `TRAINABLE_MODES | {"decision_fusion"}` 生成 choices，避免以后新增 mode 时再次漏改入口。
+
+### 12.11 `true P2-P5 BiFPN c256` 与 `OA gate c256` 续训前结果
+
+本节只记录当前续训前的两个原始 run。后续 `oagate-c256` 的 `personmerge2` 续训结果单独记录，不提前并入主结论。
+
+#### 12.11.1 plain c256 完整训练结果
+
+- mode：`bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge_e100_20260427_001438.stdout.log`
+- W&B run：`61ke0ekm`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/61ke0ekm`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1`
+- 模型规模：`536 layers / 10,121,924 parameters / 54.57 GFLOPs`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出，`results.csv` 共 `100` 个 epoch
+
+- `results.csv` 最优 epoch：
+  - epoch `94`
+  - `Precision = 0.68729`
+  - `Recall = 0.59268`
+  - `mAP50 = 0.63579`
+  - `mAP50-95 = 0.43961`
+- `results.csv` 最后 epoch：
+  - epoch `100`
+  - `Precision = 0.67522`
+  - `Recall = 0.58808`
+  - `mAP50 = 0.62960`
+  - `mAP50-95 = 0.43765`
+- `best.pt` 复验主要类别表现：
+  - `person`: `mAP50 = 0.514`, `mAP50-95 = 0.266`
+  - `motorcycle`: `mAP50 = 0.526`, `mAP50-95 = 0.242`
+  - `car`: `mAP50 = 0.872`, `mAP50-95 = 0.661`
+  - `truck`: `mAP50 = 0.561`, `mAP50-95 = 0.419`
+  - `bus`: `mAP50 = 0.611`, `mAP50-95 = 0.499`
+  - `autorickshaw`: `mAP50 = 0.729`, `mAP50-95 = 0.549`
+
+#### 12.11.2 OA gate c256 续训前中断结果
+
+- mode：`bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge_e100_20260427_015015.stdout.log`
+- W&B run：`d79prr6p`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/d79prr6p`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1`
+- 模型规模：`576 layers / 10,844,488 parameters / 67.85 GFLOPs`
+- 训练状态：中断于 epoch `91/100` 中途；`results.csv` 最后一条完整记录为 epoch `90`
+
+- 续训前 `results.csv` 最优/最后 epoch：
+  - epoch `90`
+  - `Precision = 0.75325`
+  - `Recall = 0.54912`
+  - `mAP50 = 0.62743`
+  - `mAP50-95 = 0.43061`
+- 备注：
+  - 该 run 未完成最后验证与 `best.pt` 复验，因此暂无可靠的最终 per-class AP 表。
+  - 当前已从 `last.pt` 启动 15 epoch 续训用于补充观察；由于它是在旧版“权重续训”逻辑下启动，不作为严格公平主表结果。
+  - 之后异常中断恢复入口已改为 Ultralytics 原生 `resume=True`，后续新恢复任务会保留 optimizer、EMA、start epoch 与 mosaic 阶段。
+
+#### 12.11.3 对比分析
+
+- plain c256 相比 c192 的 `true P2-P5 + Adam + close_mosaic=15`（`mAP50 = 0.63204`，`mAP50-95 = 0.44113`）：
+  - `mAP50 +0.00375`
+  - `mAP50-95 -0.00152`
+  - 说明把 `BiFPNP2P5` 与 refine head 字面通道从 `192` 加到 `256` 没有带来高 IoU 指标增益。
+- plain c256 相比 `P2 head + close_mosaic=20`（`mAP50 = 0.67259`，`mAP50-95 = 0.47049`）：
+  - `mAP50 -0.03680`
+  - `mAP50-95 -0.03088`
+  - `person/motorcycle` 的 `mAP50-95 = 0.266 / 0.242` 也低于 P2 head close_mosaic=20 的 `0.290 / 0.280`。
+- plain c256 相比无 P2 的 `BiFPN + Light NIR branch` 主线（`mAP50 = 0.66055`，`mAP50-95 = 0.47087`）：
+  - `mAP50 -0.02476`
+  - `mAP50-95 -0.03126`
+  - 说明 true P2-P5 加宽后仍没有超过更简单、效率更好的 Light NIR 主线。
+- OA gate c256 续训前结果低于 plain c256：
+  - `mAP50 -0.00836`
+  - `mAP50-95 -0.00900`
+  - OA gate c256 增加约 `0.72M` 参数与 `13.28` GFLOPs，但中断前没有显示收益。
+
+#### 12.11.4 下一步训练计划
+
+- 当前正在进行的 `oagate-c256` 续训完成后，只做补充记录；除非其 `mAP50-95` 明确超过 `0.470`，否则不再继续 true P2-P5 加宽或 gate 方向。
+- 主线结构回到两条已验证更强的候选：
+  - 总体主线：`bifpn_only_light_nir_yolo11s_6cls_personmerge`
+  - 小目标候选：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+- 下一轮若继续训练，优先只开一个最小变量实验：`P2 head + close_mosaic=25`。
+  - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
+  - 配方：`100 epoch, imgsz=800, Adam, batch=20, device=0,1, close_mosaic=25`
+  - 目的：验证更长 no-mosaic 阶段是否继续提升 `person/motorcycle`，因为 `close_mosaic=20` 明显优于 `15`。
+  - 晋级标准：`mAP50-95` 不低于 `0.470`，且 `person/motorcycle` 的 `mAP50-95` 至少接近或超过 `0.290 / 0.280`。
+- 如果 `close_mosaic=25` 不能提升小目标，训练方向应停止新增结构，转为做 per-weather/per-class 评测与论文表格整理。
