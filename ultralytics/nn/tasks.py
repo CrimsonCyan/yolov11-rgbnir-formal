@@ -332,10 +332,39 @@ class BaseModel(torch.nn.Module):
 
         preds = self.forward(batch["img"]) if preds is None else preds
         loss, loss_items = self.criterion(preds, batch)
+        det_loss = loss.detach()
         aux_loss = self._object_aware_foreground_loss(batch)
+        has_oa_fg_loss = aux_loss is not None or self._has_object_aware_foreground_loss()
         if aux_loss is not None:
-            loss = loss + aux_loss * batch["img"].shape[0]
+            batch_size = batch["img"].shape[0]
+            scaled_aux_loss = aux_loss * batch_size
+            if not getattr(self, "_oa_fg_loss_scale_logged", False):
+                rank = (
+                    torch.distributed.get_rank()
+                    if torch.distributed.is_available() and torch.distributed.is_initialized()
+                    else -1
+                )
+                if rank in {-1, 0}:
+                    LOGGER.info(
+                        "OA-FG loss scale check: "
+                        f"aux_loss={float(aux_loss.detach()):.6f}, "
+                        f"scaled_aux_loss={float(scaled_aux_loss.detach()):.6f}, "
+                        f"det_loss={float(det_loss):.6f}, batch_size={batch_size}"
+                    )
+                self._oa_fg_loss_scale_logged = True
+            loss = loss + scaled_aux_loss
+        if has_oa_fg_loss and isinstance(loss_items, torch.Tensor) and loss_items.ndim == 1 and loss_items.numel() == 3:
+            fg_item = aux_loss.detach() if aux_loss is not None else loss_items.new_zeros(())
+            loss_items = torch.cat((loss_items, fg_item.reshape(1).to(device=loss_items.device, dtype=loss_items.dtype)))
         return loss, loss_items
+
+    def _has_object_aware_foreground_loss(self):
+        """Return True when this model contains foreground-supervised OA gate modules."""
+        cached = getattr(self, "_has_oa_fg_loss", None)
+        if cached is None:
+            cached = any(float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0 for module in self.modules())
+            self._has_oa_fg_loss = cached
+        return cached
 
     def _object_aware_foreground_loss(self, batch):
         """Add weak bbox supervision to object-prior maps exposed by foreground-aware OA modules."""

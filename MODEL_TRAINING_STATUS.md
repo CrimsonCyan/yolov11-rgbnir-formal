@@ -2038,7 +2038,8 @@ python scripts/iddaw/analyze_bifpn_weights.py \
 - 训练时记录 `object_prior gate`
 - loss 阶段把 batch 中归一化 `xywh` GT box 栅格化到 gate 尺度，生成二值 foreground mask
 - 对 gate 与 foreground mask 计算 balanced BCE，默认 `lambda=0.01`
-- 辅助损失只加到训练总 loss，不改变 Ultralytics 原有 `box_loss / cls_loss / dfl_loss` 日志项
+- 辅助损失加到训练总 loss，同时作为第四个日志项 `fg_gate_loss` 输出；普通模式仍保持 `box_loss / cls_loss / dfl_loss` 三项
+- 第一个有效训练 batch 会打印一次量级检查：`aux_loss`、`scaled_aux_loss=aux_loss*batch_size`、`det_loss`、`batch_size`
 
 #### 12.15.2 设计目的
 

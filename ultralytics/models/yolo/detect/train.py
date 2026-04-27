@@ -93,8 +93,18 @@ class DetectionTrainer(BaseTrainer):
     def get_validator(self):
         """Returns a DetectionValidator for YOLO model validation."""
         self.loss_names = "box_loss", "cls_loss", "dfl_loss"
+        if self._has_fg_gate_loss():
+            self.loss_names = (*self.loss_names, "fg_gate_loss")
         return yolo.detect.DetectionValidator(
             self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+        )
+
+    def _has_fg_gate_loss(self):
+        """Check whether the active model exposes foreground-supervised OA gate loss."""
+        model = de_parallel(self.model) if self.model is not None else None
+        return bool(
+            model is not None
+            and any(float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0 for module in model.modules())
         )
 
     def label_loss_items(self, loss_items=None, prefix="train"):
@@ -103,11 +113,16 @@ class DetectionTrainer(BaseTrainer):
 
         Not needed for classification but necessary for segmentation & detection
         """
-        keys = [f"{prefix}/{x}" for x in self.loss_names]
         if loss_items is not None:
+            loss_count = int(loss_items.numel()) if hasattr(loss_items, "numel") else len(loss_items)
+            loss_names = self.loss_names
+            if loss_count == len(loss_names) + 1:
+                loss_names = (*loss_names, "fg_gate_loss")
+            keys = [f"{prefix}/{x}" for x in loss_names]
             loss_items = [round(float(x), 5) for x in loss_items]  # convert tensors to 5 decimal place floats
             return dict(zip(keys, loss_items))
         else:
+            keys = [f"{prefix}/{x}" for x in self.loss_names]
             return keys
 
     def progress_string(self):
