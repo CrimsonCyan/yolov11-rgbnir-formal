@@ -111,6 +111,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_6cls_personmerge.yaml` | `YOLO11s` 版 `BiFPN-only + Light NIR branch + true P2-P5 BiFPN + Object-aware NIR gate`：仅在 `P2/P3` RGB-NIR 融合处用轻量 OA gate 调制 NIR，`P4/P5` 保持 plain concat |
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oagate_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + OA gate c256`：保留 `P2/P3` OA gate，同时将 `BiFPNP2P5` 宽度和四个 refine head 通道字面量设为 `256` |
 | `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_reflect_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + OA-Reflect gate c256`：以 plain c256 为基线，仅在 `P2/P3` 用 luminance/reflection/object-prior 三路 gate 调制 NIR，`P4/P5` 保持 plain concat |
+| `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fg_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + foreground-supervised OA-Reflect c256`：沿用 OA-Reflect 结构，仅在训练时用 GT box 栅格化前景 mask 对 P2/P3 object-prior gate 加轻量 BCE 约束 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -157,6 +158,8 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN c256 |
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；基于 true P2-P5 BiFPN，仅在 `P2/P3` 加 OA gate |
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过 Ultralytics 原生 `resume=True` 完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA gate c256 |
+| `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA-Reflect c256 |
+| `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待冒烟；foreground-supervised OA-Reflect c256 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -2009,3 +2012,59 @@ python scripts/iddaw/analyze_bifpn_weights.py \
    - 第一优先：`foreground-supervised OA gate c256`
    - 第二优先：plain c256 的可视化与错误案例分析
    - 暂不建议继续做 `OA-Reflect + 更大通道`、`P4/P5 gate` 或 `P6`
+
+### 12.15 Foreground-Supervised OA-Reflect c256 实现记录
+
+#### 12.15.1 新增内容
+
+- 新增 mode：`bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge`
+- 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fg_c256_6cls_personmerge.yaml`
+- 新增模块：`ObjectAwareForegroundReflectanceGateConcat`
+- 基线来源：基于 `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` 修改。
+
+结构保持不变：
+
+- RGB full branch 不变
+- Light NIR branch 不变
+- `BiFPNP2P5([P2, P3, P4, P5], out_channels=256, repeats=2)` 不变
+- 四尺度 refine head 通道仍为 `256`
+- Detect head 不变
+- `P4/P5` 继续使用 plain `Concat`
+
+唯一新增约束：
+
+- `P2/P3` 使用 `ObjectAwareForegroundReflectanceGateConcat`
+- forward 中保留 OA-Reflect 的 `luminance / reflectance / object-prior` 计算方式
+- 训练时记录 `object_prior gate`
+- loss 阶段把 batch 中归一化 `xywh` GT box 栅格化到 gate 尺度，生成二值 foreground mask
+- 对 gate 与 foreground mask 计算 balanced BCE，默认 `lambda=0.01`
+- 辅助损失只加到训练总 loss，不改变 Ultralytics 原有 `box_loss / cls_loss / dfl_loss` 日志项
+
+#### 12.15.2 设计目的
+
+- 上一版 `OA-Reflect c256` 的 object prior 完全靠自学习，虽然更符合 NIR 论文的反射/目标先验叙事，但没有稳定超过 plain c256。
+- 这一版把检测标注中的框信息作为弱监督先验，让 object-aware gate 至少学会在目标区域提高响应，避免 gate 被背景纹理、道路边缘或车灯眩光主导。
+- 当前版本仍只约束 `P2/P3`，因为小目标和边界细节主要依赖浅层高分辨率特征；不对 `P4/P5` 加 gate，避免再次破坏高层语义路径。
+
+#### 12.15.3 建议训练配方
+
+先做远端冒烟：
+
+```bash
+WANDB_ENABLED=0 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge 1 0,1
+```
+
+冒烟通过后跑正式对照：
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+判定标准：
+
+- 第一基线仍是 plain c256：`mAP50 = 0.69135`，`mAP50-95 = 0.47976`
+- OA-FG c256 必须超过 plain c256 的 `mAP50-95`
+- `person` 和 `motorcycle` 不应低于 plain c256，否则不进入主线
+- 若只提升 `person` 但整体不升，可作为 object-aware 消融保留，但不能作为主结构

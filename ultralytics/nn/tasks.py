@@ -49,6 +49,7 @@ from ultralytics.nn.modules import (
     ConcatGate,
     ObjectAwareNIRGateConcat,
     ObjectAwareReflectanceGateConcat,
+    ObjectAwareForegroundReflectanceGateConcat,
     QualityAwareFusion,
     ResidualQualityAwareFusion,
     ResidualQualityAwareFusionV2,
@@ -330,7 +331,58 @@ class BaseModel(torch.nn.Module):
             self.criterion = self.init_criterion()
 
         preds = self.forward(batch["img"]) if preds is None else preds
-        return self.criterion(preds, batch)
+        loss, loss_items = self.criterion(preds, batch)
+        aux_loss = self._object_aware_foreground_loss(batch)
+        if aux_loss is not None:
+            loss = loss + aux_loss * batch["img"].shape[0]
+        return loss, loss_items
+
+    def _object_aware_foreground_loss(self, batch):
+        """Add weak bbox supervision to object-prior maps exposed by foreground-aware OA modules."""
+        if "bboxes" not in batch or "batch_idx" not in batch or batch["bboxes"].numel() == 0:
+            return None
+
+        losses = []
+        for module in self.modules():
+            weight = float(getattr(module, "foreground_loss_weight", 0.0) or 0.0)
+            gate = getattr(module, "last_object_gate", None)
+            if weight <= 0 or gate is None or not isinstance(gate, torch.Tensor) or not gate.requires_grad:
+                continue
+
+            target = self._foreground_mask_from_bboxes(batch, gate).float()
+            gate = gate.float().clamp(1e-4, 1.0 - 1e-4)
+            pos = target.sum()
+            neg = target.numel() - pos
+            pos_weight = (neg / pos.clamp_min(1.0)).clamp(1.0, 10.0)
+            loss = -(pos_weight * target * gate.log() + (1.0 - target) * (1.0 - gate).log()).mean()
+            losses.append(loss * weight)
+            module.last_object_gate = None
+
+        return torch.stack(losses).sum() if losses else None
+
+    @staticmethod
+    def _foreground_mask_from_bboxes(batch, gate):
+        """Rasterize normalized xywh boxes to the spatial size of an object-prior gate."""
+        bs, _, h, w = gate.shape
+        target = gate.new_zeros((bs, 1, h, w))
+        bboxes = batch["bboxes"].to(device=gate.device, dtype=torch.float32).view(-1, 4)
+        batch_idx = batch["batch_idx"].to(device=gate.device).view(-1).long()
+
+        xy = bboxes[:, :2]
+        wh = bboxes[:, 2:].clamp_min(0)
+        xyxy = torch.cat((xy - wh * 0.5, xy + wh * 0.5), dim=1)
+        x1 = torch.floor(xyxy[:, 0] * w).clamp(0, max(w - 1, 0)).long()
+        y1 = torch.floor(xyxy[:, 1] * h).clamp(0, max(h - 1, 0)).long()
+        x2 = torch.ceil(xyxy[:, 2] * w).clamp(1, w).long()
+        y2 = torch.ceil(xyxy[:, 3] * h).clamp(1, h).long()
+        valid = (batch_idx >= 0) & (batch_idx < bs) & (x2 > x1) & (y2 > y1)
+
+        for idx in torch.nonzero(valid, as_tuple=False).flatten().tolist():
+            bi = int(batch_idx[idx].item())
+            y_start, y_end = int(y1[idx].item()), int(y2[idx].item())
+            x_start, x_end = int(x1[idx].item()), int(x2[idx].item())
+            target[bi, 0, y_start:y_end, x_start:x_end] = 1.0
+        return target
 
     def init_criterion(self):
         """Initialize the loss criterion for the BaseModel."""
@@ -1113,7 +1165,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in {ObjectAwareNIRGateConcat, ObjectAwareReflectanceGateConcat}:
+        elif m in {ObjectAwareNIRGateConcat, ObjectAwareReflectanceGateConcat, ObjectAwareForegroundReflectanceGateConcat}:
             if not isinstance(f, list) or len(f) != 2:
                 raise ValueError(f"{m.__name__} expects exactly 2 inputs, got {f}")
             c2 = sum(ch[x] for x in f)

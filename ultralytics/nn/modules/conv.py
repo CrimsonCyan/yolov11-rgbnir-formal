@@ -25,6 +25,7 @@ __all__ = (
     "ConcatGate",
     "ObjectAwareNIRGateConcat",
     "ObjectAwareReflectanceGateConcat",
+    "ObjectAwareForegroundReflectanceGateConcat",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
@@ -454,6 +455,8 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
         self.cue_refine = Conv(nir_channels * 2, nir_channels, k=1, s=1)
         self.gate_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
         self.reflectance_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
+        self.foreground_loss_weight = 0.0
+        self.last_object_gate = None
 
     def forward(self, x):
         if len(x) != 2:
@@ -481,6 +484,10 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
             dim=1,
         )
         object_gate = self.object_prior(cues)
+        if self.training and self.foreground_loss_weight > 0:
+            self.last_object_gate = object_gate
+        else:
+            self.last_object_gate = None
         channel_gate = self.channel_gate(cues)
         selection_gate = channel_gate * object_gate
 
@@ -490,6 +497,14 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
         nir_weight = 1.0 + gate_scale * (selection_gate - 0.5) * 2.0
         nir_out = nir_feat * nir_weight + reflectance_scale * object_gate * (refined_cue - nir_feat)
         return torch.cat((rgb_feat, nir_out), dim=self.d)
+
+
+class ObjectAwareForegroundReflectanceGateConcat(ObjectAwareReflectanceGateConcat):
+    """OA-Reflect gate with bbox foreground supervision on the object-prior map during training."""
+
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4, foreground_loss_weight=0.01):
+        super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
+        self.foreground_loss_weight = float(foreground_loss_weight)
 
 
 class QualityAwareFusion(nn.Module):
