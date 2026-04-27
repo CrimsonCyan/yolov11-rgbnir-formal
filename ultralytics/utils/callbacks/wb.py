@@ -141,7 +141,13 @@ def on_fit_epoch_end(trainer):
 
 def on_train_epoch_end(trainer):
     """Log metrics and save images at the end of each training epoch."""
-    wb.run.log(trainer.label_loss_items(trainer.tloss, prefix="train"), step=trainer.epoch + 1)
+    train_losses = trainer.label_loss_items(trainer.tloss, prefix="train")
+    fg_gate_loss = train_losses.get("train/fg_gate_loss")
+    if fg_gate_loss is not None:
+        # Keep the Ultralytics CSV key and add flat aliases that W&B auto-panels display reliably.
+        train_losses["fg_gate_loss"] = fg_gate_loss
+        train_losses["loss/fg_gate"] = fg_gate_loss
+    wb.run.log(train_losses, step=trainer.epoch + 1)
     wb.run.log(trainer.lr, step=trainer.epoch + 1)
     if trainer.epoch == 1:
         _log_plots(trainer.plots, step=trainer.epoch + 1)

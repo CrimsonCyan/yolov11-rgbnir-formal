@@ -26,6 +26,8 @@ __all__ = (
     "ObjectAwareNIRGateConcat",
     "ObjectAwareReflectanceGateConcat",
     "ObjectAwareForegroundReflectanceGateConcat",
+    "ObjectAwareMultiScaleReflectanceGateConcat",
+    "ObjectAwareMultiScaleSoftPriorGateConcat",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
@@ -456,8 +458,13 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
         self.gate_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
         self.reflectance_scale = nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
         self.foreground_loss_weight = 0.0
+        self.foreground_target_mode = "box"
         self.capture_object_gate = False
         self.last_object_gate = None
+
+    def _smooth_nir(self, nir_feat):
+        """Estimate the low-frequency NIR component used by the Retinex-style split."""
+        return F.avg_pool2d(nir_feat, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         if len(x) != 2:
@@ -471,7 +478,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
             )
 
         rgb_context = self.rgb_proj(rgb_feat)
-        nir_smooth = F.avg_pool2d(nir_feat, kernel_size=3, stride=1, padding=1)
+        nir_smooth = self._smooth_nir(nir_feat)
         luminance = self.luminance(nir_smooth)
         reflectance = self.reflectance(nir_feat - nir_smooth)
         cues = torch.cat(
@@ -506,6 +513,30 @@ class ObjectAwareForegroundReflectanceGateConcat(ObjectAwareReflectanceGateConca
     def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4, foreground_loss_weight=0.01):
         super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
         self.foreground_loss_weight = float(foreground_loss_weight)
+        self.foreground_target_mode = "box"
+
+
+class ObjectAwareMultiScaleReflectanceGateConcat(ObjectAwareReflectanceGateConcat):
+    """OA-Reflect gate using multi-scale NIR smoothing before luminance/reflectance separation."""
+
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4):
+        super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
+        self.smooth_fuse = Conv(nir_channels * 3, nir_channels, k=1, s=1)
+
+    def _smooth_nir(self, nir_feat):
+        smooth3 = F.avg_pool2d(nir_feat, kernel_size=3, stride=1, padding=1)
+        smooth5 = F.avg_pool2d(nir_feat, kernel_size=5, stride=1, padding=2)
+        smooth7 = F.avg_pool2d(nir_feat, kernel_size=7, stride=1, padding=3)
+        return self.smooth_fuse(torch.cat((smooth3, smooth5, smooth7), dim=1))
+
+
+class ObjectAwareMultiScaleSoftPriorGateConcat(ObjectAwareMultiScaleReflectanceGateConcat):
+    """Multi-scale OA-Reflect gate with soft bbox-prior supervision on the object-prior map."""
+
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4, foreground_loss_weight=0.003):
+        super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
+        self.foreground_loss_weight = float(foreground_loss_weight)
+        self.foreground_target_mode = "soft"
 
 
 class QualityAwareFusion(nn.Module):
