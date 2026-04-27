@@ -1880,3 +1880,132 @@ python scripts/iddaw/analyze_bifpn_weights.py \
 3. 若冒烟通过，再用同基线配方训练：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`。
 4. 判定标准仍以 plain c256 为唯一主基线：`OA-Reflect c256` 必须超过 `mAP50-95 = 0.47976`，并且 `person/motorcycle` 至少不退化，才进入论文主线。
 5. 如果 `OA-Reflect c256` 仍无收益，下一步不继续堆 gate，而是实现 box foreground mask 弱监督，让 object-aware 从隐式自学习变成检测框引导。
+
+### 12.14 OA-Reflect c256 训练结果与下一步计划
+
+#### 12.14.1 训练完成状态
+
+- mode：`bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-reflect-c256-6cls-personmerge3`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-reflect-c256-6cls-personmerge3`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge_e100_20260427_183250.stdout.log`
+- meta：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge_e100_20260427_183250.meta`
+- W&B run：`lbtbfnh9`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/lbtbfnh9`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出
+- 模型规模：
+  - 训练构建 summary：`596 layers / 11,511,754 parameters / 80.85 GFLOPs`
+  - `best.pt` 复验 summary：`464 layers / 11,492,426 parameters / 125.03 GFLOPs`
+  - W&B 记录：`11,511,754` parameters / `126.33` GFLOPs
+
+#### 12.14.2 主指标结果
+
+- `results.csv` 最优 epoch：
+  - epoch `95`
+  - `Precision = 0.76680`
+  - `Recall = 0.61125`
+  - `mAP50 = 0.68145`
+  - `mAP50-95 = 0.47710`
+- `results.csv` 最后 epoch：
+  - epoch `100`
+  - `Precision = 0.75851`
+  - `Recall = 0.60514`
+  - `mAP50 = 0.67385`
+  - `mAP50-95 = 0.47284`
+- `best.pt` 复验：
+  - `Precision = 0.767`
+  - `Recall = 0.611`
+  - `mAP50 = 0.682`
+  - `mAP50-95 = 0.477`
+
+#### 12.14.3 类别指标
+
+- `person`: `mAP50 = 0.564`, `mAP50-95 = 0.299`
+- `motorcycle`: `mAP50 = 0.576`, `mAP50-95 = 0.265`
+- `car`: `mAP50 = 0.890`, `mAP50-95 = 0.686`
+- `truck`: `mAP50 = 0.626`, `mAP50-95 = 0.473`
+- `bus`: `mAP50 = 0.667`, `mAP50-95 = 0.542`
+- `autorickshaw`: `mAP50 = 0.765`, `mAP50-95 = 0.598`
+
+#### 12.14.4 与当前主基线对比
+
+- 相比 plain c256 baseline（`mAP50 = 0.69135`，`mAP50-95 = 0.47976`）：
+  - `mAP50 -0.00976`
+  - `mAP50-95 -0.00266`
+  - 参数量增加约 `+1.39M`
+  - W&B GFLOPs 从 `85.271` 增加到 `126.33`
+- 类别对比：
+  - `person`: `0.561 / 0.296 -> 0.564 / 0.299`，略有改善
+  - `motorcycle`: `0.580 / 0.275 -> 0.576 / 0.265`，小目标关键类退化
+  - `car`: `0.888 / 0.686 -> 0.890 / 0.686`，基本持平
+  - `truck`: `0.636 / 0.476 -> 0.626 / 0.473`，略降
+  - `bus`: `0.669 / 0.538 -> 0.667 / 0.542`，高 IoU 略升
+  - `autorickshaw`: `0.815 / 0.604 -> 0.765 / 0.598`，mAP50 明显下降
+- 结论：`OA-Reflect c256` 没有超过 plain c256 主基线，不能作为下一阶段主结构。它只对 `person` 和 `bus` 的 `mAP50-95` 有轻微收益，但代价是整体 `mAP50`、`motorcycle` 和 `autorickshaw` 下降，且复杂度明显增加。
+
+#### 12.14.5 与旧 OA gate c256 对比
+
+- 相比旧 OA gate c256（`mAP50 = 0.68654`，`mAP50-95 = 0.47814`）：
+  - `mAP50 -0.00509`
+  - `mAP50-95 -0.00104`
+- 类别层面：
+  - `person`: `0.569 / 0.298 -> 0.564 / 0.299`，高 IoU 基本持平
+  - `motorcycle`: `0.586 / 0.274 -> 0.576 / 0.265`，退化
+  - `car`: `0.893 / 0.695 -> 0.890 / 0.686`，退化
+  - `truck`: `0.618 / 0.453 -> 0.626 / 0.473`，改善
+  - `bus`: `0.684 / 0.545 -> 0.667 / 0.542`，略降
+  - `autorickshaw`: `0.769 / 0.600 -> 0.765 / 0.598`，略降
+- 结论：`OA-Reflect` 比旧 OA gate 更贴近论文动机，但实测并没有带来稳定指标提升。当前 object-aware 的问题不应继续靠增加无监督 gate 复杂度解决。
+
+#### 12.14.6 BiFPN 权重分析
+
+- `plain c256` 权重目录：`runs/analysis/bifpn_weights/c256_baseline_best`
+- `OA gate c256` 权重目录：`runs/analysis/bifpn_weights/oagate_c256_best`
+- `OA-Reflect c256` 权重目录：`runs/analysis/bifpn_weights/oa_reflect_c256_best`
+- 后续 BiFPN 权重分析仅保存本地 `json/csv/png`，不再上传 W&B。
+
+关键现象：
+
+- plain c256 中，`p5_out_fuse` 两个 block 都几乎完全依赖 `P4_out_down`：
+  - block0：`P5_in = 0.0%`，`P4_out_down = 99.8%`
+  - block1：`P5_in = 0.0%`，`P4_out_down = 99.9%`
+- 旧 OA gate c256 中，第二个 block 的 `p5_out_fuse` 回退到原始 `P5_in`：
+  - block0：`P5_in = 0.0%`，`P4_out_down = 99.8%`
+  - block1：`P5_in = 80.9%`，`P4_out_down = 17.9%`
+- OA-Reflect c256 中，这个问题被修复：
+  - block0：`P5_in = 0.0%`，`P4_out_down = 99.9%`
+  - block1：`P5_in = 8.2%`，`P4_out_down = 91.8%`
+
+解释：
+
+- OA-Reflect 确实比旧 OA gate 更好地保持了 `P2/P3 -> P4 -> P5` 的 bottom-up 细节传播路径。
+- 但指标仍未超过 plain c256，说明当前性能瓶颈已经不是 BiFPN 尺度路径被破坏，而是 OA-Reflect 对 P2/P3 特征的调制没有转化为更好的检测收益。
+- 这也说明“仅靠更复杂的无监督 object-aware gate”不足以形成稳定贡献；下一步必须引入更明确的 object prior 或更轻量的约束方式。
+
+#### 12.14.7 当前结论
+
+- 当前正式主基线继续固定为：`bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`
+- 当前最强主指标仍是 plain c256：`mAP50 = 0.69135`，`mAP50-95 = 0.47976`
+- 旧 OA gate c256 与 OA-Reflect c256 均未超过 plain c256：
+  - 旧 OA gate：`0.68654 / 0.47814`
+  - OA-Reflect：`0.68145 / 0.47710`
+- `OA-Reflect` 不进入主结果表的最优结构，但可作为 object-aware 改造的失败/消融证据。
+- 论文主贡献应继续围绕 `true P2-P5 BiFPN c256` 和动态尺度权重可解释性展开；Object-Aware 只能作为附加探索，除非后续弱监督版本证明有效。
+
+#### 12.14.8 下一步计划
+
+1. 暂停继续堆叠更复杂的无监督 OA gate。
+2. 保留 plain c256 作为唯一主基线，下一轮如果要继续 Object-Aware，优先做 `foreground-aware weak supervision`：
+   - 用 GT box 生成 P2/P3 前景 mask
+   - 对 OA spatial/object gate 加轻量 BCE 或 soft target 约束
+   - 初始 `lambda` 建议 `0.01`
+   - 只训练一个 `P2/P3 foreground-supervised OA` 对照，不改 BiFPN 和 head
+3. 如果暂时不改训练 loss，则下一步更稳的是做解释性补强：
+   - 导出 plain c256、旧 OA gate、OA-Reflect 三者的 `bifpn_weights.png`
+   - 形成论文图：`P2/P3 bottom-up path dominates P4/P5`
+   - 重点说明 true P2-P5 BiFPN 如何服务 IDD-AW 的小目标和非结构化道路场景
+4. 下一轮训练优先级：
+   - 第一优先：`foreground-supervised OA gate c256`
+   - 第二优先：plain c256 的可视化与错误案例分析
+   - 暂不建议继续做 `OA-Reflect + 更大通道`、`P4/P5 gate` 或 `P6`
