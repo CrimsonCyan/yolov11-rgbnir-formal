@@ -95,7 +95,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `rgb_yolo11s_6cls_personmerge` | `ultralytics/cfg/models/11/yolo11s.yaml` | 官方 `YOLO11s` 单模 RGB 检测器，6 类口径并将 `rider` 合并到 `person` |
 | `rgb_rtdetr` | `ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml` | 官方 Ultralytics `RT-DETR-R18` 单模 RGB 检测器 |
 | `nir` | `ultralytics/cfg/models/11/yolo11-gray.yaml` | 官方 `YOLO11` 灰度单模检测器，输入为单通道 NIR |
+| `nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_nir_6cls_personmerge.yaml` | `YOLO11s` 单模 NIR 检测器，6 类 personmerge 口径，用于与 RGB-only / RGB-NIR 统一规模比较 |
 | `rgbnir` | `configs/models/yolo11n_rgbnir_midfusion_plain.yaml` | 双流 RGB/NIR backbone，`P3/P4/P5` 同尺度 `Concat`，之后 `SPPF + C2PSA + YOLO head` |
+| `rgbnir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_midfusion_plain_6cls_personmerge.yaml` | `YOLO11s` 双流 RGB/NIR plain mid-fusion，`P3/P4/P5` 同尺度 `Concat`，作为不带 BiFPN/Light NIR/OA 的统一 plain baseline |
 | `input_fusion` | `configs/models/yolo11n_rgbnir_input_fusion.yaml` | 4 通道输入级融合，`RGB(3)+NIR(1)` 直接输入单 backbone |
 | `light_gate` | `configs/models/yolo11n_rgbnir_midfusion_gate.yaml` | 双流 backbone，`P3/P4/P5` 用 `ConcatGate` 代替 plain concat |
 | `bifpn_only` | `configs/models/yolo11n_rgbnir_bifpn_only.yaml` | 双流 backbone + plain mid-fusion，neck 换成 `BiFPN(256, repeat=2)` |
@@ -143,7 +145,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `rgb_yolo11s_6cls_personmerge` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
 | `rgb_rtdetr` | `visible/train,val` | `BGR` | `3` | `32` | `10` | `50 epoch`，现补到 `70` 中 |
 | `nir` | `nir/train,val` | `Gray` | `1` | `96` | `12` | `50 epoch` |
+| `nir_yolo11s_6cls_personmerge` | `nir/train,val` | `Gray` | `1` | `20` | `10` | 新增待训练；YOLO11s NIR-only 统一基线 |
 | `rgbnir` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
+| `rgbnir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待训练；YOLO11s RGB-NIR plain 统一基线 |
 | `input_fusion` | `visible/train,val` + paired nir | `RGBNIR` | `4` | `96` | `12` | `50 epoch` |
 | `light_gate` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前无 all-weather 正式长训 |
 | `bifpn_only` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
@@ -2256,3 +2260,31 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softpri
 - 新版必须超过 plain c256 的 `mAP50-95` 才能作为主结构候选。
 - `motorcycle mAP50-95` 不应低于 `0.275`；否则说明 P3 soft prior 仍然伤害关键小目标。
 - 如果只提升 `person`，但总体和 `motorcycle` 不升，则只作为 Object-Aware 消融保留。
+
+### 12.18 YOLO11s 统一基线补训计划
+
+为避免后续主表混入历史 YOLO11n 结果，新增两个 YOLO11s 基线 mode：
+
+- `nir_yolo11s_6cls_personmerge`
+- `rgbnir_yolo11s_6cls_personmerge`
+
+下一轮排队训练统一使用 YOLO11s 规模、6 类 personmerge、同一训练配方：
+
+- `rgb_yolo11s_6cls_personmerge`
+- `nir_yolo11s_6cls_personmerge`
+- `rgbnir_yolo11s_6cls_personmerge`
+- `rgbnir_light_nir_yolo11s_6cls_personmerge`
+
+统一配方：
+
+- `100 epoch`
+- `imgsz=800`
+- `optimizer=Adam`
+- `lr0=0.01`
+- `batch=20`
+- `close_mosaic=15`
+- `device=0,1`
+- `IDDAW_CLASS_SCHEMA=6cls_personmerge`
+- `WANDB_ENABLED=1`
+
+执行方式：等待当前 `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` 完成后，按上述顺序依次启动，每两个训练之间间隔 `8` 分钟。

@@ -13,6 +13,8 @@ DEFAULT_CLASS_SCHEMA = "6cls_personmerge"
 LEGACY_CLASS_SCHEMA = "7cls"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
+    "nir_yolo11s_6cls_personmerge",
+    "rgbnir_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
@@ -34,7 +36,9 @@ TRAINABLE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "rgb_rtdetr",
     "nir",
+    "nir_yolo11s_6cls_personmerge",
     "rgbnir",
+    "rgbnir_yolo11s_6cls_personmerge",
     "input_fusion",
     "light_gate",
     "bifpn_only",
@@ -118,7 +122,7 @@ def build_dataset_yaml(mode: str) -> Path:
     if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
         train = "visible/train"
         val = "visible/val"
-    elif mode == "nir":
+    elif mode in {"nir", "nir_yolo11s_6cls_personmerge"}:
         train = "nir/train"
         val = "nir/val"
     elif mode in TRAINABLE_MODES | {"decision_fusion"}:
@@ -154,7 +158,9 @@ def experiment_name(mode: str) -> str:
         "rgb_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgb-6cls-personmerge",
         "rgb_rtdetr": "iddaw-rtdetr-r18-rgb",
         "nir": "iddaw-yolo11n-nir",
+        "nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-nir-6cls-personmerge",
         "rgbnir": "iddaw-yolo11n-rgbnir-plain",
+        "rgbnir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-plain-6cls-personmerge",
         "input_fusion": "iddaw-yolo11n-input-fusion",
         "light_gate": "iddaw-yolo11n-rgbnir-light-gate",
         "bifpn_only": "iddaw-yolo11n-rgbnir-bifpn-only",
@@ -198,8 +204,12 @@ def model_config_for(mode: str) -> str:
         return str((root / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr-r18.yaml").resolve())
     if mode == "nir":
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11-gray.yaml").resolve())
+    if mode == "nir_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_nir_6cls_personmerge.yaml").resolve())
     if mode == "rgbnir":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_plain.yaml").resolve())
+    if mode == "rgbnir_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_rgbnir_midfusion_plain_6cls_personmerge.yaml").resolve())
     if mode == "input_fusion":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_input_fusion.yaml").resolve())
     if mode == "light_gate":
@@ -303,9 +313,12 @@ def model_config_for(mode: str) -> str:
 def mode_specific_kwargs(mode: str) -> dict[str, object]:
     if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
         return {"use_simotm": "BGR", "channels": 3}
-    if mode == "nir":
+    if mode in {"nir", "nir_yolo11s_6cls_personmerge"}:
         return {"use_simotm": "Gray", "channels": 1}
-    if mode in (TRAINABLE_MODES - {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr", "nir"}) | {"decision_fusion"}:
+    if mode in (
+        TRAINABLE_MODES
+        - {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr", "nir", "nir_yolo11s_6cls_personmerge"}
+    ) | {"decision_fusion"}:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
     raise ValueError(f"Unsupported mode: {mode}")
 
@@ -317,7 +330,9 @@ def train_batch_for(mode: str) -> int:
         "rgb_yolo11s_6cls_personmerge": 48,
         "rgb_rtdetr": 32,
         "nir": 96,
+        "nir_yolo11s_6cls_personmerge": 20,
         "rgbnir": 48,
+        "rgbnir_yolo11s_6cls_personmerge": 20,
         "input_fusion": 96,
         "light_gate": 48,
         "bifpn_only": 48,
@@ -354,7 +369,9 @@ def workers_for(mode: str) -> int:
         "rgb_yolo11s_6cls_personmerge": 12,
         "rgb_rtdetr": 10,
         "nir": 12,
+        "nir_yolo11s_6cls_personmerge": 10,
         "rgbnir": 10,
+        "rgbnir_yolo11s_6cls_personmerge": 10,
         "input_fusion": 12,
         "light_gate": 10,
         "bifpn_only": 10,
@@ -433,7 +450,7 @@ def common_val_kwargs(mode: str, imgsz: int = 640, batch: int | None = None) -> 
 
 def common_predict_kwargs(mode: str, imgsz: int = 640) -> dict[str, object]:
     dataset_root = resolve_dataset_root(mode)
-    source_subdir = "nir/val" if mode == "nir" else "visible/val"
+    source_subdir = "nir/val" if mode in {"nir", "nir_yolo11s_6cls_personmerge"} else "visible/val"
     return {
         "source": str((dataset_root / source_subdir).resolve()),
         "imgsz": imgsz,
