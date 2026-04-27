@@ -155,7 +155,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN |
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN c256 |
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；基于 true P2-P5 BiFPN，仅在 `P2/P3` 加 OA gate |
-| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 原始 run 中断于 epoch 91，中断前完整 CSV 到 epoch 90；已启动续训 |
+| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过 Ultralytics 原生 `resume=True` 完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA gate c256 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -255,7 +255,8 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge6` | `150 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.73999` | `0.55773` | `0.63204` | `0.44113` | true P2-P5 BiFPN 的 Adam/lr0/close_mosaic=15 复核；优于 AdamW+cos，但仍低于 P2 head / Light NIR 主线 |
 | `bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.70032` | `0.57634` | `0.63013` | `0.43517` | true P2-P5 + P2/P3 OA gate 诊断实验；小目标未改善，不建议继续强化 true P2-P5 |
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.68729` | `0.59268` | `0.63579` | `0.43961` | true P2-P5 BiFPN c256；mAP50 略升但 mAP50-95 低于 c192 Adam 版，未证明加宽有效 |
-| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 中断于 epoch 91 | `0.75325` | `0.54912` | `0.62743` | `0.43061` | 续训前完整 CSV 到 epoch 90；低于 plain c256，OA gate c256 未显示优势 |
+| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge` | `100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.72876` | `0.56793` | `0.63061` | `0.43168` | 原生 `resume=True` 从 epoch 91 恢复到 100；低于 plain c256，OA gate c256 未显示优势 |
+| `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge3` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.74477` | `0.62225` | `0.68654` | `0.47814` | `lr0=0.01` 复训显著提升，当前总体最强；需补 BiFPN-only 同 lr0 对照确认收益来源 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -1596,13 +1597,171 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_yolo11s_6cls_
 
 #### 12.11.4 下一步训练计划
 
-- 当前正在进行的 `oagate-c256` 续训完成后，只做补充记录；除非其 `mAP50-95` 明确超过 `0.470`，否则不再继续 true P2-P5 加宽或 gate 方向。
-- 主线结构回到两条已验证更强的候选：
-  - 总体主线：`bifpn_only_light_nir_yolo11s_6cls_personmerge`
-  - 小目标候选：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
-- 下一轮若继续训练，优先只开一个最小变量实验：`P2 head + close_mosaic=25`。
-  - mode：`bifpn_only_light_nir_p2_yolo11s_6cls_personmerge`
-  - 配方：`100 epoch, imgsz=800, Adam, batch=20, device=0,1, close_mosaic=25`
-  - 目的：验证更长 no-mosaic 阶段是否继续提升 `person/motorcycle`，因为 `close_mosaic=20` 明显优于 `15`。
-  - 晋级标准：`mAP50-95` 不低于 `0.470`，且 `person/motorcycle` 的 `mAP50-95` 至少接近或超过 `0.290 / 0.280`。
-- 如果 `close_mosaic=25` 不能提升小目标，训练方向应停止新增结构，转为做 per-weather/per-class 评测与论文表格整理。
+- 本小节是基于 `lr0=0.001` 及续训前结果形成的历史判断。
+- 后续 `12.12` 的 `OA gate c256 + Adam lr0=0.01` 已达到 `mAP50-95 = 0.47814`，因此 true P2-P5 + OA gate 路线重新进入候选。
+- 当前有效下一步计划以 `12.13` 为准：先补同配方 `plain c256 + lr0=0.01` 与 `c192 + lr0=0.01`，再决定是否实现下一版 Object-Aware Reflectance Gate。
+
+### 12.12 `OA gate c256` 原生 resume 完成结果
+
+- mode：`bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge`
+- 原始中断日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge_e100_20260427_015015.stdout.log`
+- 原生 resume 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge_e100_20260427_123753.stdout.log`
+- W&B run：`ya7peh45`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/ya7peh45`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.001, batch=20, close_mosaic=15, device=0,1`
+- 恢复方式：Ultralytics 原生 `resume=True`
+- 恢复状态：从 epoch `91` 恢复到 `100` total epochs，并触发 `Closing dataloader mosaic`
+- 模型规模：
+  - W&B 记录：`10,844,488` parameters / `106.018` GFLOPs
+  - `best.pt` 复验日志：`450 layers / 10,826,312 parameters / 104.91 GFLOPs`
+- 训练完成状态：
+  - `100` epoch 完成
+  - `best.pt` 与 `last.pt` 均已导出
+  - `results.csv` 共 `100` 个 epoch
+
+- `results.csv` 最优 epoch：
+  - epoch `92`
+  - `Precision = 0.72876`
+  - `Recall = 0.56793`
+  - `mAP50 = 0.63061`
+  - `mAP50-95 = 0.43168`
+- `results.csv` 最后 epoch：
+  - epoch `100`
+  - `Precision = 0.74222`
+  - `Recall = 0.56409`
+  - `mAP50 = 0.62974`
+  - `mAP50-95 = 0.42835`
+- W&B summary：
+  - `Precision = 0.72781`
+  - `Recall = 0.56808`
+  - `mAP50 = 0.63050`
+  - `mAP50-95 = 0.43163`
+  - `model/GFLOPs = 106.018`
+  - `model/parameters = 10844488`
+- `best.pt` 复验主要类别表现：
+  - `person`: `mAP50 = 0.503`, `mAP50-95 = 0.252`
+  - `motorcycle`: `mAP50 = 0.501`, `mAP50-95 = 0.225`
+  - `car`: `mAP50 = 0.865`, `mAP50-95 = 0.657`
+  - `truck`: `mAP50 = 0.542`, `mAP50-95 = 0.403`
+  - `bus`: `mAP50 = 0.640`, `mAP50-95 = 0.506`
+  - `autorickshaw`: `mAP50 = 0.732`, `mAP50-95 = 0.547`
+
+#### 12.12.1 结论
+
+- 原生 resume 完成后，`OA gate c256` 最优 `mAP50-95 = 0.43168`，仍低于 plain c256 的 `0.43961`。
+- `person/motorcycle` 的 `mAP50-95 = 0.252 / 0.225`，也低于 plain c256 的 `0.266 / 0.242`，说明 `P2/P3` OA gate 没有改善当前最关心的小目标。
+- 相比无 P2 的 `BiFPN + Light NIR branch` 主线（`0.66055 / 0.47087`）和 `P2 head + close_mosaic=20`（`0.67259 / 0.47049`），true P2-P5 + OA gate c256 仍明显落后。
+- 当前证据不支持继续沿 true P2-P5 加宽或 OA gate 加重方向推进；后续新增训练只作为学习率敏感性诊断。
+
+#### 12.12.2 `lr0=0.01` 复训完成结果
+
+- mode：`bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge3`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge3`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge_e100_20260427_125557.stdout.log`
+- meta：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge_e100_20260427_125557.meta`
+- W&B run：`02h09m4g`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/02h09m4g`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出，`results.csv` 共 `100` 个 epoch
+- 模型规模：
+  - 训练构建 summary：`576 layers / 10,844,488 parameters / 67.85 GFLOPs`
+  - `best.pt` 复验日志：`450 layers / 10,826,312 parameters / 104.91 GFLOPs`
+  - W&B 记录：`10,844,488` parameters / `106.018` GFLOPs
+
+- 启动命令：
+
+```bash
+WANDB_ENABLED=1 BATCH=20 OPTIMIZER=Adam LR0=0.01 IMGSZ=800 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+- `results.csv` 最优 epoch：
+  - epoch `100`
+  - `Precision = 0.74477`
+  - `Recall = 0.62225`
+  - `mAP50 = 0.68654`
+  - `mAP50-95 = 0.47814`
+- `results.csv` 最后 epoch：
+  - epoch `100`
+  - `Precision = 0.74477`
+  - `Recall = 0.62225`
+  - `mAP50 = 0.68654`
+  - `mAP50-95 = 0.47814`
+- `best.pt` 复验主要类别表现：
+  - `person`: `mAP50 = 0.569`, `mAP50-95 = 0.298`
+  - `motorcycle`: `mAP50 = 0.586`, `mAP50-95 = 0.274`
+  - `car`: `mAP50 = 0.893`, `mAP50-95 = 0.695`
+  - `truck`: `mAP50 = 0.618`, `mAP50-95 = 0.453`
+  - `bus`: `mAP50 = 0.684`, `mAP50-95 = 0.545`
+  - `autorickshaw`: `mAP50 = 0.769`, `mAP50-95 = 0.600`
+
+#### 12.12.3 对比分析
+
+- 相比同结构 `lr0=0.001` 原生 resume 结果（`mAP50 = 0.63061`，`mAP50-95 = 0.43168`）：
+  - `mAP50 +0.05593`
+  - `mAP50-95 +0.04646`
+  - `person`: `0.503 / 0.252 -> 0.569 / 0.298`
+  - `motorcycle`: `0.501 / 0.225 -> 0.586 / 0.274`
+  - 说明此前 OA gate c256 表现差，很大一部分是优化器学习率不足，而不是结构本身完全无效。
+- 相比 plain c256（`mAP50 = 0.63579`，`mAP50-95 = 0.43961`）：
+  - `mAP50 +0.05075`
+  - `mAP50-95 +0.03853`
+  - `person/motorcycle` 的 `mAP50-95` 分别提升 `+0.032 / +0.032`
+  - 说明在合适学习率下，P2/P3 OA gate 对小目标和整体定位均有明确增益。
+- 相比无 P2 的 `BiFPN + Light NIR branch` 主线（`mAP50 = 0.66055`，`mAP50-95 = 0.47087`）：
+  - `mAP50 +0.02599`
+  - `mAP50-95 +0.00727`
+  - 这是目前首次让 true P2-P5 + OA gate c256 在总体 `mAP50-95` 上超过 Light NIR 主线。
+- 相比 `P2 head + close_mosaic=20`（`mAP50 = 0.67259`，`mAP50-95 = 0.47049`）：
+  - `mAP50 +0.01395`
+  - `mAP50-95 +0.00765`
+  - `person/motorcycle` 的 `mAP50-95 = 0.298 / 0.274`，接近或超过此前 P2 head 的 `0.290 / 0.280`。
+
+#### 12.12.4 结论
+
+- `OA gate c256 + Adam lr0=0.01` 暂时成为当前结果最强结构，主指标 `mAP50-95 = 0.47814`。
+- 这一结果同时支持两件事：
+  - BiFPN 侧：true P2-P5 在足够宽度和合适优化器设置下可以超过外接 P2 head 与无 P2 Light NIR 主线。
+  - Object-Aware 侧：P2/P3 的 NIR gate 在小目标上有实际价值，但高度依赖学习率，不能再用 `lr0=0.001` 结果否定 OA gate。
+- 但该结论还不能直接写成最终主贡献，因为缺少同配方 `plain c256 + lr0=0.01` 和 `no-OA true P2-P5 + lr0=0.01` 对照。当前提升可能来自 `lr0=0.01`、c256 宽度、OA gate 三者共同作用。
+
+### 12.13 下一轮实验计划：BiFPN 与 Object-Aware 两条线拆分验证
+
+下一轮不再继续随意新增结构，目标是拆清楚当前最强结果中到底是哪一部分在贡献：`BiFPN/宽度/学习率`，还是 `Object-Aware NIR gate`。
+
+#### 12.13.1 第一优先级：BiFPN 侧同配方对照
+
+- 实验 A：`plain true P2-P5 c256 + lr0=0.01`
+  - mode：`bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`
+  - 配方：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+  - 目的：排除“只是 lr0=0.01 让 c256 BiFPN 变强”的可能。
+  - 判定：如果 plain c256 也接近 `0.478`，则主贡献应写 BiFPN + 优化配方；如果明显低于 OA gate c256，则 OA gate 可作为结构贡献。
+- 实验 B：`true P2-P5 c192 + lr0=0.01`
+  - mode：`bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge`
+  - 配方同上，只保留原 `[192, 2]` BiFPNP2P5。
+  - 目的：判断 `256` 宽度是否必要。
+  - 判定：如果 c192 接近 c256，则优先选更轻的 c192；如果 c256 明显更高，再保留 c256。
+
+#### 12.13.2 第二优先级：Object-Aware NIR-to-Visible 思想的轻量改造
+
+- 不建议把 Sherry 的完整 `NIR -> VIS` 翻译网络搬进 YOLO；当前方向应继续采用“检测任务内的对象感知 NIR 选择”。
+- 下一版 OA 模块应从单纯 gate 升级为 `Object-Aware Reflectance Gate`，但仍只放在 `P2/P3`：
+  - 从 NIR 特征提取局部边缘/反射响应，近似对应论文中的 object-specific reflection。
+  - 从 RGB/NIR 融合特征生成目标先验 gate，近似对应论文中的 object prior。
+  - 输出仍保持检测友好的 `RGB + gate * NIR_reflectance`，不生成伪 RGB 图像。
+- 建议先做一个最小实现版本：
+  - `NIR -> depthwise 3x3 -> high-frequency/edge feature`
+  - `concat(RGB, NIR, edge) -> 1x1/3x3 conv -> sigmoid gate`
+  - `fused = concat(RGB, gate * NIR_projected)` 或 `RGB + gate * NIR_projected`
+  - 只替换当前 P2/P3 的 `ObjectAwareNIRGateConcat`
+- 不引入分割网络，不新增 NIR-to-RGB 重建 loss；如果需要对象先验监督，优先用检测框生成轻量 foreground mask 作为可选辅助约束。
+
+#### 12.13.3 推荐执行顺序
+
+1. 先跑 `plain true P2-P5 c256 + lr0=0.01`。
+2. 如果它低于 `OA gate c256 lr0=0.01` 超过 `0.01 mAP50-95`，再实现 `Object-Aware Reflectance Gate`。
+3. 如果它与 OA gate c256 接近，则先跑 `true P2-P5 c192 + lr0=0.01`，判断能否降复杂度。
+4. 在上述对照完成前，不建议继续加新 head、加 P6、加完整翻译分支或引入额外损失。
