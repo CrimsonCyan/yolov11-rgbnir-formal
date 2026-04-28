@@ -2248,6 +2248,39 @@ WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW
 bash scripts/iddaw/launch_nohup_train.sh oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge 100 0,1
 ```
 
+#### 12.22.1 OA-only 远端冒烟与正式训练启动
+
+同步提交：
+
+- commit：`43806a7 Add OA-only light NIR P2-P5 ablation`
+- 远端代码目录：`/data1/lvyanhu/code/yolov11-rgbnir-formal`
+- 远端同步状态：已从 Gitee `fast-forward` 到 `43806a7`
+
+本地检查：
+
+- `python -m py_compile formal_rgbnir/iddaw.py scripts/iddaw/run_experiment.py` 通过。
+- 本地默认 Python 仍缺 `cv2`，Ultralytics 构建验证放到远端 `visnir-exp` 环境执行。
+
+远端冒烟：
+
+- 命令配置：`1 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, WANDB_ENABLED=0`
+- PID：`759030`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge_e1_20260428_201142.stdout.log`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-oa-only-light-nir-p2p5-c256-6cls-personmerge`
+- 结果：训练启动、验证阶段、`best.pt`、`last.pt` 均正常完成。
+- 构建摘要：`521 layers / 10,575,534 parameters / 69.28 GFLOPs`，`best.pt` fused 复验为 `107.00 GFLOPs`。
+- 关键结构确认：`P2 ObjectAwareMultiScaleSoftPriorGateConcat[128,128,1,4,0.1]`，`P3 ObjectAwareMultiScaleReflectanceGateConcat[256,256,1,4]`，四尺度 `Detect [128,128,128,128]`。
+
+正式训练：
+
+- 命令配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, WANDB_ENABLED=1`
+- PID：`761382`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge_e100_20260428_201528.stdout.log`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-oa-only-light-nir-p2p5-c256-6cls-personmerge2`
+- W&B run：`sibai9s1`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/sibai9s1`
+- 启动状态：已进入训练，W&B 登录、数据集 cache、AMP 检查均正常。
+
 目的：
 
 - 只改变 `close_mosaic: 15 -> 20`，其余保持当前最强 plain c256 配方不变。
