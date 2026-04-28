@@ -115,7 +115,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_reflect_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + OA-Reflect gate c256`：以 plain c256 为基线，仅在 `P2/P3` 用 luminance/reflection/object-prior 三路 gate 调制 NIR，`P4/P5` 保持 plain concat |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fg_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + foreground-supervised OA-Reflect c256`：沿用 OA-Reflect 结构，仅在训练时用 GT box 栅格化前景 mask 对 P2/P3 object-prior gate 加轻量 BCE 约束 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + multi-scale OA soft-prior c256`：P2/P3 使用 `3/5/7` 多尺度 NIR smooth 做 luminance/reflectance 分解，并对 object-prior gate 加中心高边缘低的 soft box 约束 |
-| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + P2-only multi-scale OA soft-prior c256`：P2 使用 multi-scale soft-prior 且 `lambda=0.005`，P3 只保留 multi-scale OA-Reflect 不加辅助 loss，P4/P5 plain concat |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + P2-only multi-scale OA soft-prior c256`：P2 使用 multi-scale soft-prior 且 `lambda=0.01`，P3 只保留 multi-scale OA-Reflect 不加辅助 loss，P4/P5 plain concat |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -167,7 +167,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA-Reflect c256 |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；foreground-supervised OA-Reflect c256 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；multi-scale OA soft-prior c256 |
-| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待训练；P2-only multi-scale OA soft-prior c256，P2 `lambda=0.005` |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待训练；P2-only multi-scale OA soft-prior c256，P2 `lambda=0.01` |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -2393,7 +2393,7 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_
 
 第二优先级：若仍需要继续 Object-Aware，建议只做 `P2-only MS SoftPrior`，不要继续 P2/P3 同时加约束。
 
-- 结构建议：`P2` 使用 `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.005)`；`P3` 回退为无辅助 loss 的 multi-scale OA-Reflect；`P4/P5` 保持 plain concat。
+- 结构建议：`P2` 使用 `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.01)`；`P3` 回退为无辅助 loss 的 multi-scale OA-Reflect；`P4/P5` 保持 plain concat。
 - 配方仍保持：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`。
 - 判定标准：必须超过 plain c256 的 `mAP50-95`，且 `motorcycle mAP50-95` 不低于 `0.275`；否则停止继续训练 Object-Aware 分支。
 
@@ -2403,7 +2403,7 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_
 - 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml`
 - 基线来源：`bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge`
 - 结构差异：
-  - `P2`: `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.005)`
+  - `P2`: `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.01)`
   - `P3`: `ObjectAwareMultiScaleReflectanceGateConcat`，不加 auxiliary foreground/soft-prior loss
   - `P4/P5`: plain `Concat`
   - `BiFPNP2P5`: 仍为 `[256, 2]`
