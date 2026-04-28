@@ -3,7 +3,7 @@
 # Based on yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_c256_6cls_personmerge.yaml:
 # - keeps RGB full branch, Light NIR branch, BiFPNP2P5 width 256, and four-scale Detect unchanged
 # - keeps multi-scale NIR smoothing at P2/P3 for luminance/reflectance separation
-# - applies soft bbox-prior auxiliary loss only at P2, with lambda=0.01
+# - applies soft bbox-prior auxiliary loss only at P2, with lambda=0.1
 # - leaves P3 object-aware but unsupervised, avoiding the previous P3 soft-prior constraint
 # - keeps P4/P5 plain concat to avoid over-gating high-level semantic features
 
@@ -43,7 +43,7 @@ backbone:
 
   - [18, 1, Conv, [512, 1, 1]]
   - [20, 1, Conv, [1024, 1, 1]]
-  - [[4, 14], 1, ObjectAwareMultiScaleSoftPriorGateConcat, [1, 4, 0.01]]
+  - [[4, 14], 1, ObjectAwareMultiScaleSoftPriorGateConcat, [1, 4, 0.1]]
   - [[6, 16], 1, ObjectAwareMultiScaleReflectanceGateConcat, [1, 4]]
   - [[8, 21], 1, Concat, [1]]
   - [[10, 22], 1, Concat, [1]]
