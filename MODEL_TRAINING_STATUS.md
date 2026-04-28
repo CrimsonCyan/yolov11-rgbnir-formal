@@ -8,7 +8,7 @@
 4. 训练日志与结果存放位置
 5. 当前最新训练状态及结果
 
-更新时间：`2026-04-27`
+更新时间：`2026-04-28`
 
 ## 1. 工程与数据根
 
@@ -115,6 +115,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_reflect_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + OA-Reflect gate c256`：以 plain c256 为基线，仅在 `P2/P3` 用 luminance/reflection/object-prior 三路 gate 调制 NIR，`P4/P5` 保持 plain concat |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fg_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + foreground-supervised OA-Reflect c256`：沿用 OA-Reflect 结构，仅在训练时用 GT box 栅格化前景 mask 对 P2/P3 object-prior gate 加轻量 BCE 约束 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + multi-scale OA soft-prior c256`：P2/P3 使用 `3/5/7` 多尺度 NIR smooth 做 luminance/reflectance 分解，并对 object-prior gate 加中心高边缘低的 soft box 约束 |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + P2-only multi-scale OA soft-prior c256`：P2 使用 multi-scale soft-prior 且 `lambda=0.005`，P3 只保留 multi-scale OA-Reflect 不加辅助 loss，P4/P5 plain concat |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -142,12 +143,12 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | --- | --- | --- | --- | --- | --- | --- |
 | `rgb` | `visible/train,val` | `BGR` | `3` | `96` | `12` | `50 epoch` |
 | `rgb_yolo11s` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
-| `rgb_yolo11s_6cls_personmerge` | `visible/train,val` | `BGR` | `3` | `48` | `12` | 已完成 `80 epoch` |
+| `rgb_yolo11s_6cls_personmerge` | `visible/train,val` | `BGR` | `3` | `20` | `10` | 已完成 `100 epoch`；YOLO11s RGB-only 统一基线 |
 | `rgb_rtdetr` | `visible/train,val` | `BGR` | `3` | `32` | `10` | `50 epoch`，现补到 `70` 中 |
 | `nir` | `nir/train,val` | `Gray` | `1` | `96` | `12` | `50 epoch` |
-| `nir_yolo11s_6cls_personmerge` | `nir/train,val` | `Gray` | `1` | `20` | `10` | 新增待训练；YOLO11s NIR-only 统一基线 |
+| `nir_yolo11s_6cls_personmerge` | `nir/train,val` | `Gray` | `1` | `20` | `10` | 已完成 `100 epoch`；YOLO11s NIR-only 统一基线 |
 | `rgbnir` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
-| `rgbnir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待训练；YOLO11s RGB-NIR plain 统一基线 |
+| `rgbnir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；YOLO11s RGB-NIR plain 统一基线 |
 | `input_fusion` | `visible/train,val` + paired nir | `RGBNIR` | `4` | `96` | `12` | `50 epoch` |
 | `light_gate` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | 当前无 all-weather 正式长训 |
 | `bifpn_only` | paired `visible + nir` | `RGBNIR` | `4` | `48` | `10` | `50 epoch`，现补到 `70` |
@@ -165,8 +166,9 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已通过 Ultralytics 原生 `resume=True` 完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA gate c256 |
 | `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA-Reflect c256 |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；foreground-supervised OA-Reflect c256 |
-| `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待冒烟；multi-scale OA soft-prior c256 |
-| `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；multi-scale OA soft-prior c256 |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待训练；P2-only multi-scale OA soft-prior c256，P2 `lambda=0.005` |
+| `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
 | `bifpn_only_yolo11s` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | `YOLO11s BiFPN-only`，已完成 `70 epoch` |
@@ -2288,3 +2290,129 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softpri
 - `WANDB_ENABLED=1`
 
 执行方式：等待当前 `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` 完成后，按上述顺序依次启动，每两个训练之间间隔 `8` 分钟。
+
+### 12.19 2026-04-28 OA-MS-SoftPrior 与 YOLO11s 统一基线完成结果
+
+#### 12.19.1 `Multi-Scale OA Soft-Prior c256` 完成状态
+
+- mode：`bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge`
+- run：`iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-c256-6cls-personmerge2`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-c256-6cls-personmerge2`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge_e100_20260428_012425.stdout.log`
+- W&B run：`7fsxrmhw`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/7fsxrmhw`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出
+- `best.pt` 复验模型规模：`468 layers / 11,738,570 parameters / 132.90 GFLOPs`
+
+主指标：
+
+| 来源 | epoch | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `results.csv` best | 98 | 0.73526 | 0.61573 | 0.67506 | 0.47089 |
+| `results.csv` last | 100 | 0.70924 | 0.61082 | 0.67020 | 0.47019 |
+| `best.pt` 复验 | 98 | 0.735 | 0.616 | 0.675 | 0.471 |
+
+类别指标（`best.pt` 复验）：
+
+| 类别 | mAP50 | mAP50-95 |
+| --- | ---: | ---: |
+| `person` | 0.564 | 0.295 |
+| `motorcycle` | 0.579 | 0.263 |
+| `car` | 0.892 | 0.689 |
+| `truck` | 0.592 | 0.463 |
+| `bus` | 0.661 | 0.522 |
+| `autorickshaw` | 0.761 | 0.593 |
+
+与当前 plain c256 主基线（`mAP50 = 0.69135`, `mAP50-95 = 0.47976`）对比：
+
+- 总体：`mAP50 -0.01629`，`mAP50-95 -0.00887`，未达到晋级标准。
+- `person`：`0.561 / 0.296 -> 0.564 / 0.295`，几乎持平。
+- `motorcycle`：`0.580 / 0.275 -> 0.579 / 0.263`，关键小目标高 IoU 明显下降。
+- `car`：`0.888 / 0.686 -> 0.892 / 0.689`，略升。
+- `truck`：`0.636 / 0.476 -> 0.592 / 0.463`，下降。
+- `bus`：`0.669 / 0.538 -> 0.661 / 0.522`，下降。
+- `autorickshaw`：`0.815 / 0.604 -> 0.761 / 0.593`，下降。
+
+结论：
+
+- 多尺度 smooth 与 soft-prior 让 `Object-Aware` 叙事更完整，但没有超过 plain c256。
+- P2/P3 同时加 soft-prior 后，`person` 没有实质提升，`motorcycle` 反而下降，说明 P3 弱监督仍可能干扰小目标上下文。
+- 当前 `Object-Aware` 仍不能作为主结构贡献，最多作为“目标先验探索/消融”保留。
+
+#### 12.19.2 YOLO11s 统一基线补训完成状态
+
+统一配方：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, IDDAW_CLASS_SCHEMA=6cls_personmerge`。
+
+| 模式 | run | best epoch | mAP50 | mAP50-95 | W&B |
+| --- | --- | ---: | ---: | ---: | --- |
+| `rgb_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgb-6cls-personmerge10` | 100 | 0.62407 | 0.43800 | `zwtvq3er` |
+| `nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-nir-6cls-personmerge2` | 100 | 0.57387 | 0.38912 | `qxz3uskm` |
+| `rgbnir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-plain-6cls-personmerge2` | 100 | 0.63355 | 0.43354 | `0qn901pr` |
+| `rgbnir_light_nir_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge3` | 99 | 0.64475 | 0.44745 | `9vubgdz2` |
+
+类别 `mAP50-95` 对比：
+
+| 模式 | person | motorcycle | car | truck | bus | autorickshaw |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| RGB-only | 0.220 | 0.220 | 0.665 | 0.399 | 0.559 | 0.562 |
+| NIR-only | 0.187 | 0.198 | 0.623 | 0.384 | 0.474 | 0.469 |
+| RGB-NIR plain | 0.241 | 0.228 | 0.660 | 0.440 | 0.469 | 0.562 |
+| RGB + Light NIR | 0.245 | 0.239 | 0.659 | 0.443 | 0.515 | 0.584 |
+
+结果解读：
+
+- NIR-only 明显弱于 RGB-only，说明 NIR 不能作为主语义分支替代 RGB。
+- RGB-NIR plain 的 `mAP50` 高于 RGB-only，但 `mAP50-95` 略低，说明直接双流 concat 提升召回和低 IoU 命中，但定位质量不足。
+- RGB + Light NIR 是四条统一 YOLO11s 基线中最好：相比 RGB-only，`mAP50 +0.02068`、`mAP50-95 +0.00945`。
+- Light NIR 对 `person/motorcycle` 有小幅稳定增益，且对 `truck/autorickshaw` 的高 IoU 也更好；这支持“保留 RGB 主语义，NIR 作为轻量补充”的主线。
+- 这四条基线都低于 `true P2-P5 BiFPN c256` 的 `mAP50-95 = 0.47976`，进一步确认主要结构增益来自 `BiFPN/P2-P5 多尺度融合`，不是单纯增加 NIR 输入。
+
+#### 12.19.3 当前结论
+
+- 当前最强主结构仍是：`bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`。
+- 当前最强主指标仍是 plain c256：`mAP50 = 0.69135`，`mAP50-95 = 0.47976`。
+- 最新 `OA-MS-SoftPrior c256` 未超过 plain c256：`mAP50 = 0.67506`，`mAP50-95 = 0.47089`。
+- 统一 YOLO11s 基线已经补齐，后续主表不应再混用 YOLO11n 或历史不同配方结果。
+- 论文主线建议继续写成：`YOLO11s + Light NIR branch + true P2-P5 BiFPN c256`；`Object-Aware` 作为消融探索，不进入最优主结构。
+
+#### 12.19.4 下一步训练计划
+
+第一优先级：补当前最强 plain c256 的 `close_mosaic=20` 对照，只改变一个训练策略变量。
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=20 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+目的：
+
+- 验证 `close_mosaic=20` 是否能把当前最强 plain c256 从 `0.47976` 继续推高。
+- 若提升，后续所有 OA 变体都必须以新的 close_mosaic=20 结果作为主基线。
+- 若不提升，则固定 `close_mosaic=15`，停止在 mosaic 关闭时机上继续发散。
+
+第二优先级：若仍需要继续 Object-Aware，建议只做 `P2-only MS SoftPrior`，不要继续 P2/P3 同时加约束。
+
+- 结构建议：`P2` 使用 `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.005)`；`P3` 回退为无辅助 loss 的 multi-scale OA-Reflect；`P4/P5` 保持 plain concat。
+- 配方仍保持：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`。
+- 判定标准：必须超过 plain c256 的 `mAP50-95`，且 `motorcycle mAP50-95` 不低于 `0.275`；否则停止继续训练 Object-Aware 分支。
+
+### 12.20 P2-only Multi-Scale OA Soft-Prior c256 启动记录
+
+- 新增 mode：`bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge`
+- 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml`
+- 基线来源：`bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge`
+- 结构差异：
+  - `P2`: `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.005)`
+  - `P3`: `ObjectAwareMultiScaleReflectanceGateConcat`，不加 auxiliary foreground/soft-prior loss
+  - `P4/P5`: plain `Concat`
+  - `BiFPNP2P5`: 仍为 `[256, 2]`
+  - `Index` 和四尺度 refine head 仍保持 `256`
+- 目的：验证上一轮 `P2/P3` soft-prior 同时约束导致 `motorcycle` 下降的问题是否主要来自 P3，同时适当增强 P2 目标先验强度。
+
+训练命令：
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge 100 0,1
+```
