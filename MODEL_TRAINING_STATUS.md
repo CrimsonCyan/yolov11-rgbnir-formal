@@ -167,7 +167,7 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；true P2-P5 BiFPN + P2/P3 OA-Reflect c256 |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；foreground-supervised OA-Reflect c256 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；multi-scale OA soft-prior c256 |
-| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 新增待训练；P2-only multi-scale OA soft-prior c256，P2 `lambda=0.01` |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`（实际 P2 `lambda=0.005`）；当前配置已提高到 `lambda=0.01`，待下一轮验证 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `20` | `10` | 已完成 `100 epoch`；Light NIR plain baseline |
 | `proposed_lite_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 已完成 `70 epoch` |
 | `proposed_lite_light_nir_yolo11s_6cls_personmerge` | paired `visible + nir` | `RGBNIR` | `4` | `24` | `10` | 当前不在主线，保留为备选结构 |
@@ -271,6 +271,7 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oagate-c256-6cls-personmerge3` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.74477` | `0.62225` | `0.68654` | `0.47814` | `lr0=0.01` 复训显著提升，曾为阶段最强；后续 plain c256 同配方略高 |
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.72568` | `0.62905` | `0.69135` | `0.47976` | plain c256 同配方对照；略优于 OA gate c256 且更轻，说明当前主要收益来自 true P2-P5 c256 + lr0=0.01 |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-fg-c256-6cls-personmerge3` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.71942` | `0.61375` | `0.67895` | `0.47658` | foreground mask 弱监督能让 `fg_gate_loss` 下降，但整体低于 plain c256，暂不晋级 |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-c256-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, P2 lambda=0.005` | 已完成 | `0.70929` | `0.62768` | `0.68364` | `0.47355` | P2-only soft-prior 比 P2/P3 同时约束更好，但仍低于 plain c256；当前配置已提高到 `lambda=0.01` 待验证 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -2373,6 +2374,7 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softpri
 - 当前最强主结构仍是：`bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`。
 - 当前最强主指标仍是 plain c256：`mAP50 = 0.69135`，`mAP50-95 = 0.47976`。
 - 最新 `OA-MS-SoftPrior c256` 未超过 plain c256：`mAP50 = 0.67506`，`mAP50-95 = 0.47089`。
+- 最新 `P2-only OA-MS-SoftPrior c256(lambda=0.005)` 也未超过 plain c256：`mAP50 = 0.68364`，`mAP50-95 = 0.47355`。
 - 统一 YOLO11s 基线已经补齐，后续主表不应再混用 YOLO11n 或历史不同配方结果。
 - 论文主线建议继续写成：`YOLO11s + Light NIR branch + true P2-P5 BiFPN c256`；`Object-Aware` 作为消融探索，不进入最优主结构。
 
@@ -2402,6 +2404,7 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_
 - 新增 mode：`bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge`
 - 新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml`
 - 基线来源：`bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge`
+- 注意：本轮已完成训练启动于配置更新前，实际构造日志为 `ObjectAwareMultiScaleSoftPriorGateConcat[128, 128, 1, 4, 0.005]`；当前仓库配置已在后续提交中提高为 `lambda=0.01`，尚未完成长训验证。
 - 结构差异：
   - `P2`: `ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.01)`
   - `P3`: `ObjectAwareMultiScaleReflectanceGateConcat`，不加 auxiliary foreground/soft-prior loss
@@ -2415,4 +2418,87 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_
 ```bash
 WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
 bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+#### 12.20.1 P2-only Multi-Scale OA Soft-Prior c256 结果（实际 P2 `lambda=0.005`）
+
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-c256-6cls-personmerge2`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge_e100_20260428_135203.stdout.log`
+- W&B run：`p4wa0dyr`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/p4wa0dyr`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 实际 P2 soft-prior 权重：`lambda=0.005`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出
+- 模型规模：
+  - 训练构建 summary：`602 layers / 11,758,282 parameters / 85.92 GFLOPs`
+  - `best.pt` 复验 summary：`468 layers / 11,738,570 parameters / 132.90 GFLOPs`
+  - W&B 记录：`134.255 GFLOPs`
+- 辅助 loss 量级：
+  - 首次 scale check：`aux_loss=0.005731`, `scaled_aux_loss=0.057305`, `det_loss=135.573166`, `batch_size=10`
+  - `results.csv`: `train/fg_gate_loss 0.00524 -> 0.00377`
+  - 说明 soft-prior loss 正常下降，且量级远小于主检测 loss，没有主导训练。
+
+主指标：
+
+| 来源 | epoch | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `results.csv` best | 98 | 0.70929 | 0.62768 | 0.68364 | 0.47355 |
+| `results.csv` last | 100 | 0.71353 | 0.62678 | 0.67865 | 0.46976 |
+| `best.pt` 复验 | 98 | 0.710 | 0.628 | 0.684 | 0.473 |
+
+类别指标（`best.pt` 复验）：
+
+| 类别 | mAP50 | mAP50-95 |
+| --- | ---: | ---: |
+| `person` | 0.571 | 0.295 |
+| `motorcycle` | 0.581 | 0.269 |
+| `car` | 0.885 | 0.689 |
+| `truck` | 0.608 | 0.465 |
+| `bus` | 0.691 | 0.524 |
+| `autorickshaw` | 0.766 | 0.596 |
+
+与当前 plain c256 主基线（`mAP50 = 0.69135`, `mAP50-95 = 0.47976`）对比：
+
+- 总体：`mAP50 -0.00771`，`mAP50-95 -0.00621`，未达到晋级标准。
+- `person`：`0.561 / 0.296 -> 0.571 / 0.295`，`mAP50` 提升但高 IoU 基本持平。
+- `motorcycle`：`0.580 / 0.275 -> 0.581 / 0.269`，`mAP50` 持平但 `mAP50-95` 下降，仍未满足小目标判定线。
+- `car`：`0.888 / 0.686 -> 0.885 / 0.689`，高 IoU 略升。
+- `truck`：`0.636 / 0.476 -> 0.608 / 0.465`，下降。
+- `bus`：`0.669 / 0.538 -> 0.691 / 0.524`，低 IoU 提升但高 IoU 下降。
+- `autorickshaw`：`0.815 / 0.604 -> 0.766 / 0.596`，下降。
+
+与 P2/P3 同时 soft-prior 版本（`mAP50 = 0.67506`, `mAP50-95 = 0.47089`）对比：
+
+- 总体：`mAP50 +0.00858`，`mAP50-95 +0.00266`。
+- `person`: `0.564 / 0.295 -> 0.571 / 0.295`，略升。
+- `motorcycle`: `0.579 / 0.263 -> 0.581 / 0.269`，有所恢复但仍低于 plain c256。
+- 说明去掉 P3 soft-prior 约束是正确方向，但 P2-only 弱监督本身还不足以超过强 BiFPN baseline。
+
+结论：
+
+- `P2-only soft-prior` 比 `P2/P3 soft-prior` 更稳，证明 P3 辅助约束确实可能干扰中层上下文。
+- 但 `lambda=0.005` 仍未超过 plain c256，且 `motorcycle mAP50-95=0.269` 低于晋级线 `0.275`。
+- 当前 `Object-Aware` 仍不能作为主结构贡献，只能作为反射/目标先验相关消融。
+- 下一步只建议做一次已准备好的 `P2 lambda=0.01` 最终强度验证；若仍低于 plain c256，则停止继续训练 OA gate 类结构，把主线回到 `plain c256 + close_mosaic` 与可视化分析。
+
+#### 12.20.2 下一步执行计划
+
+第一优先级：执行当前已同步配置的 `P2-only OA-MS SoftPrior lambda=0.01`。
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+判定标准：
+
+- 必须超过 plain c256 的 `mAP50-95 = 0.47976`。
+- `motorcycle mAP50-95` 不应低于 `0.275`。
+- 若只提升 `mAP50` 但 `mAP50-95` 仍低于 plain c256，不晋级。
+
+第二优先级：若 `lambda=0.01` 仍失败，停止继续扩展 Object-Aware 训练，回到 `plain c256 + close_mosaic=20` 的单变量确认实验。
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=20 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge 100 0,1
 ```
