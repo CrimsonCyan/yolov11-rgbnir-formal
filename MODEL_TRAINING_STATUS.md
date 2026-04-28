@@ -2177,6 +2177,77 @@ WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=20 IDDAW
 bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge 100 0,1
 ```
 
+### 12.21 P2-only Multi-Scale OA Soft-Prior c256 结果（P2 `lambda=0.1`）
+
+- 模式：`bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge`
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-c256-6cls-personmerge4`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge_e100_20260428_165249.stdout.log`
+- W&B run：`y8cwpnzd`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/y8cwpnzd`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出
+- W&B 记录模型规模：`134.255 GFLOPs`
+
+主指标：
+
+| 来源 | epoch | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `results.csv` best | 99 | 0.76554 | 0.59007 | 0.68526 | 0.48176 |
+| `results.csv` last | 100 | 0.73523 | 0.61700 | 0.68725 | 0.48125 |
+| W&B summary / `best.pt` 复验 | best | 0.76377 | 0.59041 | 0.68533 | 0.48164 |
+
+类别指标（`best.pt` 复验）：
+
+| 类别 | mAP50 | mAP50-95 |
+| --- | ---: | ---: |
+| `person` | 0.556 | 0.292 |
+| `motorcycle` | 0.574 | 0.271 |
+| `car` | 0.896 | 0.690 |
+| `truck` | 0.629 | 0.486 |
+| `bus` | 0.698 | 0.554 |
+| `autorickshaw` | 0.760 | 0.597 |
+
+与当前 plain c256 主基线（`mAP50 = 0.69135`, `mAP50-95 = 0.47976`）对比：
+
+- 总体：`mAP50 -0.00602`，`mAP50-95 +0.00188`，总高 IoU 指标略高于 plain c256。
+- `person`：`0.561 / 0.296 -> 0.556 / 0.292`，下降。
+- `motorcycle`：`0.580 / 0.275 -> 0.574 / 0.271`，下降，仍未满足小目标晋级线。
+- `car`：`0.888 / 0.686 -> 0.896 / 0.690`，略升。
+- `truck`：`0.636 / 0.476 -> 0.629 / 0.486`，高 IoU 提升。
+- `bus`：`0.669 / 0.538 -> 0.698 / 0.554`，提升明显。
+- `autorickshaw`：`0.815 / 0.604 -> 0.760 / 0.597`，下降。
+
+结论：
+
+- `P2 lambda=0.1` 是目前 Object-Aware 系列中总 `mAP50-95` 最高的版本，略超过 plain c256。
+- 但该提升主要来自 `car/truck/bus`，没有改善论文最关心的小目标 `person/motorcycle`。
+- 因此它可以作为 Object-Aware 章节的正向消融结果，但不宜直接替代 plain c256 成为主结构，除非后续主表只以总 `mAP50-95` 排序。
+
+### 12.22 OA-only 消融配置与下一步训练
+
+新增 mode：`oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge`
+
+新增配置：`configs/models/yolo11s_rgbnir_oa_only_light_nir_p2p5_c256_6cls_personmerge.yaml`
+
+配置口径：
+
+- 基于上一版全量模型 `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge`。
+- 保留 RGB full branch 与 Light NIR branch。
+- 保持 Object-Aware 部分完全一致：`P2 = ObjectAwareMultiScaleSoftPriorGateConcat(lambda=0.1)`，`P3 = ObjectAwareMultiScaleReflectanceGateConcat`，`P4/P5 = plain Concat`。
+- 移除 `BiFPNP2P5` 与 `Index`，将 `P2/P3/P4/P5` 四个融合尺度直接送入 c256 refine head 和四尺度 `Detect`。
+
+目的：
+
+- 做 Object-Aware-only 消融，判断上一版 `lambda=0.1` 的收益是否来自 OA gate 本身，还是主要依赖 `BiFPNP2P5` 的多尺度重融合。
+- 若 OA-only 明显低于 `bifpn_only_light_nir_p2p5_c256`，论文中应把 OA 定位为“辅助先验探索”，主贡献仍写 `Light NIR + true P2-P5 BiFPN c256`。
+
+计划训练命令：
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
 目的：
 
 - 只改变 `close_mosaic: 15 -> 20`，其余保持当前最强 plain c256 配方不变。
