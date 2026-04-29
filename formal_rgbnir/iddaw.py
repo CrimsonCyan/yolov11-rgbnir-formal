@@ -14,6 +14,7 @@ LEGACY_CLASS_SCHEMA = "7cls"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "nir_yolo11s_6cls_personmerge",
+    "early_fusion_yolo11s_6cls_personmerge",
     "rgbnir_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
@@ -45,6 +46,7 @@ TRAINABLE_MODES = {
     "rgb_rtdetr",
     "nir",
     "nir_yolo11s_6cls_personmerge",
+    "early_fusion_yolo11s_6cls_personmerge",
     "rgbnir",
     "rgbnir_yolo11s_6cls_personmerge",
     "input_fusion",
@@ -175,6 +177,7 @@ def experiment_name(mode: str) -> str:
         "rgb_rtdetr": "iddaw-rtdetr-r18-rgb",
         "nir": "iddaw-yolo11n-nir",
         "nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-nir-6cls-personmerge",
+        "early_fusion_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-early-fusion-6cls-personmerge",
         "rgbnir": "iddaw-yolo11n-rgbnir-plain",
         "rgbnir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-plain-6cls-personmerge",
         "input_fusion": "iddaw-yolo11n-input-fusion",
@@ -230,6 +233,8 @@ def model_config_for(mode: str) -> str:
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11-gray.yaml").resolve())
     if mode == "nir_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_nir_6cls_personmerge.yaml").resolve())
+    if mode == "early_fusion_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_rgbnir_early_fusion_6cls_personmerge.yaml").resolve())
     if mode == "rgbnir":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_plain.yaml").resolve())
     if mode == "rgbnir_yolo11s_6cls_personmerge":
@@ -427,6 +432,7 @@ def train_batch_for(mode: str) -> int:
         "rgb_rtdetr": 32,
         "nir": 96,
         "nir_yolo11s_6cls_personmerge": 20,
+        "early_fusion_yolo11s_6cls_personmerge": 20,
         "rgbnir": 48,
         "rgbnir_yolo11s_6cls_personmerge": 20,
         "input_fusion": 96,
@@ -474,6 +480,7 @@ def workers_for(mode: str) -> int:
         "rgb_rtdetr": 10,
         "nir": 12,
         "nir_yolo11s_6cls_personmerge": 10,
+        "early_fusion_yolo11s_6cls_personmerge": 10,
         "rgbnir": 10,
         "rgbnir_yolo11s_6cls_personmerge": 10,
         "input_fusion": 12,

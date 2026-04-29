@@ -2892,4 +2892,6 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_resreflect
 
 - 当前计划训练完成后，延迟 `10` 分钟启动 `oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge`。
 - 该模式对应 `OA + YOLO PAN-style head` 对照：保留 P2 soft-prior 与 P3 OA-Reflect，但移除 `BiFPNP2P5`，使用 YOLO 式 `P5->P4->P3->P2` top-down 与 `P2->P3->P4->P5` bottom-up 路径，再进行四尺度 Detect。
+- `OA + YOLO PAN-style head` 训练结束后，继续延迟 `10` 分钟启动 `early_fusion_yolo11s_6cls_personmerge`。
+- `early_fusion_yolo11s_6cls_personmerge` 是单流 4 通道 RGB+NIR 早期融合对照：输入层直接接收 `RGB(3)+NIR(1)`，使用 YOLO11s backbone 与原 YOLO PAN 检测头，不包含双分支、Light NIR、BiFPN 或 OA 模块。
 
