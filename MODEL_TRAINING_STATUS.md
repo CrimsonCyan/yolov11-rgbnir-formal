@@ -2632,3 +2632,152 @@ WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW
 ```
 
 执行顺序：`bifpn floor -> gate floor -> two floor`，每个实验启动间隔 `10` 分钟。判定指标仍以总体 `mAP50-95` 为第一优先，并重点检查 `person`、`motorcycle` 与 OA gate 框内/框外统计。
+
+### 12.23 BiFPN/Gate Floor 三组实验结果与权重分析
+
+统一配方：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, IDDAW_CLASS_SCHEMA=6cls_personmerge`。
+
+分析产物：`runs/analysis/floor_experiments_20260429/`。其中每个子目录保存了 `bifpn_weights.csv/json`；含 OA gate 的两组额外保存 `gate_stats.json`。BiFPN 权重统计按实际 forward 公式计算，`BiFPNP2P5Floor` 使用 floor 后的实际归一化权重，而不是普通 ReLU 归一化权重。
+
+#### 12.23.1 主指标
+
+| 实验 | W&B | 参数量 | GFLOPs | Precision | Recall | mAP50 | mAP50-95 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `BiFPN floor=0.05` | `l6fcatfb` | 10.10M | 84.28 | 0.719 | 0.602 | 0.660 | 0.461 |
+| `Gate floor=0.10` | `kjwcar8v` | 11.74M | 132.90 | 0.748 | 0.610 | 0.681 | 0.476 |
+| `Two floor` | `twl65qdy` | 11.74M | 132.90 | 0.762 | 0.607 | 0.679 | 0.474 |
+
+`results.csv` 中的 best epoch：
+
+| 实验 | best epoch | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `BiFPN floor=0.05` | 99 | 0.72544 | 0.59760 | 0.65960 | 0.46128 |
+| `Gate floor=0.10` | 98 | 0.74680 | 0.61031 | 0.68101 | 0.47522 |
+| `Two floor` | 100 | 0.76359 | 0.60632 | 0.67868 | 0.47328 |
+
+类别指标（`best.pt` 复验）：
+
+| 实验 | person mAP50-95 | motorcycle mAP50-95 | car mAP50-95 | truck mAP50-95 | bus mAP50-95 | autorickshaw mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `BiFPN floor=0.05` | 0.292 | 0.270 | 0.686 | 0.428 | 0.510 | 0.583 |
+| `Gate floor=0.10` | 0.298 | 0.270 | 0.685 | 0.479 | 0.537 | 0.585 |
+| `Two floor` | 0.295 | 0.272 | 0.682 | 0.467 | 0.517 | 0.608 |
+
+对照当前关键基线：
+
+- `plain c256 BiFPN`：`mAP50 = 0.691`, `mAP50-95 = 0.479`，`person = 0.296`，`motorcycle = 0.275`。
+- `P2-only OA-MS SoftPrior(lambda=0.1, no floor)`：`mAP50 = 0.685`, `mAP50-95 = 0.482`，`person = 0.292`，`motorcycle = 0.271`。
+- 三组 floor 实验均未超过 `P2-only OA-MS SoftPrior(lambda=0.1, no floor)` 的总 `mAP50-95 = 0.482`。
+- `Gate floor=0.10` 相比 no-floor OA 版本召回更高，但 `mAP50-95` 下降，说明 floor 释放了更多候选响应，但没有改善定位质量。
+- `BiFPN floor=0.05` 明显低于 plain c256，说明强行保留所有尺度边并不适合当前数据，BiFPN 对部分路径的稀疏化选择是有效的。
+
+#### 12.23.2 BiFPN 权重分析
+
+按两次重复 BiFPN block 的实际归一化权重求平均：
+
+| 边/输入来源 | BiFPN floor | Gate floor | Two floor | 解释 |
+| --- | ---: | ---: | ---: | --- |
+| `P2_in` | 0.5529 | 0.5759 | 0.5708 | P2 原始高分辨率输入一直保持较高权重，是小目标检测的核心路径。 |
+| `P3_td_up` | 0.4471 | 0.4240 | 0.4292 | P3 向 P2 的自顶向下补充稳定存在，但低于 P2 原始输入。 |
+| `P3_out_down` | 0.6912 | 0.6963 | 0.6928 | P3 输出向 P4 的自底向上路径权重很高，说明模型依赖中高分辨率语义继续向深层传播。 |
+| `P4_out_down` | 0.9489 | 0.5041 | 0.7342 | BiFPN floor 版本中 P5 主要依赖 P4 下采样，P5 原始输入几乎被压到 floor。 |
+| `P5_in` | 0.0511 | 0.0000 | 0.2658 | 无 floor 时模型可以完全抑制 P5 原始输入；two floor 强行恢复 P5 后并未带来收益。 |
+| `P5_up` | 0.1986 | 0.1789 | 0.2011 | P5 向 P4 的上采样贡献始终较低。 |
+
+权重范围：
+
+| 实验 | 最小实际边权重 | 最大实际边权重 | 说明 |
+| --- | ---: | ---: | --- |
+| `BiFPN floor=0.05` | 0.050048 | 0.949837 | floor 生效，但仍允许单边接近主导。 |
+| `Gate floor=0.10` | 0.000000 | 0.999498 | 普通 BiFPN 会把部分边完全压制。 |
+| `Two floor` | 0.050057 | 0.949825 | floor 生效，但整体精度未提升。 |
+
+结论：当前 BiFPN 的有效行为不是“均匀保留所有尺度”，而是主动强化 P2/P3/P4 的局部细节和中层语义路径，同时削弱 P5 原始输入。`BiFPN floor=0.05` 破坏了这种自适应选择，尤其是强行保留 P5 后，没有改善 `person/motorcycle`，反而降低总指标。
+
+#### 12.23.3 OA gate 参数与框内/框外响应
+
+P2 `ObjectAwareMultiScaleSoftPriorGateConcatFloor` 的 gate floor 固定为 `0.10`，辅助 loss 权重为 `lambda=0.1`。统计范围为完整验证集 `475` 张图像。
+
+| 实验/层 | gate all mean | 框内 mean | 框外 mean | 框内-框外 | person 框内 | motorcycle 框内 | gate_scale | reflectance_scale |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Gate floor` P2 SoftPrior | 0.2443 | 0.6396 | 0.2014 | 0.4382 | 0.6131 | 0.5806 | 0.2940 | 0.3692 |
+| `Gate floor` P3 Reflectance | 0.9814 | 0.9822 | 0.9813 | 0.0009 | 0.9813 | 0.9826 | 0.0230 | 0.0957 |
+| `Two floor` P2 SoftPrior | 0.2516 | 0.6516 | 0.2083 | 0.4434 | 0.6218 | 0.6087 | 0.2891 | 0.3554 |
+| `Two floor` P3 Reflectance | 0.9936 | 0.9941 | 0.9936 | 0.0005 | 0.9951 | 0.9950 | 0.0293 | 0.1110 |
+
+`fg_gate_loss` 量级：
+
+| 实验 | best epoch `train/fg_gate_loss` | last epoch `train/fg_gate_loss` |
+| --- | ---: | ---: |
+| `Gate floor=0.10` | 0.04255 | 0.04207 |
+| `Two floor` | 0.04148 | 0.04148 |
+
+分析：
+
+- P2 SoftPrior gate 的框内均值显著高于框外均值，说明对象先验确实学到了前景区域，而不是完全失效。
+- gate floor 后整体 gate 均值约为 `0.24-0.25`，框外区域仍保留约 `0.20`，达到了“避免 NIR 被完全抑制”的设计目的。
+- 但指标没有提升，说明当前瓶颈不是简单的“gate 过低”，而是 gate 放开的 NIR 信息没有转化成更好的定位质量。
+- P3 Reflectance gate 几乎全图接近 `0.98-0.99`，框内外差异约为 `0.001`，它本质上已经退化为近似全通的反射增强分支，不具备有效对象选择性。
+- `gate_scale` 和 `reflectance_scale` 没有饱和，P2 gate 仍有调节能力；问题更可能在于 object prior 与检测目标之间的监督目标不够贴合，而不是参数被 floor 限死。
+
+#### 12.23.4 结论与下一步计划
+
+本轮结论：
+
+- `BiFPN floor=0.05` 不晋级。它显著降低 `mAP50-95`，说明不应强制所有尺度边保底。
+- `Gate floor=0.10` 不晋级。它提高了召回，但没有提升 `mAP50-95`，且低于 no-floor 的 `P2-only OA-MS SoftPrior(lambda=0.1)`。
+- `Two floor` 不晋级。BiFPN floor 与 gate floor 没有形成互补，强行恢复 P5 原始路径反而削弱了整体表现。
+- 当前 Object-Aware 系列里最值得保留的是 `P2-only OA-MS SoftPrior(lambda=0.1, no floor)`，它总 `mAP50-95` 最高，但小目标 `person/motorcycle` 没有超过 plain c256。
+
+下一步不建议继续调 floor。更合理的方向是修改 OA gate 的作用方式，而不是继续提高下限：
+
+1. 保留当前普通 `BiFPNP2P5 c256`，不要启用 `BiFPN floor`。
+2. 保留 `P2-only soft prior`，但把 object gate 从“调制 NIR 主特征强度”改为“只调制 reflectance residual”。即 NIR 主干特征默认直通，object prior 只控制反射/边缘修正项，降低 gate 对基础 NIR 信息的副作用。
+3. P3 Reflectance 目前近似全通，后续若继续保留，应改成轻量 pass-through/refine，而不是把它作为有效对象感知贡献来叙述。
+4. 如果还需要一个训练实验，优先做 `P2-only OA residual-reflect gate + 普通 BiFPNP2P5 c256`，配方保持 `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15`，与当前 no-floor OA 和 plain c256 公平对比。
+
+### 12.24 P2-only OA Residual-Reflect Gate 启动计划
+
+新增 mode：`bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge`
+
+新增配置：`configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_resreflect_p2only_c256_6cls_personmerge.yaml`
+
+基线来源：`bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge`
+
+本轮只改 P2 的 NIR 调制公式：
+
+- 原 P2：`ObjectAwareMultiScaleSoftPriorGateConcat`
+- 新 P2：`ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat`
+- 保留：RGB full branch、Light NIR branch、P3 `ObjectAwareMultiScaleReflectanceGateConcat`、P4/P5 plain concat、普通 `BiFPNP2P5 [256, 2]`、四尺度 Detect。
+- Soft-prior：仍只在 P2 生效，`lambda=0.1`。
+- Residual scale：`max_residual_scale=0.5`，实际 scale 由可学习参数经 `sigmoid` 得到，并初始化在接近 0 的状态，使训练初期近似恒等映射。
+
+核心差异：
+
+```text
+旧公式：
+F_nir,out = F_nir * [1 + alpha * (G - 0.5) * 2] + beta * O * (F_refine - F_nir)
+
+新公式：
+F_nir,out = F_nir + gamma * G * (F_refine - F_nir)
+```
+
+目的：
+
+- 避免 gate 直接缩放 NIR 主特征，降低符号翻转或过度抑制风险。
+- 让 object prior 只控制 reflectance/residual correction，NIR 主干信息默认直通。
+- 验证 `modification.md` 中“残差式、小幅度、近似恒等初始化”的建议是否能改善 OA gate 的副作用。
+
+建议训练配方：
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+判定标准：
+
+- 第一优先：是否超过当前 `P2-only OA-MS SoftPrior(lambda=0.1, no floor)` 的 `mAP50-95 = 0.482`。
+- 第二优先：`person` 和 `motorcycle` 是否不低于 plain c256 的 `0.296 / 0.275`。
+- 若总指标提升但小目标继续下降，则只能作为稳定 OA 的辅助消融，不作为主结构替代。
+
