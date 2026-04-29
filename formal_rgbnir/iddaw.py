@@ -28,9 +28,11 @@ PERSONMERGE_MODES = {
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge",
     "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
+    "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "rgbnir_light_nir_yolo11s_6cls_personmerge",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
     "proposed_lite_yolo11s_6cls_personmerge",
@@ -62,9 +64,11 @@ TRAINABLE_MODES = {
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge",
     "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
+    "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "rgbnir_light_nir_yolo11s_6cls_personmerge",
     "attention_only",
     "full_proposed",
@@ -190,9 +194,11 @@ def experiment_name(mode: str) -> str:
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-resreflect-p2only-c256-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-resreflect-p2only-p3plain-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-gatefloor-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-twofloor-c256-6cls-personmerge",
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-oa-only-light-nir-p2p5-c256-6cls-personmerge",
+        "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-oa-yolo-pan-light-nir-p2p5-c256-6cls-personmerge",
         "rgbnir_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
@@ -327,6 +333,15 @@ def model_config_for(mode: str) -> str:
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_resreflect_p2only_c256_6cls_personmerge.yaml"
             ).resolve()
         )
+    if mode == "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_resreflect_p2only_p3plain_c256_6cls_personmerge.yaml"
+            ).resolve()
+        )
     if mode == "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge":
         return str(
             (
@@ -352,6 +367,15 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_oa_only_light_nir_p2p5_c256_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_oa_yolo_pan_light_nir_p2p5_c256_6cls_personmerge.yaml"
             ).resolve()
         )
     if mode == "rgbnir_light_nir_yolo11s_6cls_personmerge":
@@ -422,9 +446,11 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": 20,
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
+        "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
         "rgbnir_light_nir_yolo11s_6cls_personmerge": 24,
         "attention_only": 48,
         "full_proposed": 48,
@@ -467,9 +493,11 @@ def workers_for(mode: str) -> int:
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": 10,
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
+        "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
         "rgbnir_light_nir_yolo11s_6cls_personmerge": 10,
         "attention_only": 10,
         "full_proposed": 10,

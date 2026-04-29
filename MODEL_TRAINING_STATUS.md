@@ -116,6 +116,8 @@ python scripts/iddaw/run_experiment.py --mode decision_fusion --task val --devic
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fg_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + foreground-supervised OA-Reflect c256`：沿用 OA-Reflect 结构，仅在训练时用 GT box 栅格化前景 mask 对 P2/P3 object-prior gate 加轻量 BCE 约束 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + multi-scale OA soft-prior c256`：P2/P3 使用 `3/5/7` 多尺度 NIR smooth 做 luminance/reflectance 分解，并对 object-prior gate 加中心高边缘低的 soft box 约束 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + P2-only multi-scale OA soft-prior c256`：P2 使用 multi-scale soft-prior 且 `lambda=0.1`，P3 只保留 multi-scale OA-Reflect 不加辅助 loss，P4/P5 plain concat |
+| `bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_resreflect_p2only_p3plain_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `true P2-P5 BiFPN + P2-only residual-reflect OA + P3 plain concat c256`：只在 P2 使用 residual-reflect soft-prior，P3/P4/P5 全部 plain concat |
+| `oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_oa_yolo_pan_light_nir_p2p5_c256_6cls_personmerge.yaml` | `YOLO11s` 版 `OA + Light NIR branch + YOLO PAN-style P2-P5 head`：保留 P2 soft-prior 与 P3 OA-Reflect，移除 BiFPN，改用 YOLO 式 top-down/bottom-up PAN 检测头 |
 | `rgbnir_light_nir_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_light_nir_6cls_personmerge.yaml` | `YOLO11s` 版 `RGB-NIR + Light NIR branch`：复用 Light NIR 分支，保留普通 YOLO neck/head，不使用 BiFPN，用于隔离 BiFPN 增益 |
 | `full_proposed_residual_v2_yolo11s` | `configs/models/yolo11s_rgbnir_full_proposed_residual_v2.yaml` | `YOLO11s` 版 `ResidualQualityAwareFusionV2 + BiFPN` |
 | `proposed_lite_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_proposed_lite_p34_6cls_personmerge.yaml` | `YOLO11s` 版 `Proposed-Lite`：`P3/P4` 用 `ResidualQualityAwareFusionV2`，`P5` 回退为 `Concat`，之后进入 `BiFPN` |
@@ -272,6 +274,7 @@ ssh lyh "tail -f /data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/res
 | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.72568` | `0.62905` | `0.69135` | `0.47976` | plain c256 同配方对照；略优于 OA gate c256 且更轻，说明当前主要收益来自 true P2-P5 c256 + lr0=0.01 |
 | `bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-fg-c256-6cls-personmerge3` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1` | 已完成 | `0.71942` | `0.61375` | `0.67895` | `0.47658` | foreground mask 弱监督能让 `fg_gate_loss` 下降，但整体低于 plain c256，暂不晋级 |
 | `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-c256-6cls-personmerge2` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, P2 lambda=0.005` | 已完成 | `0.70929` | `0.62768` | `0.68364` | `0.47355` | P2-only soft-prior 比 P2/P3 同时约束更好，但仍低于 plain c256；当前配置已提高到 `lambda=0.1` 待验证 |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge` | `iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-resreflect-p2only-c256-6cls-personmerge3` | `100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1, P2 lambda=0.1` | 已完成 | `0.72459` | `0.62278` | `0.68380` | `0.48122` | P2 residual-reflect gate 略超 plain c256 的 `mAP50-95`，但低于 no-floor OA 的约 `0.482`，且 `person/motorcycle` 未超过 plain c256，不作为主结构晋级 |
 | `nir` | `iddaw-yolo11n-nir2` | `50 epoch` | 已完成 | `0.57803` | `0.36977` | `0.40328` | `0.24597` | 官方 YOLO11 Gray/NIR 基线 |
 | `rgbnir` | `iddaw-yolo11n-rgbnir-plain2` | `50 epoch` | 已完成 | `0.63680` | `0.44948` | `0.48136` | `0.30476` | 7 类双流 plain baseline |
 | `rgbnir (6cls personmerge)` | `iddaw-yolo11n-rgbnir-plain-6cls-personmerge2` | `100 epoch, imgsz=800, Adam` | 已完成 | `0.71500` | `0.54400` | `0.61200` | `0.41500` | 默认 6 类口径，`person+rider` 合并后的双流 plain，当前最新为 Adam 版 |
@@ -2780,4 +2783,113 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softpri
 - 第一优先：是否超过当前 `P2-only OA-MS SoftPrior(lambda=0.1, no floor)` 的 `mAP50-95 = 0.482`。
 - 第二优先：`person` 和 `motorcycle` 是否不低于 plain c256 的 `0.296 / 0.275`。
 - 若总指标提升但小目标继续下降，则只能作为稳定 OA 的辅助消融，不作为主结构替代。
+
+#### 12.24.1 P2-only OA Residual-Reflect Gate 结果
+
+- 结果目录：`runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-resreflect-p2only-c256-6cls-personmerge3`
+- 日志：`/data1/lvyanhu/code/yolov11-rgbnir-formal/remote_logs/iddaw/bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge_e100_20260429_224840.stdout.log`
+- W&B run：`lyks2hqb`
+- W&B 链接：`https://wandb.ai/hilbertschopenhauer-no/iddaw-rgbnir-formal/runs/lyks2hqb`
+- 运行配置：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`
+- 训练状态：`100` epoch 正常完成，`best.pt` 与 `last.pt` 已导出。
+- 模型规模：
+  - 训练构建 summary：`602 layers / 11,758,282 parameters / 85.92 GFLOPs`
+  - `best.pt` 复验 summary：`468 layers / 11,738,570 parameters / 132.90 GFLOPs`
+  - W&B 记录：`134.255 GFLOPs`
+- 辅助 loss 量级：
+  - 首次 scale check：`aux_loss=0.104718`, `scaled_aux_loss=1.047184`, `det_loss=135.366653`, `batch_size=10`
+  - `results.csv`: `train/fg_gate_loss 0.09053 -> 0.03396`
+  - 说明 residual-reflect 的 foreground soft-prior loss 持续下降，且初始缩放后约为主检测 loss 的 `0.77%`，没有主导训练。
+
+主指标：
+
+| 来源 | epoch | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `results.csv` best | 96 | 0.72459 | 0.62278 | 0.68380 | 0.48122 |
+| `results.csv` last | 100 | 0.74053 | 0.62300 | 0.67810 | 0.47697 |
+| `best.pt` 复验 | 96 | 0.724 | 0.623 | 0.684 | 0.481 |
+
+类别指标（`best.pt` 复验）：
+
+| 类别 | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: |
+| `person` | 0.786 | 0.478 | 0.565 | 0.295 |
+| `motorcycle` | 0.795 | 0.497 | 0.588 | 0.271 |
+| `car` | 0.798 | 0.837 | 0.882 | 0.677 |
+| `truck` | 0.639 | 0.607 | 0.629 | 0.499 |
+| `bus` | 0.638 | 0.632 | 0.676 | 0.548 |
+| `autorickshaw` | 0.689 | 0.688 | 0.763 | 0.599 |
+
+与当前关键对照的比较：
+
+- 相比 `plain c256 BiFPN`（`mAP50 = 0.69135`, `mAP50-95 = 0.47976`）：`mAP50 -0.00755`，`mAP50-95 +0.00146`。总体高 IoU 略升，但低 IoU 检出质量下降。
+- 相比 `P2-only OA-MS SoftPrior(lambda=0.1, no floor)`（约 `mAP50 = 0.685`, `mAP50-95 = 0.482`）：本轮 `mAP50-95 = 0.48122`，略低，未超过当前 OA 系列最好结果。
+- `person`: plain c256 `0.561 / 0.296` -> residual-reflect `0.565 / 0.295`，`mAP50` 略升但 `mAP50-95` 基本持平略降。
+- `motorcycle`: plain c256 `0.580 / 0.275` -> residual-reflect `0.588 / 0.271`，低 IoU 检出提升，但高 IoU 定位下降。
+- `truck` 与 `bus` 的 `mAP50-95` 分别提升到 `0.499 / 0.548`，说明 residual-reflect 对部分中大目标或轮廓更明确目标有帮助。
+- `car` 与 `autorickshaw` 下降，尤其 `autorickshaw mAP50` 从 plain c256 的约 `0.815` 降至 `0.763`，说明 OA residual 并非全类别稳定收益。
+
+BiFPN 权重分析：
+
+- 分析产物：`runs/analysis/bifpn_weights/resreflect_p2only_c256_best/`
+- `P2_in / P3_td_up`: `0.5634 / 0.4365`
+- `P3_in / P4_td_up`: `0.6727 / 0.3273`
+- `P4_in / P5_up`: `0.8240 / 0.1748`
+- `P3_out`: `P3_in 0.1519`, `P3_td 0.4135`, `P2_out_down 0.4346`
+- `P4_out`: `P4_in 0.0532`, `P4_td 0.2175`, `P3_out_down 0.7292`
+- `P5_out`: `P5_in 0.0000`, `P4_out_down 0.9974`
+
+权重结论：
+
+- 当前 best.pt 仍然主动压制 `P5_in`，并高度依赖 `P4_out_down` 生成 P5 输出。
+- P2/P3/P4 路径占主导，和 floor 实验结论一致：当前数据不适合强制保留所有尺度边。
+- residual-reflect 没有改变 BiFPN 的整体尺度选择逻辑，主要变化来自 P2 NIR residual 的局部修正。
+
+OA gate 参数：
+
+| 层 | 模块 | gate_scale | reflectance_scale | 其他 |
+| --- | --- | ---: | ---: | --- |
+| P2 | `ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat` | -0.0199 | -0.5562 | `max_residual_scale=0.5`, `lambda=0.1` |
+| P3 | `ObjectAwareMultiScaleReflectanceGateConcat` | 0.0333 | 0.1521 | 无辅助 loss |
+
+P2 实际 residual scale 约为 `0.5 * sigmoid(-0.0199 - 0.5562) = 0.18`，说明该分支没有退化为完全关闭，也没有变成强行覆盖 NIR 主特征。它确实实现了“主特征直通 + 小幅 residual reflectance 修正”的设计目标。
+
+结论：
+
+- 本轮 residual-reflect 比 plain c256 的总 `mAP50-95` 略高，但收益只有 `+0.00146`，不足以作为强结论。
+- 它没有超过 `P2-only OA-MS SoftPrior(lambda=0.1, no floor)`，未达到本轮第一晋级标准。
+- `person/motorcycle mAP50-95 = 0.295 / 0.271`，没有超过 plain c256 的 `0.296 / 0.275`，未达到小目标晋级标准。
+- residual-reflect 可作为“降低 OA gate 副作用”的消融保留，但当前不能替代 plain c256 作为主结构。
+
+#### 12.24.2 下一步实验计划
+
+下一步不再调 `floor`，也不建议继续增加 residual 幅度。当前更有价值的单变量实验是去掉 P3 的 OA-Reflect gate，只保留 P2 residual-reflect：
+
+- 目的：验证 P3 `ObjectAwareMultiScaleReflectanceGateConcat` 是否仍在引入不必要的中层扰动。
+- 结构：P2 使用 `ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(lambda=0.1)`，P3/P4/P5 全部回退为 plain concat，后续仍接普通 `BiFPNP2P5 c256` 和四尺度 Detect。
+- 配方：`100 epoch, imgsz=800, Adam, lr0=0.01, batch=20, close_mosaic=15, device=0,1`。
+- 判定标准：
+  - 必须超过 residual-reflect 当前 `mAP50-95 = 0.48122`。
+  - `person/motorcycle mAP50-95` 必须不低于 plain c256 的 `0.296 / 0.275`。
+  - 若 P3 plain 后仍不能提升小目标，则停止 OA gate 结构训练，把论文主线固定为 `Light NIR branch + BiFPN`，OA 只作为对象先验消融和可视化分析内容。
+
+已新增并启用 mode：
+
+```text
+bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge
+```
+
+建议命令：
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge \
+bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge 100 0,1
+```
+
+若该实验失败，下一步应回到 `plain c256 + close_mosaic=20` 的单变量确认实验，而不是继续扩展对象先验模块。
+
+队列补充：
+
+- 当前计划训练完成后，延迟 `10` 分钟启动 `oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge`。
+- 该模式对应 `OA + YOLO PAN-style head` 对照：保留 P2 soft-prior 与 P3 OA-Reflect，但移除 `BiFPNP2P5`，使用 YOLO 式 `P5->P4->P3->P2` top-down 与 `P2->P3->P4->P5` bottom-up 路径，再进行四尺度 Detect。
 
