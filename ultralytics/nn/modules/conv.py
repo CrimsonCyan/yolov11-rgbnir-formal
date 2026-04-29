@@ -28,11 +28,13 @@ __all__ = (
     "ObjectAwareForegroundReflectanceGateConcat",
     "ObjectAwareMultiScaleReflectanceGateConcat",
     "ObjectAwareMultiScaleSoftPriorGateConcat",
+    "ObjectAwareMultiScaleSoftPriorGateConcatFloor",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
     "BiFPN",
     "BiFPNP2P5",
+    "BiFPNP2P5Floor",
     "SeparableConvBlock",
     'TransformerFusionBlock','NiNfusion',
     "RepConv",
@@ -539,6 +541,71 @@ class ObjectAwareMultiScaleSoftPriorGateConcat(ObjectAwareMultiScaleReflectanceG
         self.foreground_target_mode = "soft"
 
 
+class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPriorGateConcat):
+    """P2 soft-prior OA gate with a floor to avoid over-suppressing NIR features."""
+
+    def __init__(
+        self,
+        rgb_channels,
+        nir_channels,
+        dimension=1,
+        reduction=4,
+        foreground_loss_weight=0.1,
+        gate_floor=0.10,
+    ):
+        super().__init__(
+            rgb_channels,
+            nir_channels,
+            dimension=dimension,
+            reduction=reduction,
+            foreground_loss_weight=foreground_loss_weight,
+        )
+        if not 0.0 <= gate_floor < 1.0:
+            raise ValueError(f"gate_floor must be in [0, 1), got {gate_floor}")
+        self.gate_floor = float(gate_floor)
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ObjectAwareMultiScaleSoftPriorGateConcatFloor expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape[0] != nir_feat.shape[0] or rgb_feat.shape[2:] != nir_feat.shape[2:]:
+            raise ValueError(
+                "ObjectAwareMultiScaleSoftPriorGateConcatFloor requires matching batch/spatial shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        nir_smooth = self._smooth_nir(nir_feat)
+        luminance = self.luminance(nir_smooth)
+        reflectance = self.reflectance(nir_feat - nir_smooth)
+        cues = torch.cat(
+            (
+                rgb_context,
+                luminance,
+                reflectance,
+                torch.abs(rgb_context - luminance),
+                torch.abs(rgb_context - reflectance),
+            ),
+            dim=1,
+        )
+        object_gate = self.object_prior(cues)
+        object_gate = self.gate_floor + (1.0 - self.gate_floor) * object_gate
+        if self.training and self.foreground_loss_weight > 0 and self.capture_object_gate:
+            self.last_object_gate = object_gate
+        else:
+            self.last_object_gate = None
+        channel_gate = self.channel_gate(cues)
+        selection_gate = channel_gate * object_gate
+
+        refined_cue = self.cue_refine(torch.cat((luminance, reflectance), dim=1))
+        gate_scale = torch.tanh(self.gate_scale)
+        reflectance_scale = torch.tanh(self.reflectance_scale)
+        nir_weight = 1.0 + gate_scale * (selection_gate - 0.5) * 2.0
+        nir_out = nir_feat * nir_weight + reflectance_scale * object_gate * (refined_cue - nir_feat)
+        return torch.cat((rgb_feat, nir_out), dim=self.d)
+
+
 class QualityAwareFusion(nn.Module):
     """Quality-aware RGB/NIR fusion that preserves concatenated output width."""
 
@@ -747,6 +814,27 @@ class WeightedFeatureFusion(nn.Module):
         return fused
 
 
+class WeightedFeatureFusionFloor(WeightedFeatureFusion):
+    """Learnable normalized BiFPN fusion with a minimum normalized contribution for every edge."""
+
+    def __init__(self, num_inputs, eps=1e-4, min_weight=0.05):
+        super().__init__(num_inputs, eps=eps)
+        if not 0.0 <= min_weight < 1.0 / num_inputs:
+            raise ValueError(f"min_weight must be in [0, {1.0 / num_inputs}), got {min_weight}")
+        self.min_weight = float(min_weight)
+
+    def forward(self, features):
+        if len(features) != self.weights.numel():
+            raise ValueError(f"Expected {self.weights.numel()} features, got {len(features)}")
+        weights = F.relu(self.weights)
+        weights = (weights + self.eps) / (weights.sum() + self.eps * self.weights.numel())
+        weights = self.min_weight + (1.0 - self.weights.numel() * self.min_weight) * weights
+        fused = 0
+        for weight, feature in zip(weights, features):
+            fused = fused + weight * feature
+        return fused
+
+
 class SeparableConvBlock(nn.Module):
     """Depthwise separable conv used after each BiFPN weighted fusion node."""
 
@@ -827,14 +915,17 @@ class BiFPN(nn.Module):
 class BiFPNBlockP2P5(nn.Module):
     """EfficientDet-style bidirectional BiFPN block for P2/P3/P4/P5 features."""
 
-    def __init__(self, channels):
+    fusion_cls = WeightedFeatureFusion
+
+    def __init__(self, channels, min_weight=None):
         super().__init__()
-        self.p4_td_fuse = WeightedFeatureFusion(2)
-        self.p3_td_fuse = WeightedFeatureFusion(2)
-        self.p2_out_fuse = WeightedFeatureFusion(2)
-        self.p3_out_fuse = WeightedFeatureFusion(3)
-        self.p4_out_fuse = WeightedFeatureFusion(3)
-        self.p5_out_fuse = WeightedFeatureFusion(2)
+        fusion_kwargs = {} if min_weight is None else {"min_weight": min_weight}
+        self.p4_td_fuse = self.fusion_cls(2, **fusion_kwargs)
+        self.p3_td_fuse = self.fusion_cls(2, **fusion_kwargs)
+        self.p2_out_fuse = self.fusion_cls(2, **fusion_kwargs)
+        self.p3_out_fuse = self.fusion_cls(3, **fusion_kwargs)
+        self.p4_out_fuse = self.fusion_cls(3, **fusion_kwargs)
+        self.p5_out_fuse = self.fusion_cls(2, **fusion_kwargs)
 
         self.p4_td_conv = SeparableConvBlock(channels)
         self.p3_td_conv = SeparableConvBlock(channels)
@@ -861,12 +952,14 @@ class BiFPNBlockP2P5(nn.Module):
 class BiFPNP2P5(nn.Module):
     """BiFPN wrapper with input projection and repeated P2/P3/P4/P5 fusion."""
 
+    block_cls = BiFPNBlockP2P5
+
     def __init__(self, in_channels, out_channels, repeats=2):
         super().__init__()
         if len(in_channels) != 4:
             raise ValueError(f"BiFPNP2P5 expects 4 input channels, got {len(in_channels)}")
         self.input_proj = nn.ModuleList([Conv(c, out_channels, 1, 1) for c in in_channels])
-        self.blocks = nn.ModuleList([BiFPNBlockP2P5(out_channels) for _ in range(repeats)])
+        self.blocks = nn.ModuleList([self.block_cls(out_channels) for _ in range(repeats)])
 
     def forward(self, x):
         if len(x) != 4:
@@ -875,6 +968,26 @@ class BiFPNP2P5(nn.Module):
         for block in self.blocks:
             features = block(features)
         return features
+
+
+class BiFPNBlockP2P5Floor(BiFPNBlockP2P5):
+    """P2-P5 BiFPN block that keeps every fusion edge above a small normalized weight floor."""
+
+    fusion_cls = WeightedFeatureFusionFloor
+
+    def __init__(self, channels, min_weight=0.05):
+        super().__init__(channels, min_weight=min_weight)
+
+
+class BiFPNP2P5Floor(BiFPNP2P5):
+    """P2-P5 BiFPN wrapper with a minimum normalized fusion edge weight."""
+
+    def __init__(self, in_channels, out_channels, repeats=2, min_weight=0.05):
+        nn.Module.__init__(self)
+        if len(in_channels) != 4:
+            raise ValueError(f"BiFPNP2P5Floor expects 4 input channels, got {len(in_channels)}")
+        self.input_proj = nn.ModuleList([Conv(c, out_channels, 1, 1) for c in in_channels])
+        self.blocks = nn.ModuleList([BiFPNBlockP2P5Floor(out_channels, min_weight=min_weight) for _ in range(repeats)])
 
 
 class Index(nn.Module):

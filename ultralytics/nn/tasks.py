@@ -52,11 +52,13 @@ from ultralytics.nn.modules import (
     ObjectAwareForegroundReflectanceGateConcat,
     ObjectAwareMultiScaleReflectanceGateConcat,
     ObjectAwareMultiScaleSoftPriorGateConcat,
+    ObjectAwareMultiScaleSoftPriorGateConcatFloor,
     QualityAwareFusion,
     ResidualQualityAwareFusion,
     ResidualQualityAwareFusionV2,
     BiFPN,
     BiFPNP2P5,
+    BiFPNP2P5Floor,
     Conv,
     Conv2,
     ConvTranspose,
@@ -1257,6 +1259,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             ObjectAwareForegroundReflectanceGateConcat,
             ObjectAwareMultiScaleReflectanceGateConcat,
             ObjectAwareMultiScaleSoftPriorGateConcat,
+            ObjectAwareMultiScaleSoftPriorGateConcatFloor,
         }:
             if not isinstance(f, list) or len(f) != 2:
                 raise ValueError(f"{m.__name__} expects exactly 2 inputs, got {f}")
@@ -1265,7 +1268,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m in {ConcatGate, QualityAwareFusion, ResidualQualityAwareFusion, ResidualQualityAwareFusionV2}:
             c2 = sum(ch[x] for x in f)
             args = [c2, *args]
-        elif m in {BiFPN, BiFPNP2P5}:
+        elif m in {BiFPN, BiFPNP2P5, BiFPNP2P5Floor}:
             c2 = args[0]
             args = [[ch[x] for x in f], *args]
         elif m is ADD:

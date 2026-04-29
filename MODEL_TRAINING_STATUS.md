@@ -2608,3 +2608,27 @@ bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_oa_ms_softpri
 WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=20 IDDAW_CLASS_SCHEMA=6cls_personmerge \
 bash scripts/iddaw/launch_nohup_train.sh bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge 100 0,1
 ```
+
+### 12.22 BiFPN/Gate Floor 三组实验计划
+
+目的：在当前 `c256 BiFPN` 与 `P2-only OA-MS SoftPrior` 主线上验证两个保守约束：
+
+- `BiFPN floor=0.05`：每条 BiFPN 融合边至少保留 `5%` 归一化权重，避免部分尺度路径被完全压到 `0`。
+- `Gate floor=0.10`：P2 object gate 至少保留 `0.10`，降低 OA gate 对 NIR 的过度抑制风险。
+- `Two floor`：同时启用上述两个约束，验证二者是否互补。
+
+新增模式：
+
+| 模式 | 配置 | 单变量说明 |
+| --- | --- | --- |
+| `bifpn_only_light_nir_p2p5_floor005_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_floor005_c256_6cls_personmerge.yaml` | 只替换 `BiFPNP2P5 -> BiFPNP2P5Floor(min_weight=0.05)` |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_gatefloor_c256_6cls_personmerge.yaml` | 只替换 P2 `ObjectAwareMultiScaleSoftPriorGateConcat -> ObjectAwareMultiScaleSoftPriorGateConcatFloor(gate_floor=0.10)` |
+| `bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge` | `configs/models/yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ms_softprior_p2only_twofloor_c256_6cls_personmerge.yaml` | 同时启用 `BiFPN floor=0.05` 与 `Gate floor=0.10` |
+
+统一训练配方：
+
+```bash
+WANDB_ENABLED=1 IMGSZ=800 OPTIMIZER=Adam LR0=0.01 BATCH=20 CLOSE_MOSAIC=15 IDDAW_CLASS_SCHEMA=6cls_personmerge
+```
+
+执行顺序：`bifpn floor -> gate floor -> two floor`，每个实验启动间隔 `10` 分钟。判定指标仍以总体 `mAP50-95` 为第一优先，并重点检查 `person`、`motorcycle` 与 OA gate 框内/框外统计。
