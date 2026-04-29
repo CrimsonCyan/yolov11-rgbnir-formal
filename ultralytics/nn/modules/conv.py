@@ -564,7 +564,6 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
         if max_residual_scale <= 0:
             raise ValueError(f"max_residual_scale must be positive, got {max_residual_scale}")
         self.max_residual_scale = float(max_residual_scale)
-        self.gate_scale.requires_grad_(False)
         with torch.no_grad():
             self.gate_scale.zero_()
             self.reflectance_scale.fill_(-6.0)
@@ -605,7 +604,7 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
         selection_gate = channel_gate * object_gate
 
         refined_cue = self.cue_refine(torch.cat((luminance, reflectance), dim=1))
-        residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale)
+        residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         nir_out = nir_feat + residual_scale * selection_gate * (refined_cue - nir_feat)
         return torch.cat((rgb_feat, nir_out), dim=self.d)
 
