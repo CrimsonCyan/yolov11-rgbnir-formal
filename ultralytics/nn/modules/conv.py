@@ -29,7 +29,9 @@ __all__ = (
     "ObjectAwareMultiScaleReflectanceGateConcat",
     "ObjectAwareMultiScaleSoftPriorGateConcat",
     "ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat",
+    "ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat",
     "ObjectAwareMultiScaleSoftPriorGateConcatFloor",
+    "ObjectAwareP2HeadResidualRefine",
     "QualityAwareFusion",
     "ResidualQualityAwareFusion",
     "ResidualQualityAwareFusionV2",
@@ -464,6 +466,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
         self.foreground_target_mode = "box"
         self.capture_object_gate = False
         self.last_object_gate = None
+        self.last_residual_delta = None
 
     def _smooth_nir(self, nir_feat):
         """Estimate the low-frequency NIR component used by the Retinex-style split."""
@@ -495,10 +498,11 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.training and self.foreground_loss_weight > 0 and self.capture_object_gate:
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
+        self.last_residual_delta = None
         channel_gate = self.channel_gate(cues)
         selection_gate = channel_gate * object_gate
 
@@ -596,7 +600,7 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.training and self.foreground_loss_weight > 0 and self.capture_object_gate:
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -605,8 +609,46 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
 
         refined_cue = self.cue_refine(torch.cat((luminance, reflectance), dim=1))
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
-        nir_out = nir_feat + residual_scale * selection_gate * (refined_cue - nir_feat)
+        residual_delta = residual_scale * selection_gate * (refined_cue - nir_feat)
+        nir_out = nir_feat + residual_delta
+        if self.capture_object_gate and not torch.is_grad_enabled():
+            self.last_residual_delta = residual_delta.detach()
+        else:
+            self.last_residual_delta = None
         return torch.cat((rgb_feat, nir_out), dim=self.d)
+
+
+class ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat(
+    ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat
+):
+    """P2 residual-reflect OA gate with small-object weighted soft-prior supervision."""
+
+    def __init__(
+        self,
+        rgb_channels,
+        nir_channels,
+        dimension=1,
+        reduction=4,
+        foreground_loss_weight=0.1,
+        max_residual_scale=0.5,
+        small_area_ref=0.0064,
+        max_prior_weight=3.0,
+    ):
+        super().__init__(
+            rgb_channels,
+            nir_channels,
+            dimension=dimension,
+            reduction=reduction,
+            foreground_loss_weight=foreground_loss_weight,
+            max_residual_scale=max_residual_scale,
+        )
+        if small_area_ref <= 0:
+            raise ValueError(f"small_area_ref must be positive, got {small_area_ref}")
+        if max_prior_weight < 1.0:
+            raise ValueError(f"max_prior_weight must be >= 1.0, got {max_prior_weight}")
+        self.foreground_target_mode = "soft_small"
+        self.small_area_ref = float(small_area_ref)
+        self.max_prior_weight = float(max_prior_weight)
 
 
 class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPriorGateConcat):
@@ -659,7 +701,7 @@ class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPri
         )
         object_gate = self.object_prior(cues)
         object_gate = self.gate_floor + (1.0 - self.gate_floor) * object_gate
-        if self.training and self.foreground_loss_weight > 0 and self.capture_object_gate:
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -672,6 +714,131 @@ class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPri
         nir_weight = 1.0 + gate_scale * (selection_gate - 0.5) * 2.0
         nir_out = nir_feat * nir_weight + reflectance_scale * object_gate * (refined_cue - nir_feat)
         return torch.cat((rgb_feat, nir_out), dim=self.d)
+
+
+class ObjectAwareP2HeadResidualRefine(nn.Module):
+    """Small-object OA residual refinement applied to the BiFPN P2 detection feature."""
+
+    def __init__(
+        self,
+        p2_channels,
+        rgb_channels,
+        nir_channels,
+        reduction=4,
+        foreground_loss_weight=0.1,
+        small_area_ref=0.0064,
+        max_prior_weight=3.0,
+        max_residual_scale=0.5,
+    ):
+        super().__init__()
+        if min(p2_channels, rgb_channels, nir_channels) <= 0:
+            raise ValueError(
+                "ObjectAwareP2HeadResidualRefine expects positive channels, "
+                f"got {p2_channels}, {rgb_channels}, {nir_channels}"
+            )
+        if small_area_ref <= 0:
+            raise ValueError(f"small_area_ref must be positive, got {small_area_ref}")
+        if max_prior_weight < 1.0:
+            raise ValueError(f"max_prior_weight must be >= 1.0, got {max_prior_weight}")
+        if max_residual_scale <= 0:
+            raise ValueError(f"max_residual_scale must be positive, got {max_residual_scale}")
+
+        self.foreground_loss_weight = float(foreground_loss_weight)
+        self.foreground_target_mode = "soft_small"
+        self.small_area_ref = float(small_area_ref)
+        self.max_prior_weight = float(max_prior_weight)
+        self.max_residual_scale = float(max_residual_scale)
+        self.capture_object_gate = False
+        self.last_object_gate = None
+        self.last_residual_delta = None
+
+        self.rgb_proj = Conv(rgb_channels, p2_channels, k=1, s=1) if rgb_channels != p2_channels else nn.Identity()
+        self.nir_proj = Conv(nir_channels, p2_channels, k=1, s=1) if nir_channels != p2_channels else nn.Identity()
+        self.smooth_fuse = Conv(p2_channels * 3, p2_channels, k=1, s=1)
+        self.luminance = nn.Sequential(
+            DWConv(p2_channels, p2_channels, k=5, s=1),
+            Conv(p2_channels, p2_channels, k=1, s=1),
+        )
+        self.reflectance = nn.Sequential(
+            DWConv(p2_channels, p2_channels, k=3, s=1),
+            Conv(p2_channels, p2_channels, k=1, s=1),
+        )
+
+        hidden = max(p2_channels // reduction, 16)
+        cue_channels = p2_channels * 6
+        self.channel_gate = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, p2_channels, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.object_prior = nn.Sequential(
+            nn.Conv2d(cue_channels, hidden, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.refine = Conv(p2_channels * 3, p2_channels, k=1, s=1)
+        self.gate_scale = nn.Parameter(torch.tensor(0.0, dtype=torch.float32))
+        self.reflectance_scale = nn.Parameter(torch.tensor(-6.0, dtype=torch.float32))
+
+    def _smooth_nir(self, nir_feat):
+        smooth3 = F.avg_pool2d(nir_feat, kernel_size=3, stride=1, padding=1)
+        smooth5 = F.avg_pool2d(nir_feat, kernel_size=5, stride=1, padding=2)
+        smooth7 = F.avg_pool2d(nir_feat, kernel_size=7, stride=1, padding=3)
+        return self.smooth_fuse(torch.cat((smooth3, smooth5, smooth7), dim=1))
+
+    def forward(self, x):
+        if len(x) != 3:
+            raise ValueError(f"ObjectAwareP2HeadResidualRefine expects 3 feature maps, got {len(x)}")
+
+        p2_feat, rgb_feat, nir_feat = x
+        if (
+            p2_feat.shape[0] != rgb_feat.shape[0]
+            or p2_feat.shape[0] != nir_feat.shape[0]
+            or p2_feat.shape[2:] != rgb_feat.shape[2:]
+            or p2_feat.shape[2:] != nir_feat.shape[2:]
+        ):
+            raise ValueError(
+                "ObjectAwareP2HeadResidualRefine requires matching batch/spatial shapes, "
+                f"got {p2_feat.shape}, {rgb_feat.shape}, {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        nir_context = self.nir_proj(nir_feat)
+        nir_smooth = self._smooth_nir(nir_context)
+        luminance = self.luminance(nir_smooth)
+        reflectance = self.reflectance(nir_context - nir_smooth)
+        cues = torch.cat(
+            (
+                p2_feat,
+                rgb_context,
+                luminance,
+                reflectance,
+                torch.abs(rgb_context - reflectance),
+                torch.abs(p2_feat - reflectance),
+            ),
+            dim=1,
+        )
+        object_gate = self.object_prior(cues)
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = object_gate
+        else:
+            self.last_object_gate = None
+        channel_gate = self.channel_gate(cues)
+        selection_gate = channel_gate * object_gate
+
+        refined = self.refine(torch.cat((p2_feat, luminance, reflectance), dim=1))
+        residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
+        residual_delta = residual_scale * selection_gate * (refined - p2_feat)
+        out = p2_feat + residual_delta
+        if self.capture_object_gate and not torch.is_grad_enabled():
+            self.last_residual_delta = residual_delta.detach()
+        else:
+            self.last_residual_delta = None
+        return out
 
 
 class QualityAwareFusion(nn.Module):

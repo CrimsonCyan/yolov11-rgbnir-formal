@@ -53,7 +53,9 @@ from ultralytics.nn.modules import (
     ObjectAwareMultiScaleReflectanceGateConcat,
     ObjectAwareMultiScaleSoftPriorGateConcat,
     ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat,
+    ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat,
     ObjectAwareMultiScaleSoftPriorGateConcatFloor,
+    ObjectAwareP2HeadResidualRefine,
     QualityAwareFusion,
     ResidualQualityAwareFusion,
     ResidualQualityAwareFusionV2,
@@ -395,15 +397,21 @@ class BaseModel(torch.nn.Module):
                 continue
 
             target_mode = getattr(module, "foreground_target_mode", "box")
+            weight_map = None
             if target_mode == "soft":
                 target = self._soft_foreground_prior_from_bboxes(batch, gate).float()
+            elif target_mode == "soft_small":
+                target, weight_map = self._soft_small_foreground_prior_from_bboxes(batch, gate, module)
+                target = target.float()
+                weight_map = weight_map.float()
             else:
                 target = self._foreground_mask_from_bboxes(batch, gate).float()
             gate = gate.float().clamp(1e-4, 1.0 - 1e-4)
             pos = target.sum()
             neg = target.numel() - pos
             pos_weight = (neg / pos.clamp_min(1.0)).clamp(1.0, 10.0)
-            loss = -(pos_weight * target * gate.log() + (1.0 - target) * (1.0 - gate).log()).mean()
+            loss_map = -(pos_weight * target * gate.log() + (1.0 - target) * (1.0 - gate).log())
+            loss = (loss_map * weight_map).mean() if weight_map is not None else loss_map.mean()
             losses.append(loss * weight)
             module.last_object_gate = None
 
@@ -432,6 +440,54 @@ class BaseModel(torch.nn.Module):
             x_start, x_end = int(x1[idx].item()), int(x2[idx].item())
             target[bi, 0, y_start:y_end, x_start:x_end] = 1.0
         return target
+
+    @staticmethod
+    def _soft_small_foreground_prior_from_bboxes(batch, gate, module):
+        """Rasterize soft priors and up-weight smaller boxes in normalized image area."""
+        bs, _, h, w = gate.shape
+        target = gate.new_zeros((bs, 1, h, w))
+        weight_map = gate.new_ones((bs, 1, h, w))
+        bboxes = batch["bboxes"].to(device=gate.device, dtype=torch.float32).view(-1, 4)
+        batch_idx = batch["batch_idx"].to(device=gate.device).view(-1).long()
+
+        xy = bboxes[:, :2]
+        wh = bboxes[:, 2:].clamp_min(0)
+        cx = xy[:, 0] * w
+        cy = xy[:, 1] * h
+        bw = wh[:, 0] * w
+        bh = wh[:, 1] * h
+        x1 = torch.floor(cx - bw * 0.5).clamp(0, max(w - 1, 0)).long()
+        y1 = torch.floor(cy - bh * 0.5).clamp(0, max(h - 1, 0)).long()
+        x2 = torch.ceil(cx + bw * 0.5).clamp(1, w).long()
+        y2 = torch.ceil(cy + bh * 0.5).clamp(1, h).long()
+        valid = (batch_idx >= 0) & (batch_idx < bs) & (x2 > x1) & (y2 > y1)
+
+        small_area_ref = float(getattr(module, "small_area_ref", 0.0064))
+        max_prior_weight = float(getattr(module, "max_prior_weight", 3.0))
+        norm_area = (wh[:, 0] * wh[:, 1]).clamp_min(1e-8)
+        box_weights = torch.sqrt(gate.new_tensor(small_area_ref) / norm_area).clamp(1.0, max_prior_weight)
+
+        for idx in torch.nonzero(valid, as_tuple=False).flatten().tolist():
+            bi = int(batch_idx[idx].item())
+            y_start, y_end = int(y1[idx].item()), int(y2[idx].item())
+            x_start, x_end = int(x1[idx].item()), int(x2[idx].item())
+            ys = torch.arange(y_start, y_end, device=gate.device, dtype=torch.float32) + 0.5
+            xs = torch.arange(x_start, x_end, device=gate.device, dtype=torch.float32) + 0.5
+            yy, xx = torch.meshgrid(ys, xs, indexing="ij")
+            sigma_x = max(float(bw[idx].item()) * 0.5, 1.0)
+            sigma_y = max(float(bh[idx].item()) * 0.5, 1.0)
+            patch = torch.exp(
+                -0.5
+                * (
+                    ((xx - float(cx[idx].item())) / sigma_x) ** 2
+                    + ((yy - float(cy[idx].item())) / sigma_y) ** 2
+                )
+            )
+            current = target[bi, 0, y_start:y_end, x_start:x_end]
+            target[bi, 0, y_start:y_end, x_start:x_end] = torch.maximum(current, patch)
+            weight_patch = weight_map[bi, 0, y_start:y_end, x_start:x_end]
+            weight_map[bi, 0, y_start:y_end, x_start:x_end] = torch.maximum(weight_patch, box_weights[idx])
+        return target, weight_map
 
     @staticmethod
     def _soft_foreground_prior_from_bboxes(batch, gate):
@@ -1261,12 +1317,18 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             ObjectAwareMultiScaleReflectanceGateConcat,
             ObjectAwareMultiScaleSoftPriorGateConcat,
             ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat,
+            ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat,
             ObjectAwareMultiScaleSoftPriorGateConcatFloor,
         }:
             if not isinstance(f, list) or len(f) != 2:
                 raise ValueError(f"{m.__name__} expects exactly 2 inputs, got {f}")
             c2 = sum(ch[x] for x in f)
             args = [ch[f[0]], ch[f[1]], *args]
+        elif m is ObjectAwareP2HeadResidualRefine:
+            if not isinstance(f, list) or len(f) != 3:
+                raise ValueError(f"{m.__name__} expects exactly 3 inputs, got {f}")
+            c2 = ch[f[0]]
+            args = [ch[f[0]], ch[f[1]], ch[f[2]], *args]
         elif m in {ConcatGate, QualityAwareFusion, ResidualQualityAwareFusion, ResidualQualityAwareFusionV2}:
             c2 = sum(ch[x] for x in f)
             args = [c2, *args]
