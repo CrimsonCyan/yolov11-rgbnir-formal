@@ -41,6 +41,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--conf", type=float, default=0.001, help="Prediction confidence used for AP collection.")
     parser.add_argument("--pr-conf", type=float, default=0.25, help="Confidence threshold for precision/recall summary.")
     parser.add_argument("--iou", type=float, default=0.7)
+    parser.add_argument("--device", default="0", help="Inference device passed to Ultralytics, e.g. 0, 1, cpu.")
+    parser.add_argument("--half", action="store_true", help="Use half precision inference on CUDA devices.")
+    parser.add_argument(
+        "--per-image",
+        action="store_true",
+        help="Run one image per predict() call. Slower, but avoids long-stream CUDA cache growth.",
+    )
     parser.add_argument("--max-images", type=int, default=0, help="Optional cap for quick debugging.")
     return parser.parse_args()
 
@@ -177,6 +184,31 @@ def update_gate_stats(stats: dict[str, list[float]], modules, target, class_name
             stats["residual_inside"].append(float(delta_map[inside].mean()))
         if outside.any():
             stats["residual_outside"].append(float(delta_map[outside].mean()))
+
+
+def iter_predictions(model: YOLO, images: list[Path], args: argparse.Namespace, mode_kwargs: dict[str, object]):
+    half = bool(args.half and str(args.device).lower() != "cpu")
+    predict_kwargs = {
+        "imgsz": args.imgsz,
+        "conf": args.conf,
+        "iou": args.iou,
+        "batch": 1,
+        "stream": True,
+        "verbose": False,
+        "save": False,
+        "device": args.device,
+        "half": half,
+        **mode_kwargs,
+    }
+    if args.per_image:
+        for path in images:
+            for result in model.predict(source=str(path), **predict_kwargs):
+                yield result
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        return
+    for result in model.predict(source=[str(path) for path in images], **predict_kwargs):
+        yield result
 
 
 def ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float, area_filter: str | None) -> float:
@@ -330,17 +362,7 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         "residual_outside": [],
     }
 
-    for result in model.predict(
-        source=[str(path) for path in images],
-        imgsz=args.imgsz,
-        conf=args.conf,
-        iou=args.iou,
-        batch=1,
-        stream=True,
-        verbose=False,
-        save=False,
-        **mode_kwargs,
-    ):
+    for result in iter_predictions(model, images, args, mode_kwargs):
         image_path = Path(result.path)
         target = load_target(image_path, result.orig_shape)
         targets.append(target)
@@ -350,6 +372,8 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
     metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf)
     gate_summary = {key: mean(values) for key, values in gate_stats.items()}
     gate_summary["num_gate_samples"] = len(gate_stats["gate_all"])
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     return {
         "name": case.name,
         "mode": case.mode,
