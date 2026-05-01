@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -252,7 +253,16 @@ def iter_predictions(model: YOLO, images: list[Path], args: argparse.Namespace, 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
         return
-    for result in model.predict(source=[str(path) for path in images], **predict_kwargs):
+    if args.max_images > 0:
+        source_dir = Path(args.out) / "_source_lists"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", dir=source_dir, delete=False, encoding="utf-8") as handle:
+            for path in images:
+                handle.write(f"{path}\n")
+            source = handle.name
+    else:
+        source = str(images[0].parent)
+    for result in model.predict(source=source, **predict_kwargs):
         yield result
 
 
