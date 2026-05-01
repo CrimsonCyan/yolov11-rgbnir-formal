@@ -298,7 +298,7 @@ runs/analysis/oa_small_targets/<case_name>/
 - `gate_person_inside` 或 `gate_motorcycle_inside` 不高：说明 OA 对小目标没有形成有效选择性。
 - `residual_inside > residual_outside`：说明 residual correction 主要作用于目标区域。
 - `residual_inside` 很低：说明 residual 分支接近关闭，即使 gate 有响应也未明显改变特征。
-- 当前面积划分由 `formal_rgbnir/box_ops.py` 控制：`small < 32^2`，`medium < 96^2`，其余为 `large`；面积基于验证图像原始像素坐标计算。
+- 当前面积划分由 `formal_rgbnir/box_ops.py` 控制：`small <= 102^2`，`medium <= 306^2`，`large > 306^2`；面积基于验证图像原始像素坐标计算。该阈值按 IDD-AW 原图 `2048x1536` 与 `imgsz=640` 缩放关系设定，用于替代 COCO 默认 `32^2/96^2` 的过严小目标口径。
 
 ## 4. 日志与进程辅助工具
 

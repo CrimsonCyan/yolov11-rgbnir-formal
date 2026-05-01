@@ -3033,3 +3033,88 @@ bash scripts/iddaw/launch_nohup_train.sh <mode> 1 0,1
 
 若两组实验都未满足上述标准，则停止继续强化 OA gate，论文叙事固定为 `Light NIR branch + BiFPN` 主线，OA 仅作为对象先验、反射残差和可解释性消融。
 
+### 12.26 OA 小目标诊断结果
+
+本次仅执行诊断，不启动后续训练队列。
+
+诊断输出：
+
+```text
+/data1/lvyanhu/code/yolov11-rgbnir-formal/runs/analysis/oa_small_targets/core_compare_20260430_213038
+```
+
+诊断命令使用 `--imgsz 800 --conf 0.001 --pr-conf 0.25 --iou 0.7 --device 0 --half --per-image`。其中 `--conf 0.001` 用于尽量保留预测候选以计算 AP，`--pr-conf 0.25` 用于统计固定置信度下的 precision / recall。`--half --per-image` 用于降低诊断显存占用。
+
+参与诊断的四组模型：
+
+| 名称 | 对应模型 | 说明 |
+| --- | --- | --- |
+| `bifpn_only` | `bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | Light NIR + P2-P5 BiFPN c256，无 OA |
+| `p2_resreflect` | `bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge` | P2 residual-reflect OA + P3/P4/P5 plain/BiFPN |
+| `p3_plain` | `bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge` | P2 residual-reflect OA，P3 改为 plain |
+| `oa_yolo_pan` | `oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge` | OA + YOLO PAN-style head，无 BiFPN |
+
+#### 12.26.1 分尺度总体结果
+
+| 模型 | all mAP50-95 | small mAP50-95 | medium mAP50-95 | large mAP50-95 | small AP50 | small P/R@0.25 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `bifpn_only` | `0.46775` | `0.00428` | `0.10884` | `0.47134` | `0.01497` | `0.03461 / 0.15277` |
+| `p2_resreflect` | `0.46873` | `0.00449` | `0.10400` | `0.47782` | `0.01489` | `0.03575 / 0.16259` |
+| `p3_plain` | `0.46763` | `0.00419` | `0.10854` | `0.46549` | `0.01312` | `0.03207 / 0.13641` |
+| `oa_yolo_pan` | `0.43502` | `0.00398` | `0.09706` | `0.44539` | `0.01270` | `0.03031 / 0.15406` |
+
+结论：
+
+- `p2_resreflect` 的总体 `mAP50-95` 比 `bifpn_only` 高 `+0.00098`，属于极小幅提升。
+- `p2_resreflect` 的 small `mAP50-95` 比 `bifpn_only` 高 `+0.00021`，small recall 从 `0.15277` 提升到 `0.16259`，但提升幅度不足以支撑“显著改善小目标”的结论。
+- `p3_plain` 的 small recall 明显下降到 `0.13641`，说明去掉 P3 侧 OA/反射建模没有改善小目标问题。
+- `oa_yolo_pan` 总体和分尺度指标均低于 BiFPN 路线，说明仅保留 OA 而去掉 BiFPN 后，多尺度建模能力不足。
+
+#### 12.26.2 person / motorcycle 分尺度结果
+
+| 模型 | person all mAP50-95 | person small mAP50-95 | person small P/R@0.25 | motorcycle all mAP50-95 | motorcycle small mAP50-95 | motorcycle small P/R@0.25 |
+| --- | ---: | ---: | --- | ---: | ---: | --- |
+| `bifpn_only` | `0.28983` | `0.00934` | `0.09242 / 0.23222` | `0.28039` | `0.01346` | `0.10708 / 0.27700` |
+| `p2_resreflect` | `0.29591` | `0.01093` | `0.09199 / 0.22594` | `0.27237` | `0.01330` | `0.11384 / 0.30516` |
+| `p3_plain` | `0.29491` | `0.00966` | `0.08281 / 0.19456` | `0.27114` | `0.01232` | `0.10227 / 0.25352` |
+| `oa_yolo_pan` | `0.27587` | `0.00966` | `0.07997 / 0.19874` | `0.25997` | `0.01123` | `0.09236 / 0.24413` |
+
+类别结论：
+
+- `p2_resreflect` 对 `person all` 有提升，`0.28983 -> 0.29591`，但 `person small recall` 反而从 `0.23222` 降到 `0.22594`。这说明其主要收益不是来自 small person 的召回提升。
+- `p2_resreflect` 对 `motorcycle small recall` 有提升，`0.27700 -> 0.30516`，但 `motorcycle all mAP50-95` 从 `0.28039` 降到 `0.27237`，说明召回增加没有转化为更好的整体定位质量。
+- `p3_plain` 在 `person/motorcycle` 的 small recall 上均低于 `bifpn_only`，不支持继续沿 P3 plain 方向推进。
+- `oa_yolo_pan` 在 `person/motorcycle` 上均弱于 BiFPN 系列，说明小目标性能主要依赖 BiFPN 的多尺度路径，而不是当前 OA gate 单独贡献。
+
+#### 12.26.3 OA gate 与 residual 响应
+
+| 模型 | gate_all | gate_inside | gate_outside | person_inside | motorcycle_inside | residual_all | residual_inside | residual_outside |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bifpn_only` | `0.00000` | `0.00000` | `0.00000` | `0.00000` | `0.00000` | `0.00000` | `0.00000` | `0.00000` |
+| `p2_resreflect` | `0.19712` | `0.73648` | `0.13849` | `0.70428` | `0.70225` | `0.00734` | `0.02916` | `0.00502` |
+| `p3_plain` | `0.20578` | `0.75353` | `0.14551` | `0.72179` | `0.73352` | `0.00904` | `0.03364` | `0.00636` |
+| `oa_yolo_pan` | `0.22340` | `0.70720` | `0.17100` | `0.65893` | `0.66890` | `0.00000` | `0.00000` | `0.00000` |
+
+gate 诊断结论：
+
+- OA gate 的空间选择性是成立的：`gate_inside` 明显高于 `gate_outside`，且 `person/motorcycle` 框内 gate 均值约为 `0.66-0.73`。
+- residual 分支同样具有目标区域选择性：`p2_resreflect` 的 `residual_inside = 0.02916`，明显高于 `residual_outside = 0.00502`；`p3_plain` 也有类似现象。
+- 但 gate/residual 的可解释响应没有稳定转化为检测精度收益，尤其没有显著提升 small AP。这说明当前 OA 模块“看到了目标区域”，但它对检测头最终分类与定位的帮助有限。
+
+#### 12.26.4 阶段判断
+
+本轮诊断支持以下判断：
+
+- 当前 OA gate 并非完全失效，它在框内/框外响应上具有明确区分度。
+- 当前 OA 的问题不是“没有对象感知”，而是“对象感知特征没有有效转化为小目标检测增益”。
+- `p2_resreflect` 可以作为最合理的 OA 消融保留，因为它在 gate 选择性、residual 框内响应和总体 mAP 上都略优于 `bifpn_only`，但增益太小，不能作为主贡献。
+- `oa_yolo_pan` 证明了 BiFPN 的必要性：去掉 BiFPN 后，即使保留 OA，整体性能明显下降。
+- 后续若继续训练新 OA 小目标增强版本，应把晋级标准设得更严格：不仅看 `person/motorcycle` recall，还必须看 small `mAP50-95` 和总体 `mAP50-95` 是否同步提升。
+
+下一步执行建议：
+
+1. 先启动两个新增 OA 小目标增强实验的冒烟测试，但不要一次性进入长训。
+2. 冒烟通过后，优先训练 `bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge`，因为当前诊断显示 P2 residual-reflect 仍是 OA 系列中最接近有效的方向。
+3. 若该实验不能同时提升 small `mAP50-95`、`person/motorcycle` 小目标 recall 和总体 `mAP50-95`，则停止继续强化 OA gate。
+4. 论文叙事建议改为：`Light NIR branch + BiFPN` 是主要精度来源；OA-MS SoftPrior 提供对象区域选择性和反射残差可解释性，但当前只作为辅助模块和消融分析，不作为小目标提升的唯一原因。
+

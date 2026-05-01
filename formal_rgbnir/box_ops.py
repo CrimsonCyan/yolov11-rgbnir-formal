@@ -3,6 +3,10 @@ from __future__ import annotations
 import torch
 
 
+SMALL_AREA_SIDE = 102.0
+MEDIUM_AREA_SIDE = 306.0
+
+
 def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     out = boxes.clone()
     out[..., 0] = boxes[..., 0] - boxes[..., 2] / 2.0
@@ -26,8 +30,8 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
 
 
 def area_bucket(area: float) -> str:
-    if area < 32.0 * 32.0:
+    if area <= SMALL_AREA_SIDE * SMALL_AREA_SIDE:
         return "small"
-    if area < 96.0 * 96.0:
+    if area <= MEDIUM_AREA_SIDE * MEDIUM_AREA_SIDE:
         return "medium"
     return "large"
