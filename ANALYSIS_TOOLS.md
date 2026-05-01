@@ -204,6 +204,8 @@ scripts/iddaw/analyze_oa_small_targets.py
 | `--per-image` | 否 | 逐图调用 `predict()`，速度较慢但可避免长序列推理显存缓存增长 |
 | `--save-images` | 否 | 每个 case 保存的预测框可视化图片数量，默认 `0` 不保存 |
 | `--save-image-conf` | 否 | 保存预测框图片时使用的置信度阈值，默认 `0.25` |
+| `--save-match-images` | 否 | 每个 case 保存的 `GT / Prediction / TP-FP-FN` 三图对照数量，默认 `0` 不保存 |
+| `--match-iou` | 否 | 三图对照中判定 TP 的 IoU 阈值，默认 `0.5` |
 | `--max-images` | 否 | 调试时限制图片数量，默认全量验证集 |
 
 ### 输出
@@ -222,6 +224,7 @@ runs/analysis/oa_small_targets/<case_name>/
 | `metrics_by_class_area.csv` | 各类别、各尺度 AP 与 PR |
 | `gate_summary.csv` | OA gate 和 residual correction 汇总 |
 | `pred_images/` | 可选输出，使用 `--save-images` 时保存带预测框的图片 |
+| `match_images/` | 可选输出，使用 `--save-match-images` 时保存 `GT / Prediction / TP-FP-FN` 三图对照 |
 
 总输出：
 
@@ -279,7 +282,9 @@ runs/analysis/oa_small_targets/<case_name>/
   --half \
   --per-image \
   --save-images 20 \
-  --save-image-conf 0.25
+  --save-image-conf 0.25 \
+  --save-match-images 20 \
+  --match-iou 0.5
 ```
 
 快速调试 20 张图：

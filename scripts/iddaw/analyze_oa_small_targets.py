@@ -51,6 +51,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--save-images", type=int, default=0, help="Save up to N annotated prediction images per case.")
     parser.add_argument("--save-image-conf", type=float, default=0.25, help="Confidence threshold for saved images.")
+    parser.add_argument("--save-match-images", type=int, default=0, help="Save up to N GT/Pred/TP-FP-FN comparison images per case.")
+    parser.add_argument("--match-iou", type=float, default=0.5, help="IoU threshold for TP/FP/FN visualization.")
     parser.add_argument("--max-images", type=int, default=0, help="Optional cap for quick debugging.")
     return parser.parse_args()
 
@@ -121,6 +123,33 @@ def collect_prediction(result) -> dict[str, object]:
     }
 
 
+def draw_labeled_box(image, box, label: str, color: tuple[int, int, int], thickness: int = 2) -> None:
+    import cv2
+
+    h, w = image.shape[:2]
+    x1, y1, x2, y2 = [int(round(float(value))) for value in box]
+    x1 = max(0, min(x1, w - 1))
+    x2 = max(0, min(x2, w - 1))
+    y1 = max(0, min(y1, h - 1))
+    y2 = max(0, min(y2, h - 1))
+    cv2.rectangle(image, (x1, y1), (x2, y2), color, thickness)
+    if not label:
+        return
+    (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+    y_text = max(y1, th + baseline + 3)
+    cv2.rectangle(image, (x1, y_text - th - baseline - 3), (min(x1 + tw + 3, w - 1), y_text + 2), color, -1)
+    cv2.putText(image, label, (x1 + 1, y_text - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+
+
+def add_panel_title(image, title: str, color: tuple[int, int, int] = (32, 32, 32)):
+    import cv2
+    import numpy as np
+
+    header = np.full((48, image.shape[1], image.shape[2]), 245, dtype=image.dtype)
+    cv2.putText(header, title, (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+    return np.vstack([header, image])
+
+
 def save_prediction_image(result, class_names: list[str], out_path: Path, conf_threshold: float) -> None:
     try:
         import cv2
@@ -146,16 +175,103 @@ def save_prediction_image(result, class_names: list[str], out_path: Path, conf_t
                 continue
             cls = int(label)
             color = palette[cls % len(palette)]
-            x1, y1, x2, y2 = [int(round(float(value))) for value in box]
-            cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
             name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
-            text = f"{name} {float(score):.2f}"
-            (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-            y_text = max(y1, th + baseline + 2)
-            cv2.rectangle(image, (x1, y_text - th - baseline - 2), (x1 + tw + 2, y_text + 2), color, -1)
-            cv2.putText(image, text, (x1 + 1, y_text - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+            draw_labeled_box(image, box, f"{name} {float(score):.2f}", color)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out_path), image)
+
+
+def match_image_predictions(prediction: dict[str, torch.Tensor], target: dict[str, object], conf: float, iou: float):
+    pred_boxes = prediction["boxes"]
+    pred_scores = prediction["scores"]
+    pred_labels = prediction["labels"]
+    keep = pred_scores >= conf
+    indices = torch.nonzero(keep, as_tuple=False).flatten().tolist()
+    indices.sort(key=lambda idx: float(pred_scores[idx]), reverse=True)
+
+    gt_boxes = target["boxes_xyxy"]
+    gt_labels = target["labels"]
+    matched_gt: set[int] = set()
+    tp_pred: list[int] = []
+    fp_pred: list[int] = []
+    for pred_idx in indices:
+        same_class = [
+            gt_idx
+            for gt_idx, gt_label in enumerate(gt_labels)
+            if int(gt_label) == int(pred_labels[pred_idx]) and gt_idx not in matched_gt
+        ]
+        if same_class:
+            ious = box_iou(pred_boxes[pred_idx].unsqueeze(0), gt_boxes[same_class]).squeeze(0)
+            best_iou, best_local_idx = torch.max(ious, dim=0)
+            if float(best_iou) >= iou:
+                matched_gt.add(same_class[int(best_local_idx)])
+                tp_pred.append(pred_idx)
+                continue
+        fp_pred.append(pred_idx)
+    fn_gt = [gt_idx for gt_idx in range(len(gt_boxes)) if gt_idx not in matched_gt]
+    return tp_pred, fp_pred, fn_gt
+
+
+def save_match_comparison_image(
+    result,
+    prediction: dict[str, torch.Tensor],
+    target: dict[str, object],
+    class_names: list[str],
+    out_dir: Path,
+    conf_threshold: float,
+    match_iou: float,
+) -> None:
+    try:
+        import cv2
+    except ImportError as exc:
+        raise RuntimeError("Saving TP/FP/FN images requires opencv-python/cv2.") from exc
+
+    stem = Path(result.path).stem
+    gt_panel = result.orig_img.copy()
+    pred_panel = result.orig_img.copy()
+    match_panel = result.orig_img.copy()
+    gt_color = (255, 128, 0)
+    tp_color = (0, 180, 0)
+    fp_color = (0, 0, 255)
+    fn_color = (255, 0, 0)
+
+    for box, label in zip(target["boxes_xyxy"], target["labels"]):
+        cls = int(label)
+        name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+        draw_labeled_box(gt_panel, box, name, gt_color)
+
+    for box, score, label in zip(prediction["boxes"], prediction["scores"], prediction["labels"]):
+        if float(score) < conf_threshold:
+            continue
+        cls = int(label)
+        name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+        draw_labeled_box(pred_panel, box, f"{name} {float(score):.2f}", (56, 56, 255))
+
+    tp_pred, fp_pred, fn_gt = match_image_predictions(prediction, target, conf_threshold, match_iou)
+    for pred_idx in tp_pred:
+        cls = int(prediction["labels"][pred_idx])
+        name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+        score = float(prediction["scores"][pred_idx])
+        draw_labeled_box(match_panel, prediction["boxes"][pred_idx], f"TP {name} {score:.2f}", tp_color, thickness=3)
+    for pred_idx in fp_pred:
+        cls = int(prediction["labels"][pred_idx])
+        name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+        score = float(prediction["scores"][pred_idx])
+        draw_labeled_box(match_panel, prediction["boxes"][pred_idx], f"FP {name} {score:.2f}", fp_color, thickness=2)
+    for gt_idx in fn_gt:
+        cls = int(target["labels"][gt_idx])
+        name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+        draw_labeled_box(match_panel, target["boxes_xyxy"][gt_idx], f"FN {name}", fn_color, thickness=3)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    gt_titled = add_panel_title(gt_panel, "GT", gt_color)
+    pred_titled = add_panel_title(pred_panel, f"Prediction conf>={conf_threshold:.2f}", (56, 56, 255))
+    match_titled = add_panel_title(match_panel, f"TP/FP/FN IoU>={match_iou:.2f}", (32, 32, 32))
+    compare = cv2.hconcat([gt_titled, pred_titled, match_titled])
+    cv2.imwrite(str(out_dir / f"{stem}_gt.jpg"), gt_titled)
+    cv2.imwrite(str(out_dir / f"{stem}_pred.jpg"), pred_titled)
+    cv2.imwrite(str(out_dir / f"{stem}_match.jpg"), match_titled)
+    cv2.imwrite(str(out_dir / f"{stem}_compare.jpg"), compare)
 
 
 def prediction_area_bucket(box: torch.Tensor) -> str:
@@ -414,13 +530,16 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         "residual_outside": [],
     }
     saved_images = 0
+    saved_match_images = 0
     image_out_dir = Path(args.out) / case.name / "pred_images"
+    match_image_out_dir = Path(args.out) / case.name / "match_images"
 
     for result in iter_predictions(model, images, args, mode_kwargs):
         image_path = Path(result.path)
         target = load_target(image_path, result.orig_shape)
+        prediction = collect_prediction(result)
         targets.append(target)
-        predictions.append(collect_prediction(result))
+        predictions.append(prediction)
         update_gate_stats(gate_stats, modules, target, class_names)
         if args.save_images > 0 and saved_images < args.save_images:
             save_prediction_image(
@@ -430,11 +549,23 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
                 args.save_image_conf,
             )
             saved_images += 1
+        if args.save_match_images > 0 and saved_match_images < args.save_match_images:
+            save_match_comparison_image(
+                result,
+                prediction,
+                target,
+                class_names,
+                match_image_out_dir,
+                args.save_image_conf,
+                args.match_iou,
+            )
+            saved_match_images += 1
 
     metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf)
     gate_summary = {key: mean(values) for key, values in gate_stats.items()}
     gate_summary["num_gate_samples"] = len(gate_stats["gate_all"])
     gate_summary["num_saved_images"] = saved_images
+    gate_summary["num_saved_match_images"] = saved_match_images
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     return {
