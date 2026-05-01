@@ -26,23 +26,34 @@ def _compute_ap(recalls: torch.Tensor, precisions: torch.Tensor) -> float:
     return ap / 101.0
 
 
+def _prediction_area_bucket(box: torch.Tensor) -> str:
+    width = float((box[2] - box[0]).clamp(min=0).item())
+    height = float((box[3] - box[1]).clamp(min=0).item())
+    return area_bucket(width * height)
+
+
 def _collect_records(predictions, targets, class_id: int, area_filter: str | None):
     pred_records: list[DetectionRecord] = []
-    gt_map: dict[str, list[tuple[torch.Tensor, bool]]] = {}
+    gt_map: dict[str, dict[str, list]] = {}
     for pred, target in zip(predictions, targets):
         image_id = target["sample_id"]
-        entries: list[tuple[torch.Tensor, bool]] = []
+        valid_entries: list[tuple[torch.Tensor, bool]] = []
+        ignored_boxes: list[torch.Tensor] = []
         for box, label, bucket in zip(target["boxes_xyxy"], target["labels"], target["area_buckets"]):
-            if int(label) == class_id and (area_filter is None or bucket == area_filter):
-                entries.append((box, False))
-        gt_map[image_id] = entries
+            if int(label) != class_id:
+                continue
+            if area_filter is None or bucket == area_filter:
+                valid_entries.append((box, False))
+            else:
+                ignored_boxes.append(box)
+        gt_map[image_id] = {"valid": valid_entries, "ignored": ignored_boxes}
         for box, score, label in zip(pred["boxes"], pred["scores"], pred["labels"]):
             if int(label) == class_id:
                 pred_records.append(
                     DetectionRecord(image_id=image_id, score=float(score), label=int(label), bbox_xyxy=box)
                 )
     pred_records.sort(key=lambda item: item.score, reverse=True)
-    total_gts = sum(len(items) for items in gt_map.values())
+    total_gts = sum(len(items["valid"]) for items in gt_map.values())
     return pred_records, gt_map, total_gts
 
 
@@ -53,22 +64,30 @@ def _ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float,
     tps = []
     fps = []
     for record in pred_records:
-        gt_entries = gt_map.get(record.image_id, [])
-        if not gt_entries:
-            tps.append(0.0)
-            fps.append(1.0)
+        entries = gt_map.get(record.image_id, {"valid": [], "ignored": []})
+        gt_entries = entries["valid"]
+        unmatched = [(idx, entry[0]) for idx, entry in enumerate(gt_entries) if not entry[1]]
+        if unmatched:
+            gt_boxes = torch.stack([box for _, box in unmatched], dim=0)
+            ious = box_iou(record.bbox_xyxy.unsqueeze(0), gt_boxes).squeeze(0)
+            best_iou, local_best_idx = torch.max(ious, dim=0)
+            if float(best_iou) >= iou_threshold:
+                best_idx = unmatched[int(local_best_idx)][0]
+                gt_entries[best_idx] = (gt_entries[best_idx][0], True)
+                tps.append(1.0)
+                fps.append(0.0)
+                continue
+
+        ignored_boxes = entries["ignored"]
+        if ignored_boxes:
+            ignored_ious = box_iou(record.bbox_xyxy.unsqueeze(0), torch.stack(ignored_boxes, dim=0)).squeeze(0)
+            if float(ignored_ious.max()) >= iou_threshold:
+                continue
+
+        if area_filter is not None and _prediction_area_bucket(record.bbox_xyxy) != area_filter:
             continue
-        gt_boxes = torch.stack([entry[0] for entry in gt_entries], dim=0)
-        ious = box_iou(record.bbox_xyxy.unsqueeze(0), gt_boxes).squeeze(0)
-        best_iou, best_idx = torch.max(ious, dim=0)
-        matched = gt_entries[int(best_idx)][1]
-        if float(best_iou) >= iou_threshold and not matched:
-            gt_entries[int(best_idx)] = (gt_entries[int(best_idx)][0], True)
-            tps.append(1.0)
-            fps.append(0.0)
-        else:
-            tps.append(0.0)
-            fps.append(1.0)
+        tps.append(0.0)
+        fps.append(1.0)
     if not tps:
         return 0.0
     tps_t = torch.tensor(tps).cumsum(0)

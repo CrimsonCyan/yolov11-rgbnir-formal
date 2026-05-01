@@ -202,6 +202,8 @@ scripts/iddaw/analyze_oa_small_targets.py
 | `--device` | 否 | 推理设备，默认 `0`；CPU 诊断可设为 `cpu` |
 | `--half` | 否 | CUDA 设备上启用 FP16 推理，降低显存占用 |
 | `--per-image` | 否 | 逐图调用 `predict()`，速度较慢但可避免长序列推理显存缓存增长 |
+| `--save-images` | 否 | 每个 case 保存的预测框可视化图片数量，默认 `0` 不保存 |
+| `--save-image-conf` | 否 | 保存预测框图片时使用的置信度阈值，默认 `0.25` |
 | `--max-images` | 否 | 调试时限制图片数量，默认全量验证集 |
 
 ### 输出
@@ -219,6 +221,7 @@ runs/analysis/oa_small_targets/<case_name>/
 | `summary.json` | 完整分析结果 |
 | `metrics_by_class_area.csv` | 各类别、各尺度 AP 与 PR |
 | `gate_summary.csv` | OA gate 和 residual correction 汇总 |
+| `pred_images/` | 可选输出，使用 `--save-images` 时保存带预测框的图片 |
 
 总输出：
 
@@ -274,7 +277,9 @@ runs/analysis/oa_small_targets/<case_name>/
   --out runs/analysis/oa_small_targets/core_compare \
   --device 0 \
   --half \
-  --per-image
+  --per-image \
+  --save-images 20 \
+  --save-image-conf 0.25
 ```
 
 快速调试 20 张图：
@@ -299,6 +304,7 @@ runs/analysis/oa_small_targets/<case_name>/
 - `residual_inside > residual_outside`：说明 residual correction 主要作用于目标区域。
 - `residual_inside` 很低：说明 residual 分支接近关闭，即使 gate 有响应也未明显改变特征。
 - 当前面积划分由 `formal_rgbnir/box_ops.py` 控制：`small <= 102^2`，`medium <= 306^2`，`large > 306^2`；面积基于验证图像原始像素坐标计算。该阈值按 IDD-AW 原图 `2048x1536` 与 `imgsz=640` 缩放关系设定，用于替代 COCO 默认 `32^2/96^2` 的过严小目标口径。
+- 分尺度 AP/PR 使用 area-ignore 逻辑：当前尺度外的 GT 不计入分母；预测框若命中当前尺度外 GT，或预测框自身面积不属于当前尺度且未匹配当前尺度 GT，则不计为 FP。这样可以避免 `AP_L` 被 small/medium 预测框错误压低。
 
 ## 4. 日志与进程辅助工具
 

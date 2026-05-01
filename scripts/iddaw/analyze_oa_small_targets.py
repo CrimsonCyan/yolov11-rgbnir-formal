@@ -48,6 +48,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run one image per predict() call. Slower, but avoids long-stream CUDA cache growth.",
     )
+    parser.add_argument("--save-images", type=int, default=0, help="Save up to N annotated prediction images per case.")
+    parser.add_argument("--save-image-conf", type=float, default=0.25, help="Confidence threshold for saved images.")
     parser.add_argument("--max-images", type=int, default=0, help="Optional cap for quick debugging.")
     return parser.parse_args()
 
@@ -116,6 +118,49 @@ def collect_prediction(result) -> dict[str, object]:
         "scores": boxes.conf.detach().cpu().float(),
         "labels": boxes.cls.detach().cpu().long(),
     }
+
+
+def save_prediction_image(result, class_names: list[str], out_path: Path, conf_threshold: float) -> None:
+    try:
+        import cv2
+    except ImportError as exc:
+        raise RuntimeError("Saving annotated images requires opencv-python/cv2.") from exc
+
+    image = result.orig_img.copy()
+    boxes = result.boxes
+    if boxes is not None and len(boxes) > 0:
+        palette = [
+            (56, 56, 255),
+            (151, 157, 255),
+            (31, 112, 255),
+            (29, 178, 255),
+            (49, 210, 207),
+            (10, 249, 72),
+        ]
+        xyxy = boxes.xyxy.detach().cpu().float()
+        scores = boxes.conf.detach().cpu().float()
+        labels = boxes.cls.detach().cpu().long()
+        for box, score, label in zip(xyxy, scores, labels):
+            if float(score) < conf_threshold:
+                continue
+            cls = int(label)
+            color = palette[cls % len(palette)]
+            x1, y1, x2, y2 = [int(round(float(value))) for value in box]
+            cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+            name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+            text = f"{name} {float(score):.2f}"
+            (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+            y_text = max(y1, th + baseline + 2)
+            cv2.rectangle(image, (x1, y_text - th - baseline - 2), (x1 + tw + 2, y_text + 2), color, -1)
+            cv2.putText(image, text, (x1 + 1, y_text - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(out_path), image)
+
+
+def prediction_area_bucket(box: torch.Tensor) -> str:
+    width = float((box[2] - box[0]).clamp(min=0).item())
+    height = float((box[3] - box[1]).clamp(min=0).item())
+    return area_bucket(width * height)
 
 
 def collect_gate_modules(model) -> list[torch.nn.Module]:
@@ -211,41 +256,66 @@ def iter_predictions(model: YOLO, images: list[Path], args: argparse.Namespace, 
         yield result
 
 
-def ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float, area_filter: str | None) -> float:
+def match_predictions_for_area(
+    predictions,
+    targets,
+    class_id: int,
+    iou_threshold: float,
+    area_filter: str | None,
+    conf: float | None = None,
+) -> tuple[list[float], list[float], int]:
     pred_records = []
     gt_map = {}
     for pred, target in zip(predictions, targets):
         image_id = target["sample_id"]
-        gt_entries = []
+        valid_entries = []
+        ignored_boxes = []
         for box, label, bucket in zip(target["boxes_xyxy"], target["labels"], target["area_buckets"]):
-            if int(label) == class_id and (area_filter is None or bucket == area_filter):
-                gt_entries.append([box, False])
-        gt_map[image_id] = gt_entries
+            if int(label) != class_id:
+                continue
+            if area_filter is None or bucket == area_filter:
+                valid_entries.append([box, False])
+            else:
+                ignored_boxes.append(box)
+        gt_map[image_id] = {"valid": valid_entries, "ignored": ignored_boxes}
         for box, score, label in zip(pred["boxes"], pred["scores"], pred["labels"]):
-            if int(label) == class_id:
+            if int(label) == class_id and (conf is None or float(score) >= conf):
                 pred_records.append((image_id, float(score), box))
     pred_records.sort(key=lambda item: item[1], reverse=True)
-    total_gts = sum(len(items) for items in gt_map.values())
-    if total_gts == 0:
-        return 0.0
+    total_gts = sum(len(items["valid"]) for items in gt_map.values())
     tps, fps = [], []
     for image_id, _, pred_box in pred_records:
-        gt_entries = gt_map.get(image_id, [])
-        if not gt_entries:
-            tps.append(0.0)
-            fps.append(1.0)
+        entries = gt_map.get(image_id, {"valid": [], "ignored": []})
+        gt_entries = entries["valid"]
+        unmatched = [(idx, entry[0]) for idx, entry in enumerate(gt_entries) if not entry[1]]
+        if unmatched:
+            gt_boxes = torch.stack([box for _, box in unmatched], dim=0)
+            ious = box_iou(pred_box.unsqueeze(0), gt_boxes).squeeze(0)
+            best_iou, local_best_idx = torch.max(ious, dim=0)
+            if float(best_iou) >= iou_threshold:
+                best_idx = unmatched[int(local_best_idx)][0]
+                gt_entries[best_idx][1] = True
+                tps.append(1.0)
+                fps.append(0.0)
+                continue
+
+        ignored_boxes = entries["ignored"]
+        if ignored_boxes:
+            ignored_ious = box_iou(pred_box.unsqueeze(0), torch.stack(ignored_boxes, dim=0)).squeeze(0)
+            if float(ignored_ious.max()) >= iou_threshold:
+                continue
+
+        if area_filter is not None and prediction_area_bucket(pred_box) != area_filter:
             continue
-        gt_boxes = torch.stack([entry[0] for entry in gt_entries], dim=0)
-        ious = box_iou(pred_box.unsqueeze(0), gt_boxes).squeeze(0)
-        best_iou, best_idx = torch.max(ious, dim=0)
-        matched = gt_entries[int(best_idx)][1]
-        if float(best_iou) >= iou_threshold and not matched:
-            gt_entries[int(best_idx)][1] = True
-            tps.append(1.0)
-            fps.append(0.0)
-        else:
-            tps.append(0.0)
-            fps.append(1.0)
+        tps.append(0.0)
+        fps.append(1.0)
+    return tps, fps, total_gts
+
+
+def ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float, area_filter: str | None) -> float:
+    tps, fps, total_gts = match_predictions_for_area(predictions, targets, class_id, iou_threshold, area_filter)
+    if total_gts == 0:
+        return 0.0
     if not tps:
         return 0.0
     tps_t = torch.tensor(tps).cumsum(0)
@@ -260,39 +330,11 @@ def ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float, 
 
 
 def pr_at_conf(predictions, targets, class_id: int, area_filter: str | None, conf: float, iou_threshold: float = 0.5):
-    filtered = []
-    for pred in predictions:
-        keep = pred["scores"] >= conf
-        filtered.append({"boxes": pred["boxes"][keep], "scores": pred["scores"][keep], "labels": pred["labels"][keep]})
-    pred_records = []
-    gt_map = {}
-    for pred, target in zip(filtered, targets):
-        image_id = target["sample_id"]
-        gt_entries = []
-        for box, label, bucket in zip(target["boxes_xyxy"], target["labels"], target["area_buckets"]):
-            if int(label) == class_id and (area_filter is None or bucket == area_filter):
-                gt_entries.append([box, False])
-        gt_map[image_id] = gt_entries
-        for box, score, label in zip(pred["boxes"], pred["scores"], pred["labels"]):
-            if int(label) == class_id:
-                pred_records.append((image_id, float(score), box))
-    pred_records.sort(key=lambda item: item[1], reverse=True)
-    tp = fp = 0
-    for image_id, _, pred_box in pred_records:
-        gt_entries = gt_map.get(image_id, [])
-        if not gt_entries:
-            fp += 1
-            continue
-        gt_boxes = torch.stack([entry[0] for entry in gt_entries], dim=0)
-        ious = box_iou(pred_box.unsqueeze(0), gt_boxes).squeeze(0)
-        best_iou, best_idx = torch.max(ious, dim=0)
-        matched = gt_entries[int(best_idx)][1]
-        if float(best_iou) >= iou_threshold and not matched:
-            gt_entries[int(best_idx)][1] = True
-            tp += 1
-        else:
-            fp += 1
-    total_gts = sum(len(items) for items in gt_map.values())
+    tps, fps, total_gts = match_predictions_for_area(
+        predictions, targets, class_id, iou_threshold, area_filter, conf=conf
+    )
+    tp = int(sum(tps))
+    fp = int(sum(fps))
     precision = tp / max(tp + fp, 1)
     recall = tp / max(total_gts, 1)
     return precision, recall, total_gts
@@ -361,6 +403,8 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         "residual_inside": [],
         "residual_outside": [],
     }
+    saved_images = 0
+    image_out_dir = Path(args.out) / case.name / "pred_images"
 
     for result in iter_predictions(model, images, args, mode_kwargs):
         image_path = Path(result.path)
@@ -368,10 +412,19 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         targets.append(target)
         predictions.append(collect_prediction(result))
         update_gate_stats(gate_stats, modules, target, class_names)
+        if args.save_images > 0 and saved_images < args.save_images:
+            save_prediction_image(
+                result,
+                class_names,
+                image_out_dir / f"{image_path.stem}_pred.jpg",
+                args.save_image_conf,
+            )
+            saved_images += 1
 
     metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf)
     gate_summary = {key: mean(values) for key, values in gate_stats.items()}
     gate_summary["num_gate_samples"] = len(gate_stats["gate_all"])
+    gate_summary["num_saved_images"] = saved_images
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     return {
