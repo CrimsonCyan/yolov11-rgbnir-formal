@@ -183,6 +183,7 @@ scripts/iddaw/analyze_oa_small_targets.py
 - OA gate 的整体均值、GT 框内均值、GT 框外均值。
 - `person/motorcycle` 框内 gate 均值。
 - residual-reflect 分支的修正量强度。
+- 逐图逐类 TP/FP/FN 统计，以及同类“大框包含小框”的重复预测统计。
 
 该工具用于回答：OA 是否真的关注小目标区域，以及 residual correction 是否在小目标框内强于背景。
 
@@ -206,6 +207,11 @@ scripts/iddaw/analyze_oa_small_targets.py
 | `--save-image-conf` | 否 | 保存预测框图片时使用的置信度阈值，默认 `0.25` |
 | `--save-match-images` | 否 | 每个 case 保存的 `GT / Prediction / TP-FP-FN` 三图对照数量，默认 `0` 不保存 |
 | `--match-iou` | 否 | 三图对照中判定 TP 的 IoU 阈值，默认 `0.5` |
+| `--containment-suppress` | 否 | 启用同类包含框后处理，优先抑制“包住小框的大框” |
+| `--containment-conf` | 否 | 包含框统计和抑制使用的置信度阈值，默认等于 `--pr-conf` |
+| `--containment-overlap` | 否 | 小框被大框覆盖的最小比例，默认 `0.8` |
+| `--containment-area-ratio` | 否 | 大框/小框面积比下限，默认 `1.5` |
+| `--containment-conf-margin` | 否 | 大框分数超过小框多少时才保留大框，默认 `0.05` |
 | `--max-images` | 否 | 调试时限制图片数量，默认全量验证集 |
 
 ### 输出
@@ -222,6 +228,7 @@ runs/analysis/oa_small_targets/<case_name>/
 | --- | --- |
 | `summary.json` | 完整分析结果 |
 | `metrics_by_class_area.csv` | 各类别、各尺度 AP 与 PR |
+| `match_summary.csv` | 逐图逐类 `GT / Pred / TP / FP / FN`、precision、recall、包含框统计 |
 | `gate_summary.csv` | OA gate 和 residual correction 汇总 |
 | `pred_images/` | 可选输出，使用 `--save-images` 时保存带预测框的图片 |
 | `match_images/` | 可选输出，使用 `--save-match-images` 时保存 `GT / Prediction / TP-FP-FN` 三图对照 |
@@ -243,6 +250,19 @@ runs/analysis/oa_small_targets/<case_name>/
 | `mAP50_95` | IoU=0.5:0.95 的平均 AP |
 | `precision_at_conf` | `--pr-conf` 下 precision |
 | `recall_at_conf` | `--pr-conf` 下 recall |
+
+`match_summary.csv` 关键列：
+
+| 列 | 含义 |
+| --- | --- |
+| `image_id` | 图像 ID |
+| `class` | `all` 或具体类别 |
+| `gt_count` | 当前图像、当前类别的 GT 数量 |
+| `pred_count` | `--pr-conf` 下当前图像、当前类别的预测数量 |
+| `tp/fp/fn` | `--match-iou` 下的匹配结果 |
+| `precision/recall` | 当前图像、当前类别的固定阈值 PR |
+| `containment_pairs` | 同类大框包含小框的候选对数量 |
+| `containment_suppressed` | 启用 `--containment-suppress` 后被抑制的框数 |
 
 `gate_summary.csv` 关键项：
 
@@ -284,7 +304,9 @@ runs/analysis/oa_small_targets/<case_name>/
   --save-images 20 \
   --save-image-conf 0.25 \
   --save-match-images 20 \
-  --match-iou 0.5
+  --match-iou 0.5 \
+  --iou 0.6 \
+  --containment-suppress
 ```
 
 快速调试 20 张图：
@@ -310,6 +332,8 @@ runs/analysis/oa_small_targets/<case_name>/
 - `residual_inside` 很低：说明 residual 分支接近关闭，即使 gate 有响应也未明显改变特征。
 - 当前面积划分由 `formal_rgbnir/box_ops.py` 控制：`small <= 102^2`，`medium <= 306^2`，`large > 306^2`；面积基于验证图像原始像素坐标计算。该阈值按 IDD-AW 原图 `2048x1536` 与 `imgsz=640` 缩放关系设定，用于替代 COCO 默认 `32^2/96^2` 的过严小目标口径。
 - 分尺度 AP/PR 使用 area-ignore 逻辑：当前尺度外的 GT 不计入分母；预测框若命中当前尺度外 GT，或预测框自身面积不属于当前尺度且未匹配当前尺度 GT，则不计为 FP。这样可以避免 `AP_L` 被 small/medium 预测框错误压低。
+- `--iou` 是 Ultralytics NMS 的 IoU 阈值，会改变最终保留下来的预测框，因此会影响本脚本重新计算的 AP/PR。
+- `--containment-suppress` 是 NMS 之后的额外诊断后处理：只处理同类框，当一个大框覆盖小框面积比例超过 `--containment-overlap` 且面积比超过 `--containment-area-ratio` 时，默认抑制大框；只有当大框置信度比小框高出 `--containment-conf-margin` 以上时才保留大框并抑制小框。
 
 ## 4. 日志与进程辅助工具
 

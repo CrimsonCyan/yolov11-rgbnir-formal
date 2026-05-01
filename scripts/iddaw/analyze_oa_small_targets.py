@@ -53,6 +53,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-image-conf", type=float, default=0.25, help="Confidence threshold for saved images.")
     parser.add_argument("--save-match-images", type=int, default=0, help="Save up to N GT/Pred/TP-FP-FN comparison images per case.")
     parser.add_argument("--match-iou", type=float, default=0.5, help="IoU threshold for TP/FP/FN visualization.")
+    parser.add_argument(
+        "--containment-suppress",
+        action="store_true",
+        help="Suppress same-class large boxes that mostly contain smaller boxes before metric/match summaries.",
+    )
+    parser.add_argument(
+        "--containment-conf",
+        type=float,
+        default=None,
+        help="Confidence threshold used by containment suppression/statistics. Defaults to --pr-conf.",
+    )
+    parser.add_argument(
+        "--containment-overlap",
+        type=float,
+        default=0.8,
+        help="Minimum intersection/small-box-area ratio for same-class containment.",
+    )
+    parser.add_argument(
+        "--containment-area-ratio",
+        type=float,
+        default=1.5,
+        help="Minimum large-box/small-box area ratio for containment suppression/statistics.",
+    )
+    parser.add_argument(
+        "--containment-conf-margin",
+        type=float,
+        default=0.05,
+        help="Suppress the large box unless its score exceeds the small box by this margin.",
+    )
     parser.add_argument("--max-images", type=int, default=0, help="Optional cap for quick debugging.")
     return parser.parse_args()
 
@@ -123,6 +152,99 @@ def collect_prediction(result) -> dict[str, object]:
     }
 
 
+def box_area_xyxy(box: torch.Tensor) -> float:
+    return float(((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0)).item())
+
+
+def intersection_area_xyxy(box1: torch.Tensor, box2: torch.Tensor) -> float:
+    left_top = torch.maximum(box1[:2], box2[:2])
+    right_bottom = torch.minimum(box1[2:], box2[2:])
+    wh = (right_bottom - left_top).clamp(min=0)
+    return float((wh[0] * wh[1]).item())
+
+
+def find_containment_pairs(
+    prediction: dict[str, torch.Tensor],
+    conf: float,
+    overlap_threshold: float,
+    area_ratio_threshold: float,
+) -> list[tuple[int, int, int]]:
+    boxes = prediction["boxes"]
+    scores = prediction["scores"]
+    labels = prediction["labels"]
+    indices = torch.nonzero(scores >= conf, as_tuple=False).flatten().tolist()
+    pairs: list[tuple[int, int, int]] = []
+    for pos, idx_a in enumerate(indices):
+        for idx_b in indices[pos + 1 :]:
+            if int(labels[idx_a]) != int(labels[idx_b]):
+                continue
+            area_a = box_area_xyxy(boxes[idx_a])
+            area_b = box_area_xyxy(boxes[idx_b])
+            if area_a <= 0.0 or area_b <= 0.0:
+                continue
+            if area_a >= area_b:
+                large_idx, small_idx = idx_a, idx_b
+                large_area, small_area = area_a, area_b
+            else:
+                large_idx, small_idx = idx_b, idx_a
+                large_area, small_area = area_b, area_a
+            if large_area / max(small_area, 1e-6) < area_ratio_threshold:
+                continue
+            contained = intersection_area_xyxy(boxes[large_idx], boxes[small_idx]) / max(small_area, 1e-6)
+            if contained >= overlap_threshold:
+                pairs.append((large_idx, small_idx, int(labels[large_idx])))
+    return pairs
+
+
+def containment_counts_by_class(pairs: list[tuple[int, int, int]], class_names: list[str]) -> dict[str, int]:
+    counts = {name: 0 for name in class_names}
+    for _, _, cls in pairs:
+        if 0 <= cls < len(class_names):
+            counts[class_names[cls]] += 1
+    return counts
+
+
+def suppress_contained_predictions(
+    prediction: dict[str, torch.Tensor],
+    conf: float,
+    overlap_threshold: float,
+    area_ratio_threshold: float,
+    conf_margin: float,
+) -> tuple[dict[str, torch.Tensor], list[int], list[tuple[int, int, int]]]:
+    pairs = find_containment_pairs(prediction, conf, overlap_threshold, area_ratio_threshold)
+    if not pairs:
+        return prediction, [], pairs
+
+    boxes = prediction["boxes"]
+    scores = prediction["scores"]
+    # Resolve stronger containment conflicts first, so chained overlaps stay deterministic.
+    pairs.sort(
+        key=lambda item: box_area_xyxy(boxes[item[0]]) / max(box_area_xyxy(boxes[item[1]]), 1e-6),
+        reverse=True,
+    )
+    suppressed: set[int] = set()
+    for large_idx, small_idx, _ in pairs:
+        if large_idx in suppressed or small_idx in suppressed:
+            continue
+        large_score = float(scores[large_idx])
+        small_score = float(scores[small_idx])
+        if large_score <= small_score + conf_margin:
+            suppressed.add(large_idx)
+        else:
+            suppressed.add(small_idx)
+
+    if not suppressed:
+        return prediction, [], pairs
+    keep = torch.ones(len(scores), dtype=torch.bool)
+    keep[list(suppressed)] = False
+    filtered = {
+        "boxes": prediction["boxes"][keep],
+        "scores": prediction["scores"][keep],
+        "labels": prediction["labels"][keep],
+    }
+    return filtered, sorted(suppressed), pairs
+
+
 def draw_labeled_box(image, box, label: str, color: tuple[int, int, int], thickness: int = 2) -> None:
     import cv2
 
@@ -150,15 +272,33 @@ def add_panel_title(image, title: str, color: tuple[int, int, int] = (32, 32, 32
     return np.vstack([header, image])
 
 
-def save_prediction_image(result, class_names: list[str], out_path: Path, conf_threshold: float) -> None:
+def save_prediction_image(
+    result,
+    class_names: list[str],
+    out_path: Path,
+    conf_threshold: float,
+    prediction: dict[str, torch.Tensor] | None = None,
+) -> None:
     try:
         import cv2
     except ImportError as exc:
         raise RuntimeError("Saving annotated images requires opencv-python/cv2.") from exc
 
     image = result.orig_img.copy()
-    boxes = result.boxes
-    if boxes is not None and len(boxes) > 0:
+    if prediction is None:
+        boxes = result.boxes
+        if boxes is None or len(boxes) == 0:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(out_path), image)
+            return
+        xyxy = boxes.xyxy.detach().cpu().float()
+        scores = boxes.conf.detach().cpu().float()
+        labels = boxes.cls.detach().cpu().long()
+    else:
+        xyxy = prediction["boxes"]
+        scores = prediction["scores"]
+        labels = prediction["labels"]
+    if len(xyxy) > 0:
         palette = [
             (56, 56, 255),
             (151, 157, 255),
@@ -167,9 +307,6 @@ def save_prediction_image(result, class_names: list[str], out_path: Path, conf_t
             (49, 210, 207),
             (10, 249, 72),
         ]
-        xyxy = boxes.xyxy.detach().cpu().float()
-        scores = boxes.conf.detach().cpu().float()
-        labels = boxes.cls.detach().cpu().long()
         for box, score, label in zip(xyxy, scores, labels):
             if float(score) < conf_threshold:
                 continue
@@ -210,6 +347,65 @@ def match_image_predictions(prediction: dict[str, torch.Tensor], target: dict[st
         fp_pred.append(pred_idx)
     fn_gt = [gt_idx for gt_idx in range(len(gt_boxes)) if gt_idx not in matched_gt]
     return tp_pred, fp_pred, fn_gt
+
+
+def summarize_image_matches(
+    image_path: Path,
+    prediction: dict[str, torch.Tensor],
+    target: dict[str, object],
+    class_names: list[str],
+    conf: float,
+    iou: float,
+    containment_pairs: list[tuple[int, int, int]],
+    suppressed_indices: list[int],
+    raw_prediction: dict[str, torch.Tensor],
+) -> list[dict[str, object]]:
+    tp_pred, fp_pred, fn_gt = match_image_predictions(prediction, target, conf, iou)
+    pred_labels = prediction["labels"]
+    pred_scores = prediction["scores"]
+    target_labels = target["labels"]
+    suppressed_labels = raw_prediction["labels"]
+    pair_counts = containment_counts_by_class(containment_pairs, class_names)
+    suppressed_counts = {name: 0 for name in class_names}
+    for idx in suppressed_indices:
+        cls = int(suppressed_labels[idx])
+        if 0 <= cls < len(class_names):
+            suppressed_counts[class_names[cls]] += 1
+
+    rows = []
+    classes = ["all", *class_names]
+    for cls_name in classes:
+        cls_id = None if cls_name == "all" else class_names.index(cls_name)
+        gt_count = int(len(target_labels)) if cls_id is None else int((target_labels == cls_id).sum().item())
+        if cls_id is None:
+            pred_mask = pred_scores >= conf
+        else:
+            pred_mask = (pred_scores >= conf) & (pred_labels == cls_id)
+        pred_count = int(pred_mask.sum().item())
+        tp_count = len(tp_pred) if cls_id is None else sum(int(pred_labels[idx]) == cls_id for idx in tp_pred)
+        fp_count = len(fp_pred) if cls_id is None else sum(int(pred_labels[idx]) == cls_id for idx in fp_pred)
+        fn_count = len(fn_gt) if cls_id is None else sum(int(target_labels[idx]) == cls_id for idx in fn_gt)
+        containment_pair_count = len(containment_pairs) if cls_id is None else pair_counts[cls_name]
+        suppressed_count = len(suppressed_indices) if cls_id is None else suppressed_counts[cls_name]
+        rows.append(
+            {
+                "image_id": target["sample_id"],
+                "image_path": str(image_path),
+                "class": cls_name,
+                "gt_count": gt_count,
+                "pred_count": pred_count,
+                "tp": tp_count,
+                "fp": fp_count,
+                "fn": fn_count,
+                "precision": tp_count / max(tp_count + fp_count, 1),
+                "recall": tp_count / max(gt_count, 1),
+                "conf": conf,
+                "match_iou": iou,
+                "containment_pairs": containment_pair_count,
+                "containment_suppressed": suppressed_count,
+            }
+        )
+    return rows
 
 
 def save_match_comparison_image(
@@ -519,6 +715,7 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
 
     predictions = []
     targets = []
+    match_rows: list[dict[str, object]] = []
     gate_stats: dict[str, list[float]] = {
         "gate_all": [],
         "gate_inside": [],
@@ -533,20 +730,51 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
     saved_match_images = 0
     image_out_dir = Path(args.out) / case.name / "pred_images"
     match_image_out_dir = Path(args.out) / case.name / "match_images"
+    containment_conf = args.containment_conf if args.containment_conf is not None else args.pr_conf
 
     for result in iter_predictions(model, images, args, mode_kwargs):
         image_path = Path(result.path)
         target = load_target(image_path, result.orig_shape)
-        prediction = collect_prediction(result)
+        raw_prediction = collect_prediction(result)
+        containment_pairs = find_containment_pairs(
+            raw_prediction,
+            containment_conf,
+            args.containment_overlap,
+            args.containment_area_ratio,
+        )
+        suppressed_indices: list[int] = []
+        prediction = raw_prediction
+        if args.containment_suppress:
+            prediction, suppressed_indices, containment_pairs = suppress_contained_predictions(
+                raw_prediction,
+                containment_conf,
+                args.containment_overlap,
+                args.containment_area_ratio,
+                args.containment_conf_margin,
+            )
         targets.append(target)
         predictions.append(prediction)
         update_gate_stats(gate_stats, modules, target, class_names)
+        match_rows.extend(
+            summarize_image_matches(
+                image_path,
+                prediction,
+                target,
+                class_names,
+                args.pr_conf,
+                args.match_iou,
+                containment_pairs,
+                suppressed_indices,
+                raw_prediction,
+            )
+        )
         if args.save_images > 0 and saved_images < args.save_images:
             save_prediction_image(
                 result,
                 class_names,
                 image_out_dir / f"{image_path.stem}_pred.jpg",
                 args.save_image_conf,
+                prediction,
             )
             saved_images += 1
         if args.save_match_images > 0 and saved_match_images < args.save_match_images:
@@ -573,7 +801,20 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         "mode": case.mode,
         "weights": str(case.weights),
         "num_images": len(images),
+        "diagnostic_args": {
+            "imgsz": args.imgsz,
+            "conf": args.conf,
+            "pr_conf": args.pr_conf,
+            "nms_iou": args.iou,
+            "match_iou": args.match_iou,
+            "containment_suppress": args.containment_suppress,
+            "containment_conf": containment_conf,
+            "containment_overlap": args.containment_overlap,
+            "containment_area_ratio": args.containment_area_ratio,
+            "containment_conf_margin": args.containment_conf_margin,
+        },
         "metrics": metric_rows,
+        "match_summary": match_rows,
         "gate_summary": gate_summary,
     }
 
@@ -592,6 +833,12 @@ def write_case_outputs(out_dir: Path, payload: dict[str, object]) -> None:
         writer.writerow(["metric", "value"])
         for key, value in payload["gate_summary"].items():
             writer.writerow([key, value])
+    match_rows = payload.get("match_summary") or []
+    if match_rows:
+        with (case_dir / "match_summary.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(match_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(match_rows)
 
 
 def main() -> None:
