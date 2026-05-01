@@ -3182,3 +3182,83 @@ Gate 结论与旧口径一致：OA gate 明显更关注目标框内区域，resi
 - `p3_plain` 的优势主要出现在 large `mAP50-95`，不符合当前小目标增强目标。
 - 下一轮若继续跑 OA 小目标增强实验，应使用新面积口径复验；晋级标准应改为同时超过 `bifpn_only` 的 small `mAP50-95 = 0.11070`、`person small mAP50-95 = 0.12583` 和 `motorcycle small mAP50-95 = 0.13043`。
 
+### 12.28 分尺度 AP/PR 修复与 TP-FP-FN 可视化诊断
+
+发现问题：
+
+- 旧版分尺度 AP/PR 只按 GT 面积过滤当前尺度，但预测框仍保留全类别所有预测。
+- 这会导致计算 `large` 指标时，命中 small/medium GT 的预测框被错误计为 large FP，从而压低 `AP_L`。
+- 因此 12.27 中的分尺度 AP/PR 不应继续作为论文或实验结论引用。
+
+修复方式：
+
+- 当前尺度外的 GT 不计入当前尺度分母。
+- 预测框如果匹配到当前尺度外 GT，则 ignore，不计 TP/FP。
+- 预测框如果自身面积不属于当前尺度且未匹配当前尺度 GT，也 ignore，不计 FP。
+- 新增 `GT / Prediction / TP-FP-FN` 三图对照输出：
+  - `GT`：标注框。
+  - `Prediction`：指定置信度阈值下的预测框。
+  - `TP-FP-FN`：TP 绿色，FP 红色，FN 蓝色。
+
+代码提交：
+
+```text
+8600397 Fix area-aware AP diagnostics
+ca47e26 Fix RGB-NIR diagnostic source loading
+558d245 Add TP FP FN diagnostic visualizations
+```
+
+全量诊断输出：
+
+```text
+/data1/lvyanhu/code/yolov11-rgbnir-formal/runs/analysis/oa_small_targets/core_compare_area102_306_tpfpfn_20260501_220512
+```
+
+诊断设置：
+
+```text
+imgsz=800
+conf=0.001
+pr_conf=0.25
+nms_iou=0.7
+match_iou=0.5
+device=0
+half=False
+per_image=False
+save_match_images=20 per case
+```
+
+每个 case 已生成 `20` 张 `*_compare.jpg` 三图对照，并同时保存单独的 `*_gt.jpg`、`*_pred.jpg`、`*_match.jpg`。
+
+修复后分尺度结果：
+
+| 模型 | all mAP50-95 | small mAP50-95 | medium mAP50-95 | large mAP50-95 | small P/R@0.25 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `bifpn_only` | `0.46903` | `0.35829` | `0.56481` | `0.58935` | `0.61588 / 0.53221` |
+| `p2_resreflect` | `0.46907` | `0.32884` | `0.56371` | `0.62608` | `0.60394 / 0.50687` |
+| `p3_plain` | `0.46795` | `0.36116` | `0.55281` | `0.61232` | `0.61449 / 0.52659` |
+| `oa_yolo_pan` | `0.43602` | `0.32792` | `0.53747` | `0.55890` | `0.53733 / 0.48942` |
+
+关键类别小目标结果：
+
+| 模型 | person small mAP50-95 | person small P/R@0.25 | motorcycle small mAP50-95 | motorcycle small P/R@0.25 |
+| --- | ---: | --- | ---: | --- |
+| `bifpn_only` | `0.22489` | `0.68428 / 0.43824` | `0.22281` | `0.69755 / 0.45633` |
+| `p2_resreflect` | `0.23089` | `0.68726 / 0.42880` | `0.21251` | `0.68831 / 0.47237` |
+| `p3_plain` | `0.22852` | `0.70977 / 0.40598` | `0.21264` | `0.70882 / 0.42959` |
+| `oa_yolo_pan` | `0.21597` | `0.66237 / 0.40441` | `0.20399` | `0.67213 / 0.43850` |
+
+修复后结论：
+
+- 分尺度结果恢复为更合理的趋势：整体上 `AP_S < AP_M < AP_L`。
+- `bifpn_only` 仍是 small 总体最稳的结构，small `mAP50-95 = 0.35829`。
+- `p3_plain` 的 small `mAP50-95 = 0.36116` 略高于 `bifpn_only`，但 all `mAP50-95` 略低，且 `person/motorcycle` small recall 更低，不足以替代主线。
+- `p2_resreflect` 的 all `mAP50-95 = 0.46907` 与 `bifpn_only = 0.46903` 基本持平，并提升 `person small mAP50-95`，但降低 small 总体和 motorcycle small mAP。
+- `oa_yolo_pan` 仍显著低于 BiFPN 系列，继续支持 BiFPN 是主要结构增益来源。
+
+后续引用原则：
+
+- 12.28 之后的分尺度 AP/PR 结果可用于论文和后续实验分析。
+- 12.26 和 12.27 的分尺度 AP/PR 仅保留为排查过程记录，不再作为最终结论。
+- 论文案例图应从本节输出的 `*_compare.jpg` 中筛选，优先选择 TP/FP/FN 差异明显、且能体现小目标漏检或背景误检的样本。
+
