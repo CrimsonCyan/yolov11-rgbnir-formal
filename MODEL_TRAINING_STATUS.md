@@ -3262,3 +3262,96 @@ save_match_images=20 per case
 - 12.26 和 12.27 的分尺度 AP/PR 仅保留为排查过程记录，不再作为最终结论。
 - 论文案例图应从本节输出的 `*_compare.jpg` 中筛选，优先选择 TP/FP/FN 差异明显、且能体现小目标漏检或背景误检的样本。
 
+### 12.29 NMS IoU=0.6 与同类包含框抑制诊断
+
+本轮目的：
+
+- 检查将 Ultralytics NMS IoU 从 `0.7` 调整为 `0.6` 后，对重复框、包含框和分尺度指标的影响。
+- 新增 `match_summary.csv`，逐图逐类统计 `GT / Pred / TP / FP / FN`、固定阈值 PR、同类“大框包含小框”候选对数量。
+- 新增 `--containment-suppress`，在 NMS 后对同类包含框做诊断性后处理：当大框覆盖小框面积比例超过 `0.8` 且大框/小框面积比超过 `1.5` 时，默认抑制大框；只有当大框置信度比小框高出 `0.05` 以上时才保留大框并抑制小框。
+
+代码提交：
+
+```text
+fb856bc Add containment suppression diagnostics
+```
+
+诊断输出：
+
+```text
+/data1/lvyanhu/code/yolov11-rgbnir-formal/runs/analysis/oa_small_targets/core_compare_area102_306_nms06_containment_20260501_231804
+```
+
+诊断设置：
+
+```text
+imgsz=800
+conf=0.001
+pr_conf=0.25
+nms_iou=0.6
+match_iou=0.5
+device=0
+half=False
+per_image=False
+containment_suppress=True
+containment_conf=0.25
+containment_overlap=0.8
+containment_area_ratio=1.5
+containment_conf_margin=0.05
+save_match_images=20 per case
+```
+
+#### 12.29.1 分尺度总体结果
+
+| 模型 | all mAP50-95 | small mAP50-95 | medium mAP50-95 | large mAP50-95 | small P/R@0.25 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `bifpn_only` | `0.46802` | `0.35767` | `0.56097` | `0.58351` | `0.64454 / 0.52766` |
+| `p2_resreflect` | `0.46451` | `0.31874` | `0.56127` | `0.61290` | `0.64464 / 0.50035` |
+| `p3_plain` | `0.46666` | `0.35916` | `0.54944` | `0.61042` | `0.63690 / 0.52464` |
+| `oa_yolo_pan` | `0.43484` | `0.32637` | `0.53677` | `0.54835` | `0.56808 / 0.48482` |
+
+与 12.28 的 `NMS IoU=0.7` 诊断相比：
+
+- `bifpn_only` 的 all `mAP50-95` 从 `0.46903` 降到 `0.46802`，small `mAP50-95` 从 `0.35829` 降到 `0.35767`，变化很小。
+- `p2_resreflect` 降幅较明显，all `mAP50-95` 从 `0.46907` 降到 `0.46451`，small `mAP50-95` 从 `0.32884` 降到 `0.31874`。
+- `p3_plain` 的 small `mAP50-95 = 0.35916` 仍略高于 `bifpn_only = 0.35767`，但 all `mAP50-95` 更低，且关键类别召回不足。
+- `oa_yolo_pan` 仍明显弱于 BiFPN 系列。
+
+#### 12.29.2 person / motorcycle 结果
+
+| 模型 | person all mAP50-95 | person small mAP50-95 | person small P/R@0.25 | motorcycle all mAP50-95 | motorcycle small mAP50-95 | motorcycle small P/R@0.25 |
+| --- | ---: | ---: | --- | ---: | ---: | --- |
+| `bifpn_only` | `0.28729` | `0.22338` | `0.74691 / 0.42722` | `0.27721` | `0.22046` | `0.76292 / 0.44742` |
+| `p2_resreflect` | `0.29605` | `0.23086` | `0.74480 / 0.42250` | `0.26901` | `0.21049` | `0.74785 / 0.46524` |
+| `p3_plain` | `0.29356` | `0.22653` | `0.77896 / 0.40205` | `0.26991` | `0.21076` | `0.75796 / 0.42424` |
+| `oa_yolo_pan` | `0.27547` | `0.21502` | `0.74003 / 0.39418` | `0.25579` | `0.19908` | `0.74224 / 0.42602` |
+
+类别结论：
+
+- `p2_resreflect` 继续保持 `person all/small mAP50-95` 局部优势，但 `person small recall` 仍低于 `bifpn_only`。
+- `p2_resreflect` 的 `motorcycle small recall = 0.46524` 高于 `bifpn_only = 0.44742`，但 `motorcycle small mAP50-95` 更低，说明新增候选框的定位质量或排序质量不足。
+- `p3_plain` 的 precision 较高，但 recall 低，说明该变体更保守，不适合当前以小目标召回为核心的优化目标。
+
+#### 12.29.3 包含框统计与固定阈值匹配
+
+`match_summary.csv` 已在每个 case 下生成。按 `class=all` 聚合结果如下：
+
+| 模型 | TP@0.25 | FP@0.25 | FN@0.25 | containment pairs | containment suppressed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `bifpn_only` | `2505` | `712` | `1526` | `126` | `121` |
+| `p2_resreflect` | `2514` | `731` | `1517` | `132` | `124` |
+| `p3_plain` | `2484` | `714` | `1547` | `113` | `106` |
+| `oa_yolo_pan` | `2424` | `796` | `1607` | `132` | `127` |
+
+诊断结论：
+
+- 同类包含框问题真实存在，每个模型在 `conf=0.25` 下都有约 `113-132` 组大框包含小框候选。
+- `--containment-suppress` 能移除其中大部分候选框，但没有带来 mAP 提升；在当前设置下，它更适合作为可视化和错误分析工具，而不是直接作为默认推理后处理。
+- 单纯将 NMS IoU 降到 `0.6` 也没有稳定收益。它可能减少部分重复框，但同时会更早抑制拥挤场景中的相邻目标候选，导致 recall 或 AP 轻微下降。
+
+阶段判断：
+
+- 论文和主实验仍建议沿用训练/验证默认 NMS 设置，不把 `NMS IoU=0.6 + containment-suppress` 作为主结果。
+- 新增的 `match_summary.csv` 可用于筛选论文可视化样本：优先找 `containment_pairs > 0`、`fp` 或 `fn` 较高的图像，再结合 `*_compare.jpg` 展示大框包小框、漏检和误检现象。
+- 若后续要真正解决“大框包小框”，优先方向不是继续手工后处理，而是改进训练侧框质量与密集小目标排序，例如增加小目标定位权重、使用更合适的 NMS/Soft-NMS 评估对照，或在 P2 检测头侧加强正样本约束。
+
