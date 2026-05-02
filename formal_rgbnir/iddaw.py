@@ -13,9 +13,12 @@ DEFAULT_CLASS_SCHEMA = "6cls_personmerge"
 LEGACY_CLASS_SCHEMA = "7cls"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
+    "rgb_p2p5_yolo11s_6cls_personmerge",
     "nir_yolo11s_6cls_personmerge",
+    "nir_p2p5_yolo11s_6cls_personmerge",
     "early_fusion_yolo11s_6cls_personmerge",
     "rgbnir_yolo11s_6cls_personmerge",
+    "rgbnir_p2p5_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
@@ -40,6 +43,7 @@ PERSONMERGE_MODES = {
     "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "rgbnir_light_nir_yolo11s_6cls_personmerge",
+    "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge",
     "full_proposed_residual_v2_yolo11s_6cls_personmerge",
     "proposed_lite_yolo11s_6cls_personmerge",
     "proposed_lite_light_nir_yolo11s_6cls_personmerge",
@@ -48,12 +52,15 @@ TRAINABLE_MODES = {
     "rgb",
     "rgb_yolo11s",
     "rgb_yolo11s_6cls_personmerge",
+    "rgb_p2p5_yolo11s_6cls_personmerge",
     "rgb_rtdetr",
     "nir",
     "nir_yolo11s_6cls_personmerge",
+    "nir_p2p5_yolo11s_6cls_personmerge",
     "early_fusion_yolo11s_6cls_personmerge",
     "rgbnir",
     "rgbnir_yolo11s_6cls_personmerge",
+    "rgbnir_p2p5_yolo11s_6cls_personmerge",
     "input_fusion",
     "light_gate",
     "bifpn_only",
@@ -82,6 +89,7 @@ TRAINABLE_MODES = {
     "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
     "rgbnir_light_nir_yolo11s_6cls_personmerge",
+    "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge",
     "attention_only",
     "full_proposed",
     "full_proposed_residual",
@@ -184,12 +192,15 @@ def experiment_name(mode: str) -> str:
         "rgb": "iddaw-yolo11n-rgb",
         "rgb_yolo11s": "iddaw-yolo11s-rgb",
         "rgb_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgb-6cls-personmerge",
+        "rgb_p2p5_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgb-p2p5-6cls-personmerge",
         "rgb_rtdetr": "iddaw-rtdetr-r18-rgb",
         "nir": "iddaw-yolo11n-nir",
         "nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-nir-6cls-personmerge",
+        "nir_p2p5_yolo11s_6cls_personmerge": "iddaw-yolo11s-nir-p2p5-6cls-personmerge",
         "early_fusion_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-early-fusion-6cls-personmerge",
         "rgbnir": "iddaw-yolo11n-rgbnir-plain",
         "rgbnir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-plain-6cls-personmerge",
+        "rgbnir_p2p5_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-plain-p2p5-6cls-personmerge",
         "input_fusion": "iddaw-yolo11n-input-fusion",
         "light_gate": "iddaw-yolo11n-rgbnir-light-gate",
         "bifpn_only": "iddaw-yolo11n-rgbnir-bifpn-only",
@@ -218,6 +229,7 @@ def experiment_name(mode: str) -> str:
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-oa-only-light-nir-p2p5-c256-6cls-personmerge",
         "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-oa-yolo-pan-light-nir-p2p5-c256-6cls-personmerge",
         "rgbnir_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-light-nir-6cls-personmerge",
+        "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-light-nir-p2p5-6cls-personmerge",
         "attention_only": "iddaw-yolo11n-rgbnir-attention-only",
         "full_proposed": "iddaw-yolo11n-rgbnir-full-proposed",
         "full_proposed_residual": "iddaw-yolo11n-rgbnir-full-proposed-residual",
@@ -242,18 +254,26 @@ def model_config_for(mode: str) -> str:
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11.yaml").resolve())
     if mode in {"rgb_yolo11s", "rgb_yolo11s_6cls_personmerge"}:
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11s.yaml").resolve())
+    if mode == "rgb_p2p5_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_rgb_p2p5_6cls_personmerge.yaml").resolve())
     if mode == "rgb_rtdetr":
         return str((root / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr-r18.yaml").resolve())
     if mode == "nir":
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11-gray.yaml").resolve())
     if mode == "nir_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_nir_6cls_personmerge.yaml").resolve())
+    if mode == "nir_p2p5_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_nir_p2p5_6cls_personmerge.yaml").resolve())
     if mode == "early_fusion_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_early_fusion_6cls_personmerge.yaml").resolve())
     if mode == "rgbnir":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_midfusion_plain.yaml").resolve())
     if mode == "rgbnir_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_midfusion_plain_6cls_personmerge.yaml").resolve())
+    if mode == "rgbnir_p2p5_yolo11s_6cls_personmerge":
+        return str(
+            (root / "configs" / "models" / "yolo11s_rgbnir_midfusion_plain_p2p5_6cls_personmerge.yaml").resolve()
+        )
     if mode == "input_fusion":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_input_fusion.yaml").resolve())
     if mode == "light_gate":
@@ -445,6 +465,8 @@ def model_config_for(mode: str) -> str:
         )
     if mode == "rgbnir_light_nir_yolo11s_6cls_personmerge":
         return str((root / "configs" / "models" / "yolo11s_rgbnir_light_nir_6cls_personmerge.yaml").resolve())
+    if mode == "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge":
+        return str((root / "configs" / "models" / "yolo11s_rgbnir_light_nir_p2p5_6cls_personmerge.yaml").resolve())
     if mode == "attention_only":
         return str((root / "configs" / "models" / "yolo11n_rgbnir_attention_only.yaml").resolve())
     if mode == "full_proposed":
@@ -472,13 +494,22 @@ def model_config_for(mode: str) -> str:
 
 
 def mode_specific_kwargs(mode: str) -> dict[str, object]:
-    if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
+    if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_p2p5_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
         return {"use_simotm": "BGR", "channels": 3}
-    if mode in {"nir", "nir_yolo11s_6cls_personmerge"}:
+    if mode in {"nir", "nir_yolo11s_6cls_personmerge", "nir_p2p5_yolo11s_6cls_personmerge"}:
         return {"use_simotm": "Gray", "channels": 1}
     if mode in (
         TRAINABLE_MODES
-        - {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr", "nir", "nir_yolo11s_6cls_personmerge"}
+        - {
+            "rgb",
+            "rgb_yolo11s",
+            "rgb_yolo11s_6cls_personmerge",
+            "rgb_p2p5_yolo11s_6cls_personmerge",
+            "rgb_rtdetr",
+            "nir",
+            "nir_yolo11s_6cls_personmerge",
+            "nir_p2p5_yolo11s_6cls_personmerge",
+        }
     ) | {"decision_fusion"}:
         return {"use_simotm": "RGBNIR", "channels": 4, "pairs_rgb_ir": DEFAULT_PAIRS}
     raise ValueError(f"Unsupported mode: {mode}")
@@ -489,12 +520,15 @@ def train_batch_for(mode: str) -> int:
         "rgb": 96,
         "rgb_yolo11s": 48,
         "rgb_yolo11s_6cls_personmerge": 48,
+        "rgb_p2p5_yolo11s_6cls_personmerge": 20,
         "rgb_rtdetr": 32,
         "nir": 96,
         "nir_yolo11s_6cls_personmerge": 20,
+        "nir_p2p5_yolo11s_6cls_personmerge": 20,
         "early_fusion_yolo11s_6cls_personmerge": 20,
         "rgbnir": 48,
         "rgbnir_yolo11s_6cls_personmerge": 20,
+        "rgbnir_p2p5_yolo11s_6cls_personmerge": 20,
         "input_fusion": 96,
         "light_gate": 48,
         "bifpn_only": 48,
@@ -523,6 +557,7 @@ def train_batch_for(mode: str) -> int:
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
         "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
         "rgbnir_light_nir_yolo11s_6cls_personmerge": 24,
+        "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge": 20,
         "attention_only": 48,
         "full_proposed": 48,
         "full_proposed_residual": 48,
@@ -542,12 +577,15 @@ def workers_for(mode: str) -> int:
         "rgb": 12,
         "rgb_yolo11s": 12,
         "rgb_yolo11s_6cls_personmerge": 12,
+        "rgb_p2p5_yolo11s_6cls_personmerge": 10,
         "rgb_rtdetr": 10,
         "nir": 12,
         "nir_yolo11s_6cls_personmerge": 10,
+        "nir_p2p5_yolo11s_6cls_personmerge": 10,
         "early_fusion_yolo11s_6cls_personmerge": 10,
         "rgbnir": 10,
         "rgbnir_yolo11s_6cls_personmerge": 10,
+        "rgbnir_p2p5_yolo11s_6cls_personmerge": 10,
         "input_fusion": 12,
         "light_gate": 10,
         "bifpn_only": 10,
@@ -576,6 +614,7 @@ def workers_for(mode: str) -> int:
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
         "oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
         "rgbnir_light_nir_yolo11s_6cls_personmerge": 10,
+        "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge": 10,
         "attention_only": 10,
         "full_proposed": 10,
         "full_proposed_residual": 10,
@@ -600,6 +639,7 @@ def common_train_kwargs(
     batch: int | None = None,
     lr0: float | None = None,
     cos_lr: bool = False,
+    pretrained: bool = True,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
@@ -616,6 +656,7 @@ def common_train_kwargs(
         "workers": workers_for(mode),
         "device": device,
         "optimizer": optimizer_name,
+        "pretrained": pretrained,
         "project": "runs/IDD_AW",
         "name": experiment_name(mode),
     }
@@ -639,7 +680,7 @@ def common_val_kwargs(mode: str, imgsz: int = 640, batch: int | None = None) -> 
 
 def common_predict_kwargs(mode: str, imgsz: int = 640) -> dict[str, object]:
     dataset_root = resolve_dataset_root(mode)
-    source_subdir = "nir/val" if mode in {"nir", "nir_yolo11s_6cls_personmerge"} else "visible/val"
+    source_subdir = "nir/val" if mode in {"nir", "nir_yolo11s_6cls_personmerge", "nir_p2p5_yolo11s_6cls_personmerge"} else "visible/val"
     return {
         "source": str((dataset_root / source_subdir).resolve()),
         "imgsz": imgsz,

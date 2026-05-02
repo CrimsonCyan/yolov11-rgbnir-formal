@@ -37,6 +37,15 @@ def env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def parse_bool_arg(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Expected a boolean value, got: {value}")
+
+
 def safe_wandb_tag(tag: str, max_length: int = 64) -> str:
     tag = tag.strip()
     return tag if len(tag) <= max_length else tag[:max_length]
@@ -86,6 +95,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch", type=int, default=0, help="Optional batch override for train/val.")
     parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train.")
     parser.add_argument("--cos-lr", action="store_true", help="Use cosine learning rate schedule for train.")
+    parser.add_argument(
+        "--pretrained",
+        type=parse_bool_arg,
+        default=True,
+        help="Use pretrained weights where supported by Ultralytics during train. Defaults to true.",
+    )
     return parser.parse_args()
 
 
@@ -128,6 +143,7 @@ def main() -> None:
                     batch=args.batch or None,
                     lr0=args.lr0 or None,
                     cos_lr=args.cos_lr,
+                    pretrained=args.pretrained,
                 ),
                 resume=True,
                 **mode_kwargs,
@@ -147,6 +163,7 @@ def main() -> None:
                 batch=args.batch or None,
                 lr0=args.lr0 or None,
                 cos_lr=args.cos_lr,
+                pretrained=args.pretrained,
             ),
             **mode_kwargs,
         )

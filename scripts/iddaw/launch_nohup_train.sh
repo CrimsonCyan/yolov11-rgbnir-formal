@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:?usage: launch_nohup_train.sh <rgb|rgb_yolo11s|rgb_yolo11s_6cls_personmerge|rgb_rtdetr|nir|nir_yolo11s_6cls_personmerge|early_fusion_yolo11s_6cls_personmerge|rgbnir|rgbnir_yolo11s_6cls_personmerge|input_fusion|light_gate|bifpn_only|bifpn_only_yolo11s|bifpn_only_yolo11s_6cls_personmerge|bifpn_only_light_nir_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_c256_r1_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_c256_r3_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_c256_r4_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oagate_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oagate_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_reflect_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_fg_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_ms_softprior_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_ms_softprior_resreflect_p2only_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge|bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge|oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge|oa_yolo_pan_light_nir_p2p5_c256_yolo11s_6cls_personmerge|rgbnir_light_nir_yolo11s_6cls_personmerge|attention_only|full_proposed|full_proposed_residual|full_proposed_residual_v2|full_proposed_residual_v2_yolo11s|full_proposed_residual_v2_yolo11s_6cls_personmerge|proposed_lite_yolo11s_6cls_personmerge|proposed_lite_light_nir_yolo11s_6cls_personmerge> [epochs] [device] [resume_ckpt]}"
+MODE="${1:?usage: launch_nohup_train.sh <mode> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-1}"
 DEVICE="${3:-0}"
 RESUME_CKPT="${4:-}"
@@ -33,6 +33,7 @@ export OPTIMIZER="${OPTIMIZER:-SGD}"
 export BATCH="${BATCH:-}"
 export LR0="${LR0:-}"
 export COS_LR="${COS_LR:-0}"
+export PRETRAINED="${PRETRAINED:-true}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
@@ -71,6 +72,7 @@ CMD=(
   --val-interval "$VAL_INTERVAL"
   --device "$DEVICE"
   --optimizer "$OPTIMIZER"
+  --pretrained "$PRETRAINED"
 )
 
 if [[ -n "$BATCH" ]]; then
@@ -117,6 +119,7 @@ optimizer=$OPTIMIZER
 batch=${BATCH:-}
 lr0=${LR0:-}
 cos_lr=$COS_LR
+pretrained=$PRETRAINED
 close_mosaic=$CLOSE_MOSAIC
 started_at=$STAMP
 command=${CMD[*]}
