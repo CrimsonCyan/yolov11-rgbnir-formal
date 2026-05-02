@@ -3355,3 +3355,98 @@ save_match_images=20 per case
 - 新增的 `match_summary.csv` 可用于筛选论文可视化样本：优先找 `containment_pairs > 0`、`fp` 或 `fn` 较高的图像，再结合 `*_compare.jpg` 展示大框包小框、漏检和误检现象。
 - 若后续要真正解决“大框包小框”，优先方向不是继续手工后处理，而是改进训练侧框质量与密集小目标排序，例如增加小目标定位权重、使用更合适的 NMS/Soft-NMS 评估对照，或在 P2 检测头侧加强正样本约束。
 
+### 12.30 OA 小目标增强与 BiFPN repeat 已完成训练结果
+
+本节记录 2026-05-02 已正常完成的 4 条训练。两次 `bifpn_only r2 batch16` 中断续训不计入本节完成结果，后续需单独处理。
+
+统一训练设置：
+
+```text
+epochs=100
+imgsz=800
+optimizer=Adam
+lr0=0.01
+close_mosaic=15
+device=0,1
+IDDAW_CLASS_SCHEMA=6cls_personmerge
+```
+
+补充说明：
+
+- `bifpn_r1`、`bifpn_r3`、`oa_smallprior_p2only_p3plain` 使用 `batch=20`。
+- `oa_headp2_smallprior` 的 `batch=20` 版本曾在前期 OOM，因此本次完成结果使用 `batch=16`。
+- `oa_headp2_smallprior batch16` 与 batch20 结果不构成完全同配方比较，主要用于判断该结构能否稳定完成训练。
+
+#### 12.30.1 完成结果汇总
+
+| 实验 | batch | best epoch | Precision | Recall | mAP50 | mAP50-95 | val box/cls/dfl |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `bifpn_only_light_nir_p2p5_c256_r1` | `20` | `100` | `0.68912` | `0.62256` | `0.66297` | `0.46071` | `1.29960 / 0.99674 / 1.40816` |
+| `bifpn_only_light_nir_p2p5_c256_r3` | `20` | `98` | `0.78435` | `0.60535` | `0.69342` | `0.49505` | `1.26587 / 0.93056 / 1.44795` |
+| `oa_smallprior_p2only_p3plain_c256` | `20` | `98` | `0.75099` | `0.61940` | `0.69167` | `0.48479` | `1.27575 / 0.94026 / 1.40570` |
+| `oa_headp2_smallprior_c256` | `16` | `100` | `0.70895` | `0.63204` | `0.69182` | `0.48345` | `1.28494 / 0.94998 / 1.41419` |
+
+对应 run 目录：
+
+```text
+runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-r1-6cls-personmerge
+runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-r3-6cls-personmerge
+runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-smallprior-p2only-p3plain-c256-6cls-personmerge
+runs/IDD_AW/iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-smallprior-c256-6cls-personmerge2
+```
+
+#### 12.30.2 OA 辅助项与训练稳定性
+
+| 实验 | train box/cls/dfl at best | fg gate loss at best | last mAP50-95 |
+| --- | --- | ---: | ---: |
+| `oa_smallprior_p2only_p3plain_c256` | `1.09315 / 0.75803 / 1.23363` | `0.03554` | `0.47671` |
+| `oa_headp2_smallprior_c256` | `1.11102 / 0.76850 / 1.24094` | `0.02084` | `0.48345` |
+
+结果判断：
+
+- `bifpn_only_light_nir_p2p5_c256_r3` 是本组完成实验中的最优结果，`mAP50-95 = 0.49505`，高于此前 `r2 batch20` 的 `0.47606`，说明在当前 `c256` 主线下继续增加 BiFPN repeat 到 `3` 有明确收益。
+- `bifpn_r1` 明显低于 `r2/r3`，说明单次 BiFPN 双向融合容量不足，不适合作为后续主线。
+- `oa_smallprior_p2only_p3plain` 达到 `mAP50-95 = 0.48479`，优于此前 `r2 batch20`，但低于 `r3`；说明小目标加权 OA 有一定效果，但当前证据仍不足以证明其优于单纯增强 BiFPN repeat。
+- `oa_headp2_smallprior batch16` 达到 `mAP50-95 = 0.48345`，可稳定完成训练，但由于 batch 与前三条不同，暂不能直接得出其优于或弱于 batch20 主线的结论。
+
+#### 12.30.3 各类别 mAP
+
+本表来自训练结束后对 `best.pt` 的 final validation stdout。由于 Ultralytics stdout 中各类别结果只保留三位小数，因此本节按三位小数记录；总体指标仍以 `results.csv` 中的高精度结果为准。
+
+各类别 `mAP50-95`：
+
+| 类别 | `bifpn_r1` | `bifpn_r3` | `oa_smallprior_p2only_p3plain` | `oa_headp2_smallprior` |
+| --- | ---: | ---: | ---: | ---: |
+| all | `0.460` | `0.495` | `0.484` | `0.483` |
+| person | `0.281` | `0.302` | `0.299` | `0.295` |
+| motorcycle | `0.274` | `0.267` | `0.281` | `0.267` |
+| car | `0.681` | `0.694` | `0.690` | `0.676` |
+| truck | `0.431` | `0.508` | `0.494` | `0.475` |
+| bus | `0.508` | `0.572` | `0.545` | `0.574` |
+| autorickshaw | `0.588` | `0.629` | `0.598` | `0.609` |
+
+各类别 `mAP50`：
+
+| 类别 | `bifpn_r1` | `bifpn_r3` | `oa_smallprior_p2only_p3plain` | `oa_headp2_smallprior` |
+| --- | ---: | ---: | ---: | ---: |
+| all | `0.663` | `0.697` | `0.691` | `0.692` |
+| person | `0.546` | `0.569` | `0.573` | `0.571` |
+| motorcycle | `0.582` | `0.594` | `0.601` | `0.578` |
+| car | `0.879` | `0.895` | `0.893` | `0.885` |
+| truck | `0.563` | `0.641` | `0.642` | `0.624` |
+| bus | `0.651` | `0.690` | `0.663` | `0.697` |
+| autorickshaw | `0.754` | `0.791` | `0.777` | `0.796` |
+
+类别层面观察：
+
+- `bifpn_r3` 的优势主要来自 `person`、`car`、`truck`、`autorickshaw` 的 `mAP50-95` 提升，同时总体 `mAP50-95` 最高。
+- `oa_smallprior_p2only_p3plain` 虽然总体低于 `r3`，但在 `motorcycle mAP50-95 = 0.281` 上是本组最高，并且 `person/motorcycle mAP50` 均高于 `r3`。这说明 OA 小目标加权确实对部分弱势交通参与者有增益，但定位质量在高 IoU 阈值下仍不足以超过 `r3`。
+- `oa_headp2_smallprior` 对 `bus` 和 `autorickshaw` 的 `mAP50` 表现较好，但 `person/motorcycle mAP50-95` 没有超过 `oa_smallprior`，因此不适合作为当前小目标增强主线。
+- `bifpn_r1` 在多数类别上均低于 `r3`，进一步说明当前 BiFPN 重复次数过低会限制多尺度融合能力。
+
+阶段结论：
+
+- 当前最强结构证据仍指向 `Light NIR branch + P2-P5 BiFPN c256`，其中 `repeat=3` 是新的优先候选。
+- OA 方向目前更适合作为对象先验/小目标辅助消融，而不是替代 BiFPN 的主贡献。
+- 下一步若继续验证 `r4`，应先解决双卡 `SIGKILL` 问题，建议优先单卡或降低 batch 冒烟，再决定是否开展 100 epoch 长训。
+
