@@ -8,6 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,8 +16,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from formal_rgbnir.box_ops import area_bucket, box_iou, xywh_to_xyxy
-from formal_rgbnir.iddaw import DEFAULT_PAIRS, category_names_for_mode, mode_specific_kwargs, resolve_dataset_root
+from formal_rgbnir.iddaw import (
+    DEFAULT_PAIRS,
+    build_dataset_yaml,
+    category_names_for_mode,
+    common_val_kwargs,
+    mode_specific_kwargs,
+    resolve_dataset_root,
+)
 from ultralytics import YOLO
+from ultralytics.models.yolo.detect.val import DetectionValidator
+from ultralytics.utils.metrics import ap_per_class, box_iou as ultralytics_box_iou
 
 
 @dataclass(frozen=True)
@@ -39,11 +49,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weights", default="", help="Single-case checkpoint path.")
     parser.add_argument("--out", default="runs/analysis/oa_small_targets", help="Output directory.")
     parser.add_argument("--imgsz", type=int, default=800)
+    parser.add_argument("--batch", type=int, default=0, help="Batch size for validator metrics. Defaults to mode val batch.")
     parser.add_argument("--conf", type=float, default=0.001, help="Prediction confidence used for AP collection.")
     parser.add_argument("--pr-conf", type=float, default=0.25, help="Confidence threshold for precision/recall summary.")
     parser.add_argument("--iou", type=float, default=0.7)
     parser.add_argument("--device", default="0", help="Inference device passed to Ultralytics, e.g. 0, 1, cpu.")
     parser.add_argument("--half", action="store_true", help="Use half precision inference on CUDA devices.")
+    parser.add_argument(
+        "--metric-backend",
+        choices=["validator", "predict"],
+        default="validator",
+        help="Use an isolated Ultralytics validator subclass for AP by default; predict keeps the legacy diagnostic path.",
+    )
+    parser.add_argument(
+        "--skip-predict-diagnostics",
+        action="store_true",
+        help="Only run validator metrics. This disables gate stats, match CSV, and saved visualizations.",
+    )
     parser.add_argument(
         "--per-image",
         action="store_true",
@@ -52,6 +74,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-images", type=int, default=0, help="Save up to N annotated prediction images per case.")
     parser.add_argument("--save-image-conf", type=float, default=0.25, help="Confidence threshold for saved images.")
     parser.add_argument("--save-match-images", type=int, default=0, help="Save up to N GT/Pred/TP-FP-FN comparison images per case.")
+    parser.add_argument("--save-gate-images", type=int, default=0, help="Save up to N OA gate/residual heatmap images per case.")
     parser.add_argument("--match-iou", type=float, default=0.5, help="IoU threshold for TP/FP/FN visualization.")
     parser.add_argument(
         "--containment-suppress",
@@ -152,6 +175,10 @@ def collect_prediction(result) -> dict[str, object]:
     }
 
 
+def bucket_boxes(boxes: torch.Tensor) -> list[str]:
+    return [area_bucket(float((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0))) for box in boxes]
+
+
 def box_area_xyxy(box: torch.Tensor) -> float:
     return float(((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0)).item())
 
@@ -245,6 +272,133 @@ def suppress_contained_predictions(
     return filtered, sorted(suppressed), pairs
 
 
+def prediction_area_mask(boxes: torch.Tensor, area_filter: str) -> torch.Tensor:
+    if len(boxes) == 0:
+        return torch.zeros((0,), dtype=torch.bool, device=boxes.device)
+    values = [area_bucket(float((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0))) == area_filter for box in boxes]
+    return torch.tensor(values, dtype=torch.bool, device=boxes.device)
+
+
+def same_class_overlap_mask_device(
+    pred_boxes: torch.Tensor,
+    pred_labels: torch.Tensor,
+    gt_boxes: torch.Tensor,
+    gt_labels: torch.Tensor,
+    iou_threshold: float = 0.5,
+) -> torch.Tensor:
+    if pred_boxes.numel() == 0 or gt_boxes.numel() == 0:
+        return torch.zeros((len(pred_boxes),), dtype=torch.bool, device=pred_boxes.device)
+    ious = ultralytics_box_iou(gt_boxes, pred_boxes)
+    same_class = gt_labels[:, None] == pred_labels
+    return (ious * same_class).max(0).values >= iou_threshold
+
+
+def filter_predn_for_area(
+    predn: torch.Tensor,
+    valid_boxes: torch.Tensor,
+    valid_labels: torch.Tensor,
+    ignored_boxes: torch.Tensor,
+    ignored_labels: torch.Tensor,
+    area_filter: str,
+) -> torch.Tensor:
+    if len(predn) == 0:
+        return predn
+    pred_boxes = predn[:, :4]
+    pred_labels = predn[:, 5]
+    pred_area = prediction_area_mask(pred_boxes, area_filter)
+    valid_overlap = same_class_overlap_mask_device(pred_boxes, pred_labels, valid_boxes, valid_labels)
+    ignored_overlap = same_class_overlap_mask_device(pred_boxes, pred_labels, ignored_boxes, ignored_labels)
+    keep = (pred_area | valid_overlap) & ~(ignored_overlap & ~valid_overlap)
+    return predn[keep]
+
+
+class AreaDetectionValidator(DetectionValidator):
+    """Isolated validator used only by this diagnostic script; it does not patch Ultralytics' default validator."""
+
+    last_instance = None
+    area_names = ("small", "medium", "large")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        AreaDetectionValidator.last_instance = self
+        self.area_stats: dict[str, dict[str, list[torch.Tensor]]] = {}
+
+    def init_metrics(self, model):
+        super().init_metrics(model)
+        self.area_stats = {
+            area: {
+                "tp": [],
+                "conf": [],
+                "pred_cls": [],
+                "target_cls": [],
+            }
+            for area in self.area_names
+        }
+
+    def update_metrics(self, preds, batch):
+        super().update_metrics(preds, batch)
+        for si, pred in enumerate(preds):
+            pbatch = self._prepare_batch(si, batch)
+            cls = pbatch["cls"]
+            bbox = pbatch["bbox"]
+            predn = self._prepare_pred(pred, pbatch) if len(pred) else torch.zeros((0, 6), device=self.device)
+            if self.args.single_cls and len(predn):
+                predn[:, 5] = 0
+
+            buckets = bucket_boxes(bbox.detach().cpu()) if len(bbox) else []
+            for area in self.area_names:
+                valid_mask = torch.tensor([bucket == area for bucket in buckets], dtype=torch.bool, device=self.device)
+                ignored_mask = ~valid_mask if len(valid_mask) else torch.zeros((len(bbox),), dtype=torch.bool, device=self.device)
+                valid_bbox = bbox[valid_mask]
+                valid_cls = cls[valid_mask]
+                ignored_bbox = bbox[ignored_mask]
+                ignored_cls = cls[ignored_mask]
+                area_predn = filter_predn_for_area(predn, valid_bbox, valid_cls, ignored_bbox, ignored_cls, area)
+                stat = self.area_stats[area]
+                stat["conf"].append(area_predn[:, 4] if len(area_predn) else torch.zeros(0, device=self.device))
+                stat["pred_cls"].append(area_predn[:, 5] if len(area_predn) else torch.zeros(0, device=self.device))
+                stat["target_cls"].append(valid_cls)
+                if len(area_predn) and len(valid_cls):
+                    stat["tp"].append(self._process_batch(area_predn, valid_bbox, valid_cls))
+                else:
+                    stat["tp"].append(torch.zeros((len(area_predn), self.niou), dtype=torch.bool, device=self.device))
+
+    def area_metric_rows(self, class_names: list[str], pr_conf: float) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        for area, stats in self.area_stats.items():
+            arrays = {
+                key: torch.cat(value, 0).cpu().numpy()
+                for key, value in stats.items()
+            }
+            metric_by_cls = metrics_from_stats(arrays, class_names)
+            conf_mask = arrays["conf"] >= pr_conf if len(arrays["conf"]) else np.zeros((0,), dtype=bool)
+            pr_stats = {
+                "tp": arrays["tp"][conf_mask, :1] if len(arrays["tp"]) else np.zeros((0, 1), dtype=bool),
+                "conf": arrays["conf"][conf_mask],
+                "pred_cls": arrays["pred_cls"][conf_mask],
+                "target_cls": arrays["target_cls"],
+            }
+            pr_by_cls = pr_at_conf_from_stats(pr_stats, class_names)
+            for cls, name in enumerate(class_names):
+                metric = metric_by_cls[cls]
+                p_at_conf, r_at_conf = pr_by_cls[cls]
+                rows.append(
+                    {
+                        "class": name,
+                        "area": area,
+                        "gt_count": metric["gt_count"],
+                        "precision": metric["precision"],
+                        "recall": metric["recall"],
+                        "AP50": metric["AP50"],
+                        "mAP50_95": metric["mAP50_95"],
+                        "precision_at_conf": p_at_conf,
+                        "recall_at_conf": r_at_conf,
+                        "conf": pr_conf,
+                    }
+                )
+        return rows
+
+
 def draw_labeled_box(image, box, label: str, color: tuple[int, int, int], thickness: int = 2) -> None:
     import cv2
 
@@ -272,6 +426,18 @@ def add_panel_title(image, title: str, color: tuple[int, int, int] = (32, 32, 32
     return np.vstack([header, image])
 
 
+def as_bgr_image(image):
+    import cv2
+
+    if image.ndim == 2:
+        return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    if image.shape[2] == 1:
+        return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    if image.shape[2] > 3:
+        return image[:, :, :3].copy()
+    return image.copy()
+
+
 def save_prediction_image(
     result,
     class_names: list[str],
@@ -284,7 +450,7 @@ def save_prediction_image(
     except ImportError as exc:
         raise RuntimeError("Saving annotated images requires opencv-python/cv2.") from exc
 
-    image = result.orig_img.copy()
+    image = as_bgr_image(result.orig_img)
     if prediction is None:
         boxes = result.boxes
         if boxes is None or len(boxes) == 0:
@@ -423,9 +589,10 @@ def save_match_comparison_image(
         raise RuntimeError("Saving TP/FP/FN images requires opencv-python/cv2.") from exc
 
     stem = Path(result.path).stem
-    gt_panel = result.orig_img.copy()
-    pred_panel = result.orig_img.copy()
-    match_panel = result.orig_img.copy()
+    base_image = as_bgr_image(result.orig_img)
+    gt_panel = base_image.copy()
+    pred_panel = base_image.copy()
+    match_panel = base_image.copy()
     gt_color = (255, 128, 0)
     tp_color = (0, 180, 0)
     fp_color = (0, 0, 255)
@@ -468,6 +635,102 @@ def save_match_comparison_image(
     cv2.imwrite(str(out_dir / f"{stem}_pred.jpg"), pred_titled)
     cv2.imwrite(str(out_dir / f"{stem}_match.jpg"), match_titled)
     cv2.imwrite(str(out_dir / f"{stem}_compare.jpg"), compare)
+
+
+def normalized_heatmap(values: torch.Tensor, value_range: tuple[float, float] | None = None):
+    import numpy as np
+
+    array = values.detach().cpu().float().numpy()
+    array = np.nan_to_num(array, nan=0.0, posinf=0.0, neginf=0.0)
+    if value_range is None:
+        lo, hi = np.percentile(array, [1, 99])
+    else:
+        lo, hi = value_range
+    if hi <= lo:
+        return np.zeros_like(array, dtype=np.float32)
+    return np.clip((array - lo) / (hi - lo), 0.0, 1.0).astype(np.float32)
+
+
+def overlay_heatmap(image, values: torch.Tensor, title: str, value_range: tuple[float, float] | None = None):
+    import cv2
+
+    h, w = image.shape[:2]
+    normalized = normalized_heatmap(values, value_range)
+    resized = cv2.resize(normalized, (w, h), interpolation=cv2.INTER_LINEAR)
+    colormap = getattr(cv2, "COLORMAP_TURBO", cv2.COLORMAP_JET)
+    heatmap = cv2.applyColorMap((resized * 255).astype("uint8"), colormap)
+    overlay = cv2.addWeighted(image, 0.55, heatmap, 0.45, 0)
+    return add_panel_title(overlay, title, (32, 32, 32))
+
+
+def blank_panel_like(image, title: str, message: str):
+    import cv2
+    import numpy as np
+
+    panel = np.full_like(image, 245)
+    cv2.putText(panel, message, (24, image.shape[0] // 2), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (96, 96, 96), 2)
+    return add_panel_title(panel, title, (96, 96, 96))
+
+
+def save_gate_residual_comparison_image(
+    result,
+    modules,
+    target: dict[str, object],
+    class_names: list[str],
+    out_dir: Path,
+) -> bool:
+    try:
+        import cv2
+    except ImportError as exc:
+        raise RuntimeError("Saving OA gate/residual images requires opencv-python/cv2.") from exc
+
+    module = next(
+        (
+            candidate
+            for candidate in modules
+            if isinstance(getattr(candidate, "last_object_gate", None), torch.Tensor)
+        ),
+        None,
+    )
+    if module is None:
+        return False
+
+    stem = Path(result.path).stem
+    image = as_bgr_image(result.orig_img)
+    gt_panel = image.copy()
+    for box, label in zip(target["boxes_xyxy"], target["labels"]):
+        cls = int(label)
+        name = class_names[cls] if 0 <= cls < len(class_names) else str(cls)
+        draw_labeled_box(gt_panel, box, name, (255, 128, 0), thickness=2)
+    gt_panel = add_panel_title(gt_panel, "GT", (255, 128, 0))
+
+    gate = module.last_object_gate.detach().cpu().float()
+    gate_map = gate[0, 0]
+    gate_panel = overlay_heatmap(
+        image,
+        gate_map,
+        f"OA gate mean={float(gate_map.mean()):.3f}",
+        value_range=(0.0, 1.0),
+    )
+
+    delta = getattr(module, "last_residual_delta", None)
+    if isinstance(delta, torch.Tensor):
+        residual_map = delta.detach().cpu().float()[0].abs().mean(0)
+        residual_panel = overlay_heatmap(
+            image,
+            residual_map,
+            f"Residual |delta| mean={float(residual_map.mean()):.4f}",
+            value_range=None,
+        )
+    else:
+        residual_panel = blank_panel_like(image, "Residual |delta|", "No residual captured")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    compare = cv2.hconcat([gt_panel, gate_panel, residual_panel])
+    cv2.imwrite(str(out_dir / f"{stem}_gate.jpg"), gate_panel)
+    cv2.imwrite(str(out_dir / f"{stem}_residual.jpg"), residual_panel)
+    cv2.imwrite(str(out_dir / f"{stem}_gate_residual_compare.jpg"), compare)
+    return True
 
 
 def prediction_area_bucket(box: torch.Tensor) -> str:
@@ -634,84 +897,311 @@ def match_predictions_for_area(
     return tps, fps, total_gts
 
 
-def ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float, area_filter: str | None) -> float:
-    tps, fps, total_gts = match_predictions_for_area(predictions, targets, class_id, iou_threshold, area_filter)
-    if total_gts == 0:
-        return 0.0
-    if not tps:
-        return 0.0
-    tps_t = torch.tensor(tps).cumsum(0)
-    fps_t = torch.tensor(fps).cumsum(0)
-    recalls = tps_t / max(total_gts, 1)
-    precisions = tps_t / (tps_t + fps_t).clamp(min=1e-6)
-    ap = 0.0
-    for level in torch.linspace(0, 1, 101):
-        valid = precisions[recalls >= level]
-        ap += float(valid.max()) if valid.numel() > 0 else 0.0
-    return ap / 101.0
+def split_target_by_area(target: dict[str, object], area_filter: str | None):
+    boxes = target["boxes_xyxy"]
+    labels = target["labels"]
+    if area_filter is None:
+        return boxes, labels, torch.zeros((0, 4), dtype=torch.float32), torch.zeros((0,), dtype=torch.long)
+    mask = torch.tensor([bucket == area_filter for bucket in target["area_buckets"]], dtype=torch.bool)
+    return boxes[mask], labels[mask], boxes[~mask], labels[~mask]
 
 
-def pr_at_conf(predictions, targets, class_id: int, area_filter: str | None, conf: float, iou_threshold: float = 0.5):
-    tps, fps, total_gts = match_predictions_for_area(
-        predictions, targets, class_id, iou_threshold, area_filter, conf=conf
-    )
-    tp = int(sum(tps))
-    fp = int(sum(fps))
-    precision = tp / max(tp + fp, 1)
-    recall = tp / max(total_gts, 1)
-    return precision, recall, total_gts
+def same_class_overlap_mask(
+    pred_boxes: torch.Tensor,
+    pred_labels: torch.Tensor,
+    gt_boxes: torch.Tensor,
+    gt_labels: torch.Tensor,
+    iou_threshold: float = 0.5,
+) -> torch.Tensor:
+    if pred_boxes.numel() == 0 or gt_boxes.numel() == 0:
+        return torch.zeros((len(pred_boxes),), dtype=torch.bool)
+    ious = ultralytics_box_iou(gt_boxes, pred_boxes)
+    same_class = gt_labels[:, None] == pred_labels
+    return (ious * same_class).max(0).values >= iou_threshold
+
+
+def filter_prediction_for_area(
+    prediction: dict[str, torch.Tensor],
+    valid_boxes: torch.Tensor,
+    valid_labels: torch.Tensor,
+    ignored_boxes: torch.Tensor,
+    ignored_labels: torch.Tensor,
+    area_filter: str | None,
+) -> dict[str, torch.Tensor]:
+    if area_filter is None or len(prediction["boxes"]) == 0:
+        return prediction
+
+    boxes = prediction["boxes"]
+    labels = prediction["labels"]
+    pred_area_mask = torch.tensor([prediction_area_bucket(box) == area_filter for box in boxes], dtype=torch.bool)
+    valid_overlap = same_class_overlap_mask(boxes, labels, valid_boxes, valid_labels)
+    ignored_overlap = same_class_overlap_mask(boxes, labels, ignored_boxes, ignored_labels)
+
+    # COCO-style area diagnostics: predictions that can match a valid-area GT are kept even if
+    # their own box area falls outside the bucket; unmatched detections outside the bucket or
+    # detections that only hit ignored-area GTs are removed from that area-specific AP pool.
+    keep = (pred_area_mask | valid_overlap) & ~(ignored_overlap & ~valid_overlap)
+    return {
+        "boxes": prediction["boxes"][keep],
+        "scores": prediction["scores"][keep],
+        "labels": prediction["labels"][keep],
+    }
+
+
+def ultralytics_match_predictions(
+    pred_classes: torch.Tensor,
+    true_classes: torch.Tensor,
+    iou: torch.Tensor,
+    iouv: torch.Tensor,
+) -> torch.Tensor:
+    correct = np.zeros((pred_classes.shape[0], iouv.shape[0]), dtype=bool)
+    if pred_classes.numel() == 0 or true_classes.numel() == 0:
+        return torch.tensor(correct, dtype=torch.bool)
+    correct_class = true_classes[:, None] == pred_classes
+    iou_np = (iou * correct_class).cpu().numpy()
+    for i, threshold in enumerate(iouv.cpu().tolist()):
+        matches = np.nonzero(iou_np >= threshold)
+        matches = np.array(matches).T
+        if matches.shape[0]:
+            if matches.shape[0] > 1:
+                matches = matches[iou_np[matches[:, 0], matches[:, 1]].argsort()[::-1]]
+                matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
+                matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
+            correct[matches[:, 1].astype(int), i] = True
+    return torch.tensor(correct, dtype=torch.bool)
+
+
+def collect_ultralytics_stats(
+    predictions,
+    targets,
+    area_filter: str | None,
+    iouv: torch.Tensor,
+    conf: float | None = None,
+) -> dict[str, np.ndarray]:
+    tp_chunks: list[np.ndarray] = []
+    conf_chunks: list[np.ndarray] = []
+    pred_cls_chunks: list[np.ndarray] = []
+    target_cls_chunks: list[np.ndarray] = []
+
+    for prediction, target in zip(predictions, targets):
+        valid_boxes, valid_labels, ignored_boxes, ignored_labels = split_target_by_area(target, area_filter)
+        filtered = filter_prediction_for_area(prediction, valid_boxes, valid_labels, ignored_boxes, ignored_labels, area_filter)
+        pred_boxes = filtered["boxes"]
+        pred_scores = filtered["scores"]
+        pred_labels = filtered["labels"]
+        if conf is not None and len(pred_scores):
+            keep = pred_scores >= conf
+            pred_boxes = pred_boxes[keep]
+            pred_scores = pred_scores[keep]
+            pred_labels = pred_labels[keep]
+
+        npr = len(pred_boxes)
+        correct = torch.zeros((npr, len(iouv)), dtype=torch.bool)
+        if npr and len(valid_labels):
+            iou = ultralytics_box_iou(valid_boxes, pred_boxes)
+            correct = ultralytics_match_predictions(pred_labels, valid_labels, iou, iouv)
+
+        tp_chunks.append(correct.numpy())
+        conf_chunks.append(pred_scores.numpy())
+        pred_cls_chunks.append(pred_labels.numpy())
+        target_cls_chunks.append(valid_labels.numpy())
+
+    return {
+        "tp": np.concatenate(tp_chunks, axis=0) if tp_chunks else np.zeros((0, len(iouv)), dtype=bool),
+        "conf": np.concatenate(conf_chunks, axis=0) if conf_chunks else np.zeros((0,), dtype=float),
+        "pred_cls": np.concatenate(pred_cls_chunks, axis=0) if pred_cls_chunks else np.zeros((0,), dtype=float),
+        "target_cls": np.concatenate(target_cls_chunks, axis=0) if target_cls_chunks else np.zeros((0,), dtype=float),
+    }
+
+
+def metrics_from_stats(stats: dict[str, np.ndarray], class_names: list[str]) -> dict[int, dict[str, float]]:
+    target_cls = stats["target_cls"].astype(int)
+    gt_counts = np.bincount(target_cls, minlength=len(class_names)) if len(target_cls) else np.zeros(len(class_names), dtype=int)
+    rows = {
+        cls: {
+            "gt_count": int(gt_counts[cls]),
+            "precision": 0.0,
+            "recall": 0.0,
+            "AP50": 0.0,
+            "mAP50_95": 0.0,
+        }
+        for cls in range(len(class_names))
+    }
+    if len(target_cls) and len(stats["tp"]):
+        _, _, p, r, _, ap, unique_classes, *_ = ap_per_class(
+            stats["tp"],
+            stats["conf"],
+            stats["pred_cls"],
+            stats["target_cls"],
+            names=dict(enumerate(class_names)),
+        )
+        for idx, cls in enumerate(unique_classes.astype(int)):
+            rows[cls].update(
+                {
+                    "precision": float(p[idx]),
+                    "recall": float(r[idx]),
+                    "AP50": float(ap[idx, 0]),
+                    "mAP50_95": float(ap[idx].mean()),
+                }
+            )
+    return rows
+
+
+def pr_at_conf_from_stats(stats: dict[str, np.ndarray], class_names: list[str]) -> dict[int, tuple[float, float]]:
+    target_cls = stats["target_cls"].astype(int)
+    pred_cls = stats["pred_cls"].astype(int)
+    tp = stats["tp"][:, 0].astype(bool) if len(stats["tp"]) else np.zeros((0,), dtype=bool)
+    out: dict[int, tuple[float, float]] = {}
+    for cls in range(len(class_names)):
+        pred_mask = pred_cls == cls
+        gt_count = int((target_cls == cls).sum())
+        tp_count = int(tp[pred_mask].sum())
+        fp_count = int(pred_mask.sum() - tp_count)
+        out[cls] = (
+            tp_count / max(tp_count + fp_count, 1),
+            tp_count / max(gt_count, 1),
+        )
+    return out
 
 
 def mean(values: list[float]) -> float:
     return float(sum(values) / len(values)) if values else 0.0
 
 
-def summarize_metrics(predictions, targets, class_names: list[str], pr_conf: float) -> list[dict[str, object]]:
-    thresholds = [0.5 + 0.05 * i for i in range(10)]
-    rows = []
-    areas = [None, "small", "medium", "large"]
-    for cls, name in enumerate(class_names):
-        for area in areas:
-            ap50 = ap_for_threshold(predictions, targets, cls, 0.5, area)
-            map5095 = mean([ap_for_threshold(predictions, targets, cls, thr, area) for thr in thresholds])
-            p, r, n = pr_at_conf(predictions, targets, cls, area, pr_conf)
-            rows.append(
-                {
-                    "class": name,
-                    "area": area or "all",
-                    "gt_count": n,
-                    "AP50": ap50,
-                    "mAP50_95": map5095,
-                    "precision_at_conf": p,
-                    "recall_at_conf": r,
-                    "conf": pr_conf,
-                }
-            )
+def append_mean_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    areas = []
+    for row in rows:
+        area = str(row["area"])
+        if area not in areas:
+            areas.append(area)
     for area in areas:
-        subset = [row for row in rows if row["area"] == (area or "all")]
+        subset = [row for row in rows if row["area"] == area and row["class"] != "mean" and int(row["gt_count"]) > 0]
         rows.append(
             {
                 "class": "mean",
-                "area": area or "all",
+                "area": area,
                 "gt_count": sum(int(row["gt_count"]) for row in subset),
+                "precision": mean([float(row["precision"]) for row in subset]),
+                "recall": mean([float(row["recall"]) for row in subset]),
                 "AP50": mean([float(row["AP50"]) for row in subset]),
                 "mAP50_95": mean([float(row["mAP50_95"]) for row in subset]),
                 "precision_at_conf": mean([float(row["precision_at_conf"]) for row in subset]),
                 "recall_at_conf": mean([float(row["recall_at_conf"]) for row in subset]),
-                "conf": pr_conf,
+                "conf": subset[0]["conf"] if subset else 0.0,
             }
         )
     return rows
 
 
-def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
+def validator_all_metric_rows(validator: AreaDetectionValidator, class_names: list[str], pr_conf: float) -> list[dict[str, object]]:
+    rows = {
+        cls: {
+            "class": name,
+            "area": "all",
+            "gt_count": int(validator.nt_per_class[cls]) if validator.nt_per_class is not None else 0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "AP50": 0.0,
+            "mAP50_95": 0.0,
+            "precision_at_conf": 0.0,
+            "recall_at_conf": 0.0,
+            "conf": pr_conf,
+        }
+        for cls, name in enumerate(class_names)
+    }
+    for metric_idx, cls in enumerate(validator.metrics.ap_class_index):
+        p, r, ap50, ap = validator.metrics.class_result(metric_idx)
+        rows[int(cls)].update(
+            {
+                "precision": float(p),
+                "recall": float(r),
+                "AP50": float(ap50),
+                "mAP50_95": float(ap),
+            }
+        )
+
+    raw_stats = {
+        key: torch.cat(value, 0).cpu().numpy()
+        for key, value in validator.stats.items()
+        if key in {"tp", "conf", "pred_cls", "target_cls"}
+    }
+    conf_mask = raw_stats["conf"] >= pr_conf if len(raw_stats["conf"]) else np.zeros((0,), dtype=bool)
+    pr_stats = {
+        "tp": raw_stats["tp"][conf_mask, :1] if len(raw_stats["tp"]) else np.zeros((0, 1), dtype=bool),
+        "conf": raw_stats["conf"][conf_mask],
+        "pred_cls": raw_stats["pred_cls"][conf_mask],
+        "target_cls": raw_stats["target_cls"],
+    }
+    pr_by_cls = pr_at_conf_from_stats(pr_stats, class_names)
+    for cls, (p_at_conf, r_at_conf) in pr_by_cls.items():
+        rows[cls]["precision_at_conf"] = p_at_conf
+        rows[cls]["recall_at_conf"] = r_at_conf
+    return [rows[cls] for cls in range(len(class_names))]
+
+
+def run_validator_metrics(case: Case, args: argparse.Namespace, class_names: list[str]) -> list[dict[str, object]]:
+    AreaDetectionValidator.last_instance = None
     model = YOLO(str(case.weights))
-    modules = collect_gate_modules(model)
+    val_kwargs = common_val_kwargs(case.mode, args.imgsz, batch=args.batch or None)
+    val_kwargs.update(
+        {
+            "device": args.device,
+            "conf": args.conf,
+            "iou": args.iou,
+            "plots": False,
+            "verbose": False,
+            "half": bool(args.half),
+            **mode_specific_kwargs(case.mode),
+        }
+    )
+    model.val(data=str(build_dataset_yaml(case.mode)), validator=AreaDetectionValidator, **val_kwargs)
+    validator = AreaDetectionValidator.last_instance
+    if validator is None:
+        raise RuntimeError("AreaDetectionValidator did not run; cannot collect validator metrics.")
+    rows = validator_all_metric_rows(validator, class_names, args.pr_conf)
+    rows.extend(validator.area_metric_rows(class_names, args.pr_conf))
+    return append_mean_rows(rows)
+
+
+def summarize_metrics(predictions, targets, class_names: list[str], pr_conf: float) -> list[dict[str, object]]:
+    iouv = torch.linspace(0.5, 0.95, 10)
+    pr_iouv = torch.tensor([0.5])
+    rows = []
+    areas = [None, "small", "medium", "large"]
+    for area in areas:
+        stats = collect_ultralytics_stats(predictions, targets, area, iouv)
+        metric_by_cls = metrics_from_stats(stats, class_names)
+        pr_stats = collect_ultralytics_stats(predictions, targets, area, pr_iouv, conf=pr_conf)
+        pr_by_cls = pr_at_conf_from_stats(pr_stats, class_names)
+        for cls, name in enumerate(class_names):
+            metric = metric_by_cls[cls]
+            p_at_conf, r_at_conf = pr_by_cls[cls]
+            rows.append(
+                {
+                    "class": name,
+                    "area": area or "all",
+                    "gt_count": metric["gt_count"],
+                    "precision": metric["precision"],
+                    "recall": metric["recall"],
+                    "AP50": metric["AP50"],
+                    "mAP50_95": metric["mAP50_95"],
+                    "precision_at_conf": p_at_conf,
+                    "recall_at_conf": r_at_conf,
+                    "conf": pr_conf,
+                }
+            )
+    return append_mean_rows(rows)
+
+
+def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
     class_names = category_names_for_mode(case.mode)
-    mode_kwargs = mode_specific_kwargs(case.mode)
     images = image_paths_for_mode(case.mode)
     if args.max_images > 0:
         images = images[: args.max_images]
+
+    metric_rows: list[dict[str, object]] | None = None
+    if args.metric_backend == "validator":
+        metric_rows = run_validator_metrics(case, args, class_names)
 
     predictions = []
     targets = []
@@ -728,72 +1218,83 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
     }
     saved_images = 0
     saved_match_images = 0
+    saved_gate_images = 0
     image_out_dir = Path(args.out) / case.name / "pred_images"
     match_image_out_dir = Path(args.out) / case.name / "match_images"
+    gate_image_out_dir = Path(args.out) / case.name / "gate_images"
     containment_conf = args.containment_conf if args.containment_conf is not None else args.pr_conf
 
-    for result in iter_predictions(model, images, args, mode_kwargs):
-        image_path = Path(result.path)
-        target = load_target(image_path, result.orig_shape)
-        raw_prediction = collect_prediction(result)
-        containment_pairs = find_containment_pairs(
-            raw_prediction,
-            containment_conf,
-            args.containment_overlap,
-            args.containment_area_ratio,
-        )
-        suppressed_indices: list[int] = []
-        prediction = raw_prediction
-        if args.containment_suppress:
-            prediction, suppressed_indices, containment_pairs = suppress_contained_predictions(
+    if not args.skip_predict_diagnostics:
+        model = YOLO(str(case.weights))
+        modules = collect_gate_modules(model)
+        mode_kwargs = mode_specific_kwargs(case.mode)
+        for result in iter_predictions(model, images, args, mode_kwargs):
+            image_path = Path(result.path)
+            target = load_target(image_path, result.orig_shape)
+            raw_prediction = collect_prediction(result)
+            containment_pairs = find_containment_pairs(
                 raw_prediction,
                 containment_conf,
                 args.containment_overlap,
                 args.containment_area_ratio,
-                args.containment_conf_margin,
             )
-        targets.append(target)
-        predictions.append(prediction)
-        update_gate_stats(gate_stats, modules, target, class_names)
-        match_rows.extend(
-            summarize_image_matches(
-                image_path,
-                prediction,
-                target,
-                class_names,
-                args.pr_conf,
-                args.match_iou,
-                containment_pairs,
-                suppressed_indices,
-                raw_prediction,
+            suppressed_indices: list[int] = []
+            prediction = raw_prediction
+            if args.containment_suppress:
+                prediction, suppressed_indices, containment_pairs = suppress_contained_predictions(
+                    raw_prediction,
+                    containment_conf,
+                    args.containment_overlap,
+                    args.containment_area_ratio,
+                    args.containment_conf_margin,
+                )
+            targets.append(target)
+            predictions.append(prediction)
+            update_gate_stats(gate_stats, modules, target, class_names)
+            match_rows.extend(
+                summarize_image_matches(
+                    image_path,
+                    prediction,
+                    target,
+                    class_names,
+                    args.pr_conf,
+                    args.match_iou,
+                    containment_pairs,
+                    suppressed_indices,
+                    raw_prediction,
+                )
             )
-        )
-        if args.save_images > 0 and saved_images < args.save_images:
-            save_prediction_image(
-                result,
-                class_names,
-                image_out_dir / f"{image_path.stem}_pred.jpg",
-                args.save_image_conf,
-                prediction,
-            )
-            saved_images += 1
-        if args.save_match_images > 0 and saved_match_images < args.save_match_images:
-            save_match_comparison_image(
-                result,
-                prediction,
-                target,
-                class_names,
-                match_image_out_dir,
-                args.save_image_conf,
-                args.match_iou,
-            )
-            saved_match_images += 1
+            if args.save_images > 0 and saved_images < args.save_images:
+                save_prediction_image(
+                    result,
+                    class_names,
+                    image_out_dir / f"{image_path.stem}_pred.jpg",
+                    args.save_image_conf,
+                    prediction,
+                )
+                saved_images += 1
+            if args.save_match_images > 0 and saved_match_images < args.save_match_images:
+                save_match_comparison_image(
+                    result,
+                    prediction,
+                    target,
+                    class_names,
+                    match_image_out_dir,
+                    args.save_image_conf,
+                    args.match_iou,
+                )
+                saved_match_images += 1
+            if args.save_gate_images > 0 and saved_gate_images < args.save_gate_images:
+                if save_gate_residual_comparison_image(result, modules, target, class_names, gate_image_out_dir):
+                    saved_gate_images += 1
 
-    metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf)
+    if metric_rows is None:
+        metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf)
     gate_summary = {key: mean(values) for key, values in gate_stats.items()}
     gate_summary["num_gate_samples"] = len(gate_stats["gate_all"])
     gate_summary["num_saved_images"] = saved_images
     gate_summary["num_saved_match_images"] = saved_match_images
+    gate_summary["num_saved_gate_images"] = saved_gate_images
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     return {
@@ -802,7 +1303,13 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         "weights": str(case.weights),
         "num_images": len(images),
         "diagnostic_args": {
+            "metric_backend": args.metric_backend,
+            "validator_backend": "isolated AreaDetectionValidator" if args.metric_backend == "validator" else "",
+            "ap_backend": "ultralytics.ap_per_class",
+            "match_backend": "ultralytics.DetectionValidator.match_predictions",
+            "area_policy": "102/306 absolute-pixel GT buckets with COCO-style ignored-area detections",
             "imgsz": args.imgsz,
+            "batch": args.batch,
             "conf": args.conf,
             "pr_conf": args.pr_conf,
             "nms_iou": args.iou,
@@ -854,7 +1361,8 @@ def main() -> None:
         mean_small = next(row for row in payload["metrics"] if row["class"] == "mean" and row["area"] == "small")
         print(
             f"{payload['name']}: mAP50-95={mean_all['mAP50_95']:.5f}, "
-            f"AP_small={mean_small['AP50']:.5f}, gate_samples={payload['gate_summary']['num_gate_samples']}"
+            f"mAP50-95_small={mean_small['mAP50_95']:.5f}, AP50_small={mean_small['AP50']:.5f}, "
+            f"gate_samples={payload['gate_summary']['num_gate_samples']}"
         )
     (out_dir / "all_cases_summary.json").write_text(json.dumps(payloads, ensure_ascii=False, indent=2), encoding="utf-8")
 

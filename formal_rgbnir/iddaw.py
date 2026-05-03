@@ -21,6 +21,8 @@ PERSONMERGE_MODES = {
     "rgbnir_p2p5_yolo11s_6cls_personmerge",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p3p5_c256_r2_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p3p5_c256_r3_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
@@ -38,6 +40,10 @@ PERSONMERGE_MODES = {
     "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_prioronly_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_prioronly_l005_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge",
@@ -68,6 +74,8 @@ TRAINABLE_MODES = {
     "bifpn_only_yolo11s",
     "bifpn_only_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p3p5_c256_r2_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p3p5_c256_r3_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
@@ -85,6 +93,10 @@ TRAINABLE_MODES = {
     "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_prioronly_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_prioronly_l005_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge",
@@ -209,6 +221,8 @@ def experiment_name(mode: str) -> str:
         "bifpn_only_yolo11s": "iddaw-yolo11s-rgbnir-bifpn-only",
         "bifpn_only_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-6cls-personmerge",
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-6cls-personmerge",
+        "bifpn_only_light_nir_p3p5_c256_r2_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p3p5-c256-r2-6cls-personmerge",
+        "bifpn_only_light_nir_p3p5_c256_r3_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p3p5-c256-r3-6cls-personmerge",
         "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-c256-6cls-personmerge",
@@ -226,6 +240,10 @@ def experiment_name(mode: str) -> str:
         "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-resreflect-p2only-p3plain-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-smallprior-p2only-p3plain-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-smallprior-p2only-p3plain-c256-r3-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_prioronly_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-prioronly-p2only-p3plain-c256-r3-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_prioronly_l005_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-prioronly-l005-p2only-p3plain-c256-r3-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-boost-p2only-p3plain-c256-r3-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-boost-p2only-p3plain-c256-r4-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-smallprior-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-gatefloor-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-twofloor-c256-6cls-personmerge",
@@ -291,6 +309,24 @@ def model_config_for(mode: str) -> str:
     if mode == "bifpn_only_light_nir_yolo11s_6cls_personmerge":
         return str(
             (root / "configs" / "models" / "yolo11s_rgbnir_bifpn_only_light_nir_6cls_personmerge.yaml").resolve()
+        )
+    if mode == "bifpn_only_light_nir_p3p5_c256_r2_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p3p5_light_nir_c256_r2_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p3p5_c256_r3_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p3p5_light_nir_c256_r3_6cls_personmerge.yaml"
+            ).resolve()
         )
     if mode == "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge":
         return str(
@@ -430,6 +466,42 @@ def model_config_for(mode: str) -> str:
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_smallprior_p2only_p3plain_c256_r3_6cls_personmerge.yaml"
             ).resolve()
         )
+    if mode == "bifpn_only_light_nir_p2p5_oa_prioronly_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_prioronly_p2only_p3plain_c256_r3_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_prioronly_l005_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_prioronly_l005_p2only_p3plain_c256_r3_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_boost_p2only_p3plain_c256_r3_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_boost_p2only_p3plain_c256_r4_6cls_personmerge.yaml"
+            ).resolve()
+        )
     if mode == "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge":
         return str(
             (
@@ -547,6 +619,8 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_yolo11s": 24,
         "bifpn_only_yolo11s_6cls_personmerge": 24,
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 24,
+        "bifpn_only_light_nir_p3p5_c256_r2_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p3p5_c256_r3_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
@@ -564,6 +638,10 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oa_prioronly_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oa_prioronly_l005_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": 20,
@@ -605,6 +683,8 @@ def workers_for(mode: str) -> int:
         "bifpn_only_yolo11s": 10,
         "bifpn_only_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p3p5_c256_r2_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p3p5_c256_r3_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
@@ -622,6 +702,10 @@ def workers_for(mode: str) -> int:
         "bifpn_only_light_nir_p2p5_oa_resreflect_p2only_p3plain_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_smallprior_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_prioronly_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_prioronly_l005_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r3_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": 10,

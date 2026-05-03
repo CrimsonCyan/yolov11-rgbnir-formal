@@ -30,6 +30,8 @@ __all__ = (
     "ObjectAwareMultiScaleSoftPriorGateConcat",
     "ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat",
     "ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat",
+    "ObjectAwareMultiScaleSmallPriorAuxConcat",
+    "ObjectAwareMultiScaleSmallPriorBoostConcat",
     "ObjectAwareMultiScaleSoftPriorGateConcatFloor",
     "ObjectAwareP2HeadResidualRefine",
     "QualityAwareFusion",
@@ -649,6 +651,125 @@ class ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat(
         self.foreground_target_mode = "soft_small"
         self.small_area_ref = float(small_area_ref)
         self.max_prior_weight = float(max_prior_weight)
+
+
+class ObjectAwareMultiScaleSmallPriorAuxConcat(ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat):
+    """P2 object-prior auxiliary supervision that leaves RGB/NIR features unchanged."""
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ObjectAwareMultiScaleSmallPriorAuxConcat expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape[0] != nir_feat.shape[0] or rgb_feat.shape[2:] != nir_feat.shape[2:]:
+            raise ValueError(
+                "ObjectAwareMultiScaleSmallPriorAuxConcat requires matching batch/spatial shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        nir_smooth = self._smooth_nir(nir_feat)
+        luminance = self.luminance(nir_smooth)
+        reflectance = self.reflectance(nir_feat - nir_smooth)
+        cues = torch.cat(
+            (
+                rgb_context,
+                luminance,
+                reflectance,
+                torch.abs(rgb_context - luminance),
+                torch.abs(rgb_context - reflectance),
+            ),
+            dim=1,
+        )
+        object_gate = self.object_prior(cues)
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = object_gate
+        else:
+            self.last_object_gate = None
+        self.last_residual_delta = None
+        return torch.cat((rgb_feat, nir_feat), dim=self.d)
+
+
+class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat):
+    """P2 OA boost that preserves the original NIR path and adds a stronger object-prior residual."""
+
+    def __init__(
+        self,
+        rgb_channels,
+        nir_channels,
+        dimension=1,
+        reduction=4,
+        foreground_loss_weight=0.1,
+        max_residual_scale=0.75,
+        residual_init=0.1,
+        small_area_ref=0.0064,
+        max_prior_weight=3.0,
+    ):
+        super().__init__(
+            rgb_channels,
+            nir_channels,
+            dimension=dimension,
+            reduction=reduction,
+            foreground_loss_weight=foreground_loss_weight,
+            max_residual_scale=max_residual_scale,
+            small_area_ref=small_area_ref,
+            max_prior_weight=max_prior_weight,
+        )
+        if residual_init <= 0 or residual_init >= max_residual_scale:
+            raise ValueError(
+                "residual_init must be positive and smaller than max_residual_scale, "
+                f"got {residual_init} and {max_residual_scale}"
+            )
+        self.residual_refine = Conv(nir_channels * 3, nir_channels, k=1, s=1)
+        init_ratio = residual_init / max_residual_scale
+        init_logit = math.log(init_ratio / (1.0 - init_ratio))
+        with torch.no_grad():
+            self.gate_scale.zero_()
+            self.reflectance_scale.fill_(init_logit)
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ObjectAwareMultiScaleSmallPriorBoostConcat expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape[0] != nir_feat.shape[0] or rgb_feat.shape[2:] != nir_feat.shape[2:]:
+            raise ValueError(
+                "ObjectAwareMultiScaleSmallPriorBoostConcat requires matching batch/spatial shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        nir_smooth = self._smooth_nir(nir_feat)
+        luminance = self.luminance(nir_smooth)
+        reflectance = self.reflectance(nir_feat - nir_smooth)
+        cues = torch.cat(
+            (
+                rgb_context,
+                luminance,
+                reflectance,
+                torch.abs(rgb_context - luminance),
+                torch.abs(rgb_context - reflectance),
+            ),
+            dim=1,
+        )
+        object_gate = self.object_prior(cues)
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = object_gate
+        else:
+            self.last_object_gate = None
+        channel_gate = self.channel_gate(cues)
+        selection_gate = channel_gate * object_gate
+
+        refined_cue = self.cue_refine(torch.cat((luminance, reflectance), dim=1))
+        boost_cue = self.residual_refine(torch.cat((nir_feat, refined_cue, rgb_context), dim=1))
+        residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
+        residual_delta = residual_scale * selection_gate * (boost_cue - nir_feat)
+        nir_out = nir_feat + residual_delta
+        if self.capture_object_gate and not torch.is_grad_enabled():
+            self.last_residual_delta = residual_delta.detach()
+        else:
+            self.last_residual_delta = None
+        return torch.cat((rgb_feat, nir_out), dim=self.d)
 
 
 class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPriorGateConcat):

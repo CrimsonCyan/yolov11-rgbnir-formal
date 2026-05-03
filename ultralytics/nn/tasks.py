@@ -54,6 +54,8 @@ from ultralytics.nn.modules import (
     ObjectAwareMultiScaleSoftPriorGateConcat,
     ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat,
     ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat,
+    ObjectAwareMultiScaleSmallPriorAuxConcat,
+    ObjectAwareMultiScaleSmallPriorBoostConcat,
     ObjectAwareMultiScaleSoftPriorGateConcatFloor,
     ObjectAwareP2HeadResidualRefine,
     QualityAwareFusion,
@@ -1318,6 +1320,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             ObjectAwareMultiScaleSoftPriorGateConcat,
             ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat,
             ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat,
+            ObjectAwareMultiScaleSmallPriorAuxConcat,
+            ObjectAwareMultiScaleSmallPriorBoostConcat,
             ObjectAwareMultiScaleSoftPriorGateConcatFloor,
         }:
             if not isinstance(f, list) or len(f) != 2:
