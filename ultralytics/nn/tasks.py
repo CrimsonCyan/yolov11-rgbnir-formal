@@ -58,6 +58,7 @@ from ultralytics.nn.modules import (
     ObjectAwareMultiScaleSmallPriorBoostConcat,
     ObjectAwareMultiScaleSoftPriorGateConcatFloor,
     ObjectAwareP2HeadResidualRefine,
+    ObjectAwareP2HeadResidualRefineLite,
     QualityAwareFusion,
     ResidualQualityAwareFusion,
     ResidualQualityAwareFusionV2,
@@ -1328,7 +1329,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 raise ValueError(f"{m.__name__} expects exactly 2 inputs, got {f}")
             c2 = sum(ch[x] for x in f)
             args = [ch[f[0]], ch[f[1]], *args]
-        elif m is ObjectAwareP2HeadResidualRefine:
+        elif m in {ObjectAwareP2HeadResidualRefine, ObjectAwareP2HeadResidualRefineLite}:
             if not isinstance(f, list) or len(f) != 3:
                 raise ValueError(f"{m.__name__} expects exactly 3 inputs, got {f}")
             c2 = ch[f[0]]
