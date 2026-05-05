@@ -35,6 +35,7 @@ export LR0="${LR0:-}"
 export COS_LR="${COS_LR:-0}"
 export PRETRAINED="${PRETRAINED:-true}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
+export MOSAIC="${MOSAIC:-}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
     DATASET_TAG="6-class-personmerge"
@@ -87,6 +88,10 @@ if [[ "$COS_LR" == "1" || "$COS_LR" == "true" || "$COS_LR" == "True" ]]; then
   CMD+=(--cos-lr)
 fi
 
+if [[ -n "$MOSAIC" ]]; then
+  CMD+=(--mosaic "$MOSAIC")
+fi
+
 if [[ -n "$RESUME_CKPT" ]]; then
   CMD+=(--resume "$RESUME_CKPT")
 fi
@@ -121,6 +126,7 @@ lr0=${LR0:-}
 cos_lr=$COS_LR
 pretrained=$PRETRAINED
 close_mosaic=$CLOSE_MOSAIC
+mosaic=${MOSAIC:-}
 started_at=$STAMP
 command=${CMD[*]}
 EOF

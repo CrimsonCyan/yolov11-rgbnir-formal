@@ -95,6 +95,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch", type=int, default=0, help="Optional batch override for train/val.")
     parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train.")
     parser.add_argument("--cos-lr", action="store_true", help="Use cosine learning rate schedule for train.")
+    parser.add_argument("--mosaic", type=float, default=-1.0, help="Optional mosaic augmentation override, e.g. 0 disables mosaic.")
     parser.add_argument(
         "--pretrained",
         type=parse_bool_arg,
@@ -144,6 +145,7 @@ def main() -> None:
                     lr0=args.lr0 or None,
                     cos_lr=args.cos_lr,
                     pretrained=args.pretrained,
+                    mosaic=args.mosaic if args.mosaic >= 0 else None,
                 ),
                 resume=True,
                 **mode_kwargs,
@@ -164,6 +166,7 @@ def main() -> None:
                 lr0=args.lr0 or None,
                 cos_lr=args.cos_lr,
                 pretrained=args.pretrained,
+                mosaic=args.mosaic if args.mosaic >= 0 else None,
             ),
             **mode_kwargs,
         )

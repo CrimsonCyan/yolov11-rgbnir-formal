@@ -47,7 +47,9 @@ PERSONMERGE_MODES = {
     "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_r4_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_headp2_gatelite_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_lite_c256_r4_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_headp2_efficient_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge",
     "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
@@ -103,7 +105,9 @@ TRAINABLE_MODES = {
     "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_r4_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_headp2_gatelite_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_headp2_lite_c256_r4_yolo11s_6cls_personmerge",
+    "bifpn_only_light_nir_p2p5_oa_headp2_efficient_c256_r4_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge",
     "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge",
     "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge",
@@ -253,7 +257,9 @@ def experiment_name(mode: str) -> str:
         "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-boost-p2only-p3plain-c256-r4-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-smallprior-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_r4_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-smallprior-c256-r4-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_headp2_gatelite_c256_r4_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-gatelite-c256-r4-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_headp2_lite_c256_r4_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-lite-c256-r4-6cls-personmerge",
+        "bifpn_only_light_nir_p2p5_oa_headp2_efficient_c256_r4_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-headp2-efficient-c256-r4-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-gatefloor-c256-6cls-personmerge",
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-ms-softprior-p2only-twofloor-c256-6cls-personmerge",
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": "iddaw-yolo11s-rgbnir-oa-only-light-nir-p2p5-c256-6cls-personmerge",
@@ -538,6 +544,15 @@ def model_config_for(mode: str) -> str:
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_headp2_smallprior_c256_r4_6cls_personmerge.yaml"
             ).resolve()
         )
+    if mode == "bifpn_only_light_nir_p2p5_oa_headp2_gatelite_c256_r4_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_headp2_gatelite_c256_r4_6cls_personmerge.yaml"
+            ).resolve()
+        )
     if mode == "bifpn_only_light_nir_p2p5_oa_headp2_lite_c256_r4_yolo11s_6cls_personmerge":
         return str(
             (
@@ -545,6 +560,15 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_headp2_lite_c256_r4_6cls_personmerge.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_headp2_efficient_c256_r4_yolo11s_6cls_personmerge":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_headp2_efficient_c256_r4_6cls_personmerge.yaml"
             ).resolve()
         )
     if mode == "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge":
@@ -681,7 +705,9 @@ def train_batch_for(mode: str) -> int:
         "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_r4_yolo11s_6cls_personmerge": 16,
+        "bifpn_only_light_nir_p2p5_oa_headp2_gatelite_c256_r4_yolo11s_6cls_personmerge": 16,
         "bifpn_only_light_nir_p2p5_oa_headp2_lite_c256_r4_yolo11s_6cls_personmerge": 20,
+        "bifpn_only_light_nir_p2p5_oa_headp2_efficient_c256_r4_yolo11s_6cls_personmerge": 16,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": 20,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": 20,
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 20,
@@ -748,7 +774,9 @@ def workers_for(mode: str) -> int:
         "bifpn_only_light_nir_p2p5_oa_boost_p2only_p3plain_c256_r4_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_headp2_smallprior_c256_r4_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_headp2_gatelite_c256_r4_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_headp2_lite_c256_r4_yolo11s_6cls_personmerge": 10,
+        "bifpn_only_light_nir_p2p5_oa_headp2_efficient_c256_r4_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_gatefloor_c256_yolo11s_6cls_personmerge": 10,
         "bifpn_only_light_nir_p2p5_oa_ms_softprior_p2only_twofloor_c256_yolo11s_6cls_personmerge": 10,
         "oa_only_light_nir_p2p5_c256_yolo11s_6cls_personmerge": 10,
@@ -780,12 +808,15 @@ def common_train_kwargs(
     lr0: float | None = None,
     cos_lr: bool = False,
     pretrained: bool = True,
+    mosaic: float | None = None,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
     optimizer_name = optimizer or os.getenv("OPTIMIZER", "SGD")
     train_batch = batch if batch and batch > 0 else train_batch_for(mode)
     close_mosaic = int(os.getenv("CLOSE_MOSAIC", "20"))
+    env_mosaic = os.getenv("MOSAIC", "").strip()
+    mosaic_value = mosaic if mosaic is not None else (float(env_mosaic) if env_mosaic else None)
     kwargs = {
         "cache": "ram",
         "imgsz": imgsz,
@@ -804,6 +835,8 @@ def common_train_kwargs(
         kwargs["cos_lr"] = True
     if lr0 is not None:
         kwargs["lr0"] = lr0
+    if mosaic_value is not None:
+        kwargs["mosaic"] = mosaic_value
     return kwargs
 
 
