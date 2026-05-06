@@ -32,6 +32,7 @@ __all__ = (
     "ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat",
     "ObjectAwareMultiScaleSmallPriorAuxConcat",
     "ObjectAwareMultiScaleSmallPriorBoostConcat",
+    "ObjectAwareFusionResidualEnhanceConcat",
     "ObjectAwareMultiScaleSoftPriorGateConcatFloor",
     "ObjectAwareP2HeadResidualRefine",
     "ObjectAwareP2HeadResidualRefineLite",
@@ -766,6 +767,161 @@ class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPrior
         boost_cue = self.residual_refine(torch.cat((nir_feat, refined_cue, rgb_context), dim=1))
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         residual_delta = residual_scale * selection_gate * (boost_cue - nir_feat)
+        nir_out = nir_feat + residual_delta
+        if self.capture_object_gate and not torch.is_grad_enabled():
+            self.last_residual_delta = residual_delta.detach()
+        else:
+            self.last_residual_delta = None
+        return torch.cat((rgb_feat, nir_out), dim=self.d)
+
+
+class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
+    """Fusion-side OA module that adds a small object-aware residual to NIR before BiFPN.
+
+    Unlike the earlier gate-concat modules, this block does not multiply the
+    original NIR path by a learned gate. It keeps RGB unchanged and uses the
+    object prior only to modulate an additive reflectance residual, making the
+    default behavior close to plain RGB/NIR concatenation.
+    """
+
+    def __init__(
+        self,
+        rgb_channels,
+        nir_channels,
+        dimension=1,
+        reduction=4,
+        foreground_loss_weight=0.03,
+        small_area_ref=0.0064,
+        max_prior_weight=3.0,
+        max_residual_scale=0.25,
+        work_reduction=2,
+        gate_stride=2,
+        residual_init=0.03,
+    ):
+        super().__init__()
+        if min(rgb_channels, nir_channels) <= 0:
+            raise ValueError(
+                "ObjectAwareFusionResidualEnhanceConcat expects positive channels, "
+                f"got {rgb_channels} and {nir_channels}"
+            )
+        if small_area_ref <= 0:
+            raise ValueError(f"small_area_ref must be positive, got {small_area_ref}")
+        if max_prior_weight < 1.0:
+            raise ValueError(f"max_prior_weight must be >= 1.0, got {max_prior_weight}")
+        if max_residual_scale <= 0:
+            raise ValueError(f"max_residual_scale must be positive, got {max_residual_scale}")
+        if work_reduction < 1:
+            raise ValueError(f"work_reduction must be >= 1, got {work_reduction}")
+        if gate_stride < 1:
+            raise ValueError(f"gate_stride must be >= 1, got {gate_stride}")
+        if not 0.0 < residual_init < max_residual_scale:
+            raise ValueError(
+                "residual_init must be positive and smaller than max_residual_scale, "
+                f"got {residual_init} and {max_residual_scale}"
+            )
+
+        self.d = dimension
+        self.foreground_loss_weight = float(foreground_loss_weight)
+        self.foreground_target_mode = "soft_small"
+        self.small_area_ref = float(small_area_ref)
+        self.max_prior_weight = float(max_prior_weight)
+        self.max_residual_scale = float(max_residual_scale)
+        self.gate_stride = int(gate_stride)
+        self.capture_object_gate = False
+        self.last_object_gate = None
+        self.last_residual_delta = None
+
+        work_channels = max(nir_channels // int(work_reduction), 32)
+        hidden = max(nir_channels // reduction, 16)
+        cue_channels = work_channels * 6
+
+        self.rgb_proj = Conv(rgb_channels, work_channels, k=1, s=1)
+        self.nir_proj = Conv(nir_channels, work_channels, k=1, s=1)
+        self.smooth_fuse = Conv(work_channels * 3, work_channels, k=1, s=1)
+        self.luminance = nn.Sequential(
+            DWConv(work_channels, work_channels, k=5, s=1),
+            Conv(work_channels, work_channels, k=1, s=1),
+        )
+        self.reflectance = nn.Sequential(
+            DWConv(work_channels, work_channels, k=3, s=1),
+            Conv(work_channels, work_channels, k=1, s=1),
+        )
+        self.channel_gate = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(hidden, nir_channels, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.object_prior = nn.Sequential(
+            DWConv(cue_channels, cue_channels, k=3, s=1),
+            nn.Conv2d(cue_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
+        self.residual_refine = nn.Sequential(
+            Conv(work_channels * 4, work_channels, k=1, s=1),
+            DWConv(work_channels, work_channels, k=3, s=1),
+            Conv(work_channels, nir_channels, k=1, s=1, act=False),
+        )
+        self.gate_scale = nn.Parameter(torch.tensor(0.0, dtype=torch.float32))
+        init_ratio = float(residual_init) / float(max_residual_scale)
+        init_logit = math.log(init_ratio / (1.0 - init_ratio))
+        self.reflectance_scale = nn.Parameter(torch.tensor(init_logit, dtype=torch.float32))
+
+    def _smooth_nir(self, nir_feat):
+        smooth3 = F.avg_pool2d(nir_feat, kernel_size=3, stride=1, padding=1)
+        smooth5 = F.avg_pool2d(nir_feat, kernel_size=5, stride=1, padding=2)
+        smooth7 = F.avg_pool2d(nir_feat, kernel_size=7, stride=1, padding=3)
+        return self.smooth_fuse(torch.cat((smooth3, smooth5, smooth7), dim=1))
+
+    def _object_gate(self, cue):
+        gate_stride = int(getattr(self, "gate_stride", 1))
+        if gate_stride > 1:
+            gate_cue = F.avg_pool2d(cue, kernel_size=gate_stride, stride=gate_stride)
+            gate_low = self.object_prior(gate_cue)
+            gate = F.interpolate(gate_low, size=cue.shape[2:], mode="nearest")
+            return gate, gate_low
+        gate = self.object_prior(cue)
+        return gate, gate
+
+    def forward(self, x):
+        if len(x) != 2:
+            raise ValueError(f"ObjectAwareFusionResidualEnhanceConcat expects 2 feature maps, got {len(x)}")
+
+        rgb_feat, nir_feat = x
+        if rgb_feat.shape[0] != nir_feat.shape[0] or rgb_feat.shape[2:] != nir_feat.shape[2:]:
+            raise ValueError(
+                "ObjectAwareFusionResidualEnhanceConcat requires matching batch/spatial shapes, "
+                f"got {rgb_feat.shape} and {nir_feat.shape}"
+            )
+
+        rgb_context = self.rgb_proj(rgb_feat)
+        nir_context = self.nir_proj(nir_feat)
+        nir_smooth = self._smooth_nir(nir_context)
+        luminance = self.luminance(nir_smooth)
+        reflectance = self.reflectance(nir_context - nir_smooth)
+        cue = torch.cat(
+            (
+                rgb_context,
+                nir_context,
+                luminance,
+                reflectance,
+                torch.abs(rgb_context - reflectance),
+                torch.abs(nir_context - reflectance),
+            ),
+            dim=1,
+        )
+        object_gate, loss_gate = self._object_gate(cue)
+        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = loss_gate
+        else:
+            self.last_object_gate = None
+        channel_gate = self.channel_gate(cue)
+        selection_gate = channel_gate * object_gate
+
+        residual = self.residual_refine(torch.cat((rgb_context, nir_context, luminance, reflectance), dim=1))
+        residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
+        residual_delta = residual_scale * selection_gate * residual
         nir_out = nir_feat + residual_delta
         if self.capture_object_gate and not torch.is_grad_enabled():
             self.last_residual_delta = residual_delta.detach()
