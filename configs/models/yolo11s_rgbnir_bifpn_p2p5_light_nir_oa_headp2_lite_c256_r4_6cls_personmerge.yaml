@@ -54,7 +54,7 @@ backbone:
   - [29, 1, Index, [256, 3]]
 
 head:
-  - [[30, 4, 14], 1, ObjectAwareP2HeadResidualRefineLite, [8, 0.1, 0.0064, 3.0, 0.35, 4, 0.03]]
+  - [[30, 4, 14], 1, ObjectAwareP2HeadResidualRefineLite, [2, 0.1, 0.0064, 3.0, 0.35, 4, 0.03]]
   - [34, 2, C3k2, [256, False]]
   - [31, 2, C3k2, [256, False]]
   - [32, 2, C3k2, [256, False]]

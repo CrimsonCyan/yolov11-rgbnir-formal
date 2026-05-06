@@ -43,8 +43,8 @@ backbone:
 
   - [18, 1, Conv, [512, 1, 1]]
   - [20, 1, Conv, [1024, 1, 1]]
-  - [[4, 14], 1, ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat, [1, 4, 0.1, 0.5]]
-  - [[6, 16], 1, ObjectAwareMultiScaleReflectanceGateConcat, [1, 4]]
+  - [[4, 14], 1, ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat, [1, 2, 0.1, 0.5]]
+  - [[6, 16], 1, ObjectAwareMultiScaleReflectanceGateConcat, [1, 2]]
   - [[8, 21], 1, Concat, [1]]
   - [[10, 22], 1, Concat, [1]]
   - [-1, 1, SPPF, [1024, 5]]

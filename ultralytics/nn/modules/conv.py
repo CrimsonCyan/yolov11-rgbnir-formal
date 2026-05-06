@@ -379,7 +379,7 @@ class ConcatGate(nn.Module):
 class ObjectAwareNIRGateConcat(nn.Module):
     """Gate NIR features with lightweight reflection cues before RGB/NIR concatenation."""
 
-    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4):
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=2):
         super().__init__()
         if rgb_channels <= 0 or nir_channels <= 0:
             raise ValueError(
@@ -431,7 +431,7 @@ class ObjectAwareNIRGateConcat(nn.Module):
 class ObjectAwareReflectanceGateConcat(nn.Module):
     """Retinex-style object-aware NIR gate with luminance, reflection, and object-prior cues."""
 
-    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4):
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=2):
         super().__init__()
         if rgb_channels <= 0 or nir_channels <= 0:
             raise ValueError(
@@ -449,7 +449,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
             DWConv(nir_channels, nir_channels, k=3, s=1),
             Conv(nir_channels, nir_channels, k=1, s=1),
         )
-        cue_channels = nir_channels * 5
+        cue_channels = nir_channels * 4
         self.channel_gate = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
@@ -497,7 +497,6 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
                 rgb_context,
                 luminance,
                 reflectance,
-                torch.abs(rgb_context - luminance),
                 torch.abs(rgb_context - reflectance),
             ),
             dim=1,
@@ -522,7 +521,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
 class ObjectAwareForegroundReflectanceGateConcat(ObjectAwareReflectanceGateConcat):
     """OA-Reflect gate with bbox foreground supervision on the object-prior map during training."""
 
-    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4, foreground_loss_weight=0.01):
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=2, foreground_loss_weight=0.01):
         super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
         self.foreground_loss_weight = float(foreground_loss_weight)
         self.foreground_target_mode = "box"
@@ -531,7 +530,7 @@ class ObjectAwareForegroundReflectanceGateConcat(ObjectAwareReflectanceGateConca
 class ObjectAwareMultiScaleReflectanceGateConcat(ObjectAwareReflectanceGateConcat):
     """OA-Reflect gate using multi-scale NIR smoothing before luminance/reflectance separation."""
 
-    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4):
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=2):
         super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
         self.smooth_fuse = Conv(nir_channels * 3, nir_channels, k=1, s=1)
 
@@ -545,7 +544,7 @@ class ObjectAwareMultiScaleReflectanceGateConcat(ObjectAwareReflectanceGateConca
 class ObjectAwareMultiScaleSoftPriorGateConcat(ObjectAwareMultiScaleReflectanceGateConcat):
     """Multi-scale OA-Reflect gate with soft bbox-prior supervision on the object-prior map."""
 
-    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=4, foreground_loss_weight=0.003):
+    def __init__(self, rgb_channels, nir_channels, dimension=1, reduction=2, foreground_loss_weight=0.003):
         super().__init__(rgb_channels, nir_channels, dimension=dimension, reduction=reduction)
         self.foreground_loss_weight = float(foreground_loss_weight)
         self.foreground_target_mode = "soft"
@@ -559,7 +558,7 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
         rgb_channels,
         nir_channels,
         dimension=1,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.1,
         max_residual_scale=0.5,
     ):
@@ -599,7 +598,6 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
                 rgb_context,
                 luminance,
                 reflectance,
-                torch.abs(rgb_context - luminance),
                 torch.abs(rgb_context - reflectance),
             ),
             dim=1,
@@ -633,7 +631,7 @@ class ObjectAwareMultiScaleSmallPriorResidualReflectGateConcat(
         rgb_channels,
         nir_channels,
         dimension=1,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.1,
         max_residual_scale=0.5,
         small_area_ref=0.0064,
@@ -679,7 +677,6 @@ class ObjectAwareMultiScaleSmallPriorAuxConcat(ObjectAwareMultiScaleSmallPriorRe
                 rgb_context,
                 luminance,
                 reflectance,
-                torch.abs(rgb_context - luminance),
                 torch.abs(rgb_context - reflectance),
             ),
             dim=1,
@@ -701,7 +698,7 @@ class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPrior
         rgb_channels,
         nir_channels,
         dimension=1,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.1,
         max_residual_scale=0.75,
         residual_init=0.1,
@@ -750,7 +747,6 @@ class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPrior
                 rgb_context,
                 luminance,
                 reflectance,
-                torch.abs(rgb_context - luminance),
                 torch.abs(rgb_context - reflectance),
             ),
             dim=1,
@@ -764,7 +760,7 @@ class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPrior
         selection_gate = channel_gate * object_gate
 
         refined_cue = self.cue_refine(torch.cat((luminance, reflectance), dim=1))
-        boost_cue = self.residual_refine(torch.cat((nir_feat, refined_cue, rgb_context), dim=1))
+        boost_cue = self.residual_refine(torch.cat((rgb_context, luminance, reflectance), dim=1))
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         residual_delta = residual_scale * selection_gate * (boost_cue - nir_feat)
         nir_out = nir_feat + residual_delta
@@ -789,7 +785,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         rgb_channels,
         nir_channels,
         dimension=1,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.03,
         small_area_ref=0.0064,
         max_prior_weight=3.0,
@@ -833,7 +829,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
 
         work_channels = max(nir_channels // int(work_reduction), 32)
         hidden = max(nir_channels // reduction, 16)
-        cue_channels = work_channels * 6
+        cue_channels = work_channels * 4
 
         self.rgb_proj = Conv(rgb_channels, work_channels, k=1, s=1)
         self.nir_proj = Conv(nir_channels, work_channels, k=1, s=1)
@@ -859,7 +855,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             nn.Sigmoid(),
         )
         self.residual_refine = nn.Sequential(
-            Conv(work_channels * 4, work_channels, k=1, s=1),
+            Conv(work_channels * 3, work_channels, k=1, s=1),
             DWConv(work_channels, work_channels, k=3, s=1),
             Conv(work_channels, nir_channels, k=1, s=1, act=False),
         )
@@ -903,11 +899,9 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         cue = torch.cat(
             (
                 rgb_context,
-                nir_context,
                 luminance,
                 reflectance,
                 torch.abs(rgb_context - reflectance),
-                torch.abs(nir_context - reflectance),
             ),
             dim=1,
         )
@@ -919,7 +913,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         channel_gate = self.channel_gate(cue)
         selection_gate = channel_gate * object_gate
 
-        residual = self.residual_refine(torch.cat((rgb_context, nir_context, luminance, reflectance), dim=1))
+        residual = self.residual_refine(torch.cat((rgb_context, luminance, reflectance), dim=1))
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         residual_delta = residual_scale * selection_gate * residual
         nir_out = nir_feat + residual_delta
@@ -938,7 +932,7 @@ class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPri
         rgb_channels,
         nir_channels,
         dimension=1,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.1,
         gate_floor=0.10,
     ):
@@ -973,7 +967,6 @@ class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPri
                 rgb_context,
                 luminance,
                 reflectance,
-                torch.abs(rgb_context - luminance),
                 torch.abs(rgb_context - reflectance),
             ),
             dim=1,
@@ -1003,7 +996,7 @@ class ObjectAwareP2HeadResidualRefine(nn.Module):
         p2_channels,
         rgb_channels,
         nir_channels,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.1,
         small_area_ref=0.0064,
         max_prior_weight=3.0,
@@ -1048,7 +1041,7 @@ class ObjectAwareP2HeadResidualRefine(nn.Module):
         )
 
         hidden = max(p2_channels // reduction, 16)
-        cue_channels = p2_channels * 6
+        cue_channels = p2_channels * 4
         self.channel_gate = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
@@ -1106,12 +1099,10 @@ class ObjectAwareP2HeadResidualRefine(nn.Module):
         reflectance = self.reflectance(nir_context - nir_smooth)
         cues = torch.cat(
             (
-                p2_feat,
                 rgb_context,
                 luminance,
                 reflectance,
                 torch.abs(rgb_context - reflectance),
-                torch.abs(p2_feat - reflectance),
             ),
             dim=1,
         )
@@ -1138,7 +1129,7 @@ class ObjectAwareP2HeadResidualRefineLite(nn.Module):
     """Memory-reduced P2 head-side OA residual refinement.
 
     This keeps the same inputs and foreground prior supervision as
-    ObjectAwareP2HeadResidualRefine, but compresses the 6C cue tensor before
+    ObjectAwareP2HeadResidualRefine, but compresses the 4C cue tensor before
     spatial prior/channel gating and uses a stronger, bounded residual
     initialization. The goal is to make the head-side OA path easier to run at
     the same batch size as the BiFPN-only baseline without changing the main
@@ -1150,7 +1141,7 @@ class ObjectAwareP2HeadResidualRefineLite(nn.Module):
         p2_channels,
         rgb_channels,
         nir_channels,
-        reduction=8,
+        reduction=2,
         foreground_loss_weight=0.1,
         small_area_ref=0.0064,
         max_prior_weight=3.0,
@@ -1187,7 +1178,7 @@ class ObjectAwareP2HeadResidualRefineLite(nn.Module):
 
         hidden = max(p2_channels // reduction, 16)
         cue_hidden = max(p2_channels // cue_reduction, 32)
-        cue_channels = p2_channels * 6
+        cue_channels = p2_channels * 4
 
         self.rgb_proj = Conv(rgb_channels, p2_channels, k=1, s=1) if rgb_channels != p2_channels else nn.Identity()
         self.nir_proj = Conv(nir_channels, p2_channels, k=1, s=1) if nir_channels != p2_channels else nn.Identity()
@@ -1254,12 +1245,10 @@ class ObjectAwareP2HeadResidualRefineLite(nn.Module):
         cue = self.cue_reduce(
             torch.cat(
                 (
-                    p2_feat,
                     rgb_context,
                     luminance,
                     reflectance,
                     torch.abs(rgb_context - reflectance),
-                    torch.abs(p2_feat - reflectance),
                 ),
                 dim=1,
             )
@@ -1298,7 +1287,7 @@ class ObjectAwareP2HeadResidualRefineEfficient(nn.Module):
         p2_channels,
         rgb_channels,
         nir_channels,
-        reduction=4,
+        reduction=2,
         foreground_loss_weight=0.1,
         small_area_ref=0.0064,
         max_prior_weight=3.0,
@@ -1341,7 +1330,7 @@ class ObjectAwareP2HeadResidualRefineEfficient(nn.Module):
 
         work_channels = max(p2_channels // int(work_reduction), 32)
         hidden = max(p2_channels // reduction, 16)
-        cue_channels = work_channels * 6
+        cue_channels = work_channels * 4
 
         self.p2_proj = Conv(p2_channels, work_channels, k=1, s=1)
         self.rgb_proj = Conv(rgb_channels, work_channels, k=1, s=1)
@@ -1417,12 +1406,10 @@ class ObjectAwareP2HeadResidualRefineEfficient(nn.Module):
         reflectance = self.reflectance(nir_context - nir_smooth)
         cue = torch.cat(
             (
-                p2_context,
                 rgb_context,
                 luminance,
                 reflectance,
                 torch.abs(rgb_context - reflectance),
-                torch.abs(p2_context - reflectance),
             ),
             dim=1,
         )
