@@ -793,6 +793,8 @@ def model_config_for(mode: str) -> str:
 
 
 def mode_specific_kwargs(mode: str) -> dict[str, object]:
+    if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
+        return mode_specific_kwargs(TRAFFIC_PERSONMERGE_MODE_MAP[mode])
     if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_p2p5_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
         return {"use_simotm": "BGR", "channels": 3}
     if mode in {"nir", "nir_yolo11s_6cls_personmerge", "nir_p2p5_yolo11s_6cls_personmerge"}:
