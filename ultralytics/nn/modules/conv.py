@@ -793,6 +793,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         work_reduction=2,
         gate_stride=2,
         residual_init=0.03,
+        context_gate=False,
     ):
         super().__init__()
         if min(rgb_channels, nir_channels) <= 0:
@@ -823,6 +824,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         self.max_prior_weight = float(max_prior_weight)
         self.max_residual_scale = float(max_residual_scale)
         self.gate_stride = int(gate_stride)
+        self.use_context_gate = bool(context_gate)
         self.capture_object_gate = False
         self.last_object_gate = None
         self.last_residual_delta = None
@@ -853,6 +855,17 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             DWConv(cue_channels, cue_channels, k=3, s=1),
             nn.Conv2d(cue_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
             nn.Sigmoid(),
+        )
+        self.context_gate = (
+            nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
+                nn.SiLU(inplace=True),
+                nn.Conv2d(hidden, 1, kernel_size=1, stride=1, padding=0, bias=True),
+                nn.Sigmoid(),
+            )
+            if self.use_context_gate
+            else None
         )
         self.residual_refine = nn.Sequential(
             Conv(work_channels * 3, work_channels, k=1, s=1),
@@ -912,6 +925,9 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             self.last_object_gate = None
         channel_gate = self.channel_gate(cue)
         selection_gate = channel_gate * object_gate
+        if self.context_gate is not None:
+            # Use global context only to scale the additive residual, not to suppress the original NIR path.
+            selection_gate = selection_gate * (0.5 + self.context_gate(cue))
 
         residual = self.residual_refine(torch.cat((rgb_context, luminance, reflectance), dim=1))
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
