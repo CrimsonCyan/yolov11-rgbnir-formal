@@ -7,10 +7,21 @@ from pathlib import Path
 
 CATEGORY_NAMES_7 = ["person", "rider", "motorcycle", "car", "truck", "bus", "autorickshaw"]
 CATEGORY_NAMES_6_PERSONMERGE = ["person", "motorcycle", "car", "truck", "bus", "autorickshaw"]
+CATEGORY_NAMES_8_PERSONMERGE_TRAFFIC = [
+    "person",
+    "motorcycle",
+    "car",
+    "truck",
+    "bus",
+    "autorickshaw",
+    "traffic light",
+    "traffic sign",
+]
 CATEGORY_NAMES = CATEGORY_NAMES_6_PERSONMERGE
 DEFAULT_PAIRS = ["visible", "nir"]
 DEFAULT_CLASS_SCHEMA = "6cls_personmerge"
 LEGACY_CLASS_SCHEMA = "7cls"
+TRAFFIC_CLASS_SCHEMA = "8cls_personmerge_traffic"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "rgb_p2p5_yolo11s_6cls_personmerge",
@@ -65,6 +76,15 @@ PERSONMERGE_MODES = {
     "proposed_lite_yolo11s_6cls_personmerge",
     "proposed_lite_light_nir_yolo11s_6cls_personmerge",
 }
+TRAFFIC_PERSONMERGE_MODE_MAP = {
+    "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_6cls_personmerge"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
+}
+TRAFFIC_PERSONMERGE_MODES = set(TRAFFIC_PERSONMERGE_MODE_MAP)
 TRAINABLE_MODES = {
     "rgb",
     "rgb_yolo11s",
@@ -133,6 +153,7 @@ TRAINABLE_MODES = {
     "proposed_lite_yolo11s_6cls_personmerge",
     "proposed_lite_light_nir_yolo11s_6cls_personmerge",
 }
+TRAINABLE_MODES |= TRAFFIC_PERSONMERGE_MODES
 
 
 def repo_root() -> Path:
@@ -140,6 +161,8 @@ def repo_root() -> Path:
 
 
 def class_schema_for_mode(mode: str) -> str:
+    if mode in TRAFFIC_PERSONMERGE_MODES:
+        return TRAFFIC_CLASS_SCHEMA
     if mode in PERSONMERGE_MODES:
         return DEFAULT_CLASS_SCHEMA
     return os.getenv("IDDAW_CLASS_SCHEMA", DEFAULT_CLASS_SCHEMA).strip().lower()
@@ -150,11 +173,21 @@ def use_personmerge_schema(mode: str) -> bool:
 
 
 def category_names_for_mode(mode: str) -> list[str]:
-    return CATEGORY_NAMES_6_PERSONMERGE if use_personmerge_schema(mode) else CATEGORY_NAMES_7
+    schema = class_schema_for_mode(mode)
+    if schema == TRAFFIC_CLASS_SCHEMA:
+        return CATEGORY_NAMES_8_PERSONMERGE_TRAFFIC
+    return CATEGORY_NAMES_6_PERSONMERGE if schema != LEGACY_CLASS_SCHEMA else CATEGORY_NAMES_7
 
 
 def resolve_dataset_root(mode: str = "rgbnir") -> Path:
-    if use_personmerge_schema(mode):
+    schema = class_schema_for_mode(mode)
+    if schema == TRAFFIC_CLASS_SCHEMA:
+        env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC")
+        candidates = [
+            repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
+            repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
+        ]
+    elif schema != LEGACY_CLASS_SCHEMA:
         env_root = os.getenv("IDDAW_YOLO_ROOT_6CLS_PERSONMERGE")
         candidates = [
             repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge",
@@ -222,6 +255,10 @@ def build_dataset_yaml(mode: str) -> Path:
 
 
 def experiment_name(mode: str) -> str:
+    if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
+        return experiment_name(TRAFFIC_PERSONMERGE_MODE_MAP[mode]).replace(
+            "6cls-personmerge", "8cls-personmerge-traffic"
+        )
     names = {
         "rgb": "iddaw-yolo11n-rgb",
         "rgb_yolo11s": "iddaw-yolo11s-rgb",
@@ -301,6 +338,24 @@ def experiment_name(mode: str) -> str:
 
 def model_config_for(mode: str) -> str:
     root = repo_root()
+    if mode == "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_c256_r4_8cls_personmerge_traffic.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fusionres_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+            ).resolve()
+        )
     if mode == "rgb":
         return str((root / "ultralytics" / "cfg" / "models" / "11" / "yolo11.yaml").resolve())
     if mode in {"rgb_yolo11s", "rgb_yolo11s_6cls_personmerge"}:
@@ -720,6 +775,8 @@ def mode_specific_kwargs(mode: str) -> dict[str, object]:
 
 
 def train_batch_for(mode: str) -> int:
+    if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
+        return train_batch_for(TRAFFIC_PERSONMERGE_MODE_MAP[mode])
     batches = {
         "rgb": 96,
         "rgb_yolo11s": 48,
@@ -794,6 +851,8 @@ def train_batch_for(mode: str) -> int:
 
 
 def workers_for(mode: str) -> int:
+    if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
+        return workers_for(TRAFFIC_PERSONMERGE_MODE_MAP[mode])
     workers = {
         "rgb": 12,
         "rgb_yolo11s": 12,

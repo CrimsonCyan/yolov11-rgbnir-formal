@@ -10,9 +10,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/data1/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
 DEFAULT_DATA_ROOT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
 DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
+DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic"
 export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
+if [[ "$MODE" == *_8cls_personmerge_traffic ]]; then
+  export IDDAW_CLASS_SCHEMA="8cls_personmerge_traffic"
+fi
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
-if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
+if [[ "$MODE" == *_8cls_personmerge_traffic || "$IDDAW_CLASS_SCHEMA" == "8cls_personmerge_traffic" ]]; then
+  export IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC="${IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC:-$DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC}"
+elif [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
   export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"
 fi
 export PYTHONUNBUFFERED=1
@@ -37,7 +43,9 @@ export PRETRAINED="${PRETRAINED:-true}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 export MOSAIC="${MOSAIC:-}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
-  if [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
+  if [[ "$MODE" == *_8cls_personmerge_traffic || "$IDDAW_CLASS_SCHEMA" == "8cls_personmerge_traffic" ]]; then
+    DATASET_TAG="8-class-personmerge-traffic"
+  elif [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
     DATASET_TAG="6-class-personmerge"
   else
     DATASET_TAG="7-class"
@@ -111,6 +119,7 @@ log_file=$LOG_FILE
 python_bin=$PYTHON_BIN
 dataset_root=$IDDAW_YOLO_ROOT
 dataset_root_6cls_personmerge=${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-}
+dataset_root_8cls_personmerge_traffic=${IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC:-}
 class_schema=$IDDAW_CLASS_SCHEMA
 wandb_enabled=$WANDB_ENABLED
 wandb_console=${WANDB_CONSOLE:-}
