@@ -1,6 +1,7 @@
 # YOLO11s RGB+NIR + Light NIR branch + context-aware P2 OA residual + P2-P5 BiFPN c256 r4.
 # 8-class personmerge + traffic schema:
 # person, motorcycle, car, truck, bus, autorickshaw, traffic light, traffic sign.
+# Foreground auxiliary loss is disabled; OA is evaluated as a pure feature module.
 
 nc: 8
 scale: s
@@ -38,7 +39,7 @@ backbone:
 
   - [18, 1, Conv, [512, 1, 1]]
   - [20, 1, Conv, [1024, 1, 1]]
-  - [[4, 14], 1, ObjectAwareFusionResidualEnhanceConcat, [1, 2, 0.03, 0.0064, 3.0, 0.15, 2, 2, 0.02, true]]
+  - [[4, 14], 1, ObjectAwareFusionResidualEnhanceConcat, [1, 2, 0.0, 0.0064, 3.0, 0.15, 2, 2, 0.02, true]]
   - [[6, 16], 1, Concat, [1]]
   - [[8, 21], 1, Concat, [1]]
   - [[10, 22], 1, Concat, [1]]
