@@ -991,7 +991,8 @@ def common_train_kwargs(
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
-    optimizer_name = optimizer or os.getenv("OPTIMIZER", "SGD")
+    optimizer_name = optimizer or os.getenv("OPTIMIZER", "AdamW")
+    lr0_value = lr0 if lr0 is not None else float(os.getenv("LR0", "0.001") or 0.001)
     train_batch = batch if batch and batch > 0 else train_batch_for(mode)
     close_mosaic = int(os.getenv("CLOSE_MOSAIC", "20"))
     env_mosaic = os.getenv("MOSAIC", "").strip()
@@ -1030,8 +1031,7 @@ def common_train_kwargs(
     }
     if cos_lr:
         kwargs["cos_lr"] = True
-    if lr0 is not None:
-        kwargs["lr0"] = lr0
+    kwargs["lr0"] = lr0_value
     if mosaic_value is not None:
         kwargs["mosaic"] = mosaic_value
     return kwargs
