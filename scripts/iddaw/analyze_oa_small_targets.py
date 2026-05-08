@@ -742,7 +742,10 @@ def prediction_area_bucket(box: torch.Tensor) -> str:
 def collect_gate_modules(model) -> list[torch.nn.Module]:
     modules = []
     for module in model.model.modules():
-        if float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0:
+        has_fg_loss = float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0
+        has_gate_capture = hasattr(module, "capture_object_gate") or hasattr(module, "last_object_gate")
+        has_residual_capture = hasattr(module, "last_residual_delta")
+        if has_fg_loss or has_gate_capture or has_residual_capture:
             module.capture_object_gate = True
             module.last_object_gate = None
             if hasattr(module, "last_residual_delta"):
@@ -789,22 +792,25 @@ def update_gate_stats(stats: dict[str, list[float]], modules, target, class_name
     if outside.any():
         stats["gate_outside"].append(float(gate_map[outside].mean()))
 
-    for cls_name in ("person", "motorcycle"):
+    for cls_name in ("person", "motorcycle", "traffic light", "traffic sign"):
         if cls_name not in class_names:
             continue
         cls = class_names.index(cls_name)
         cls_mask = mask_for_boxes(boxes, labels, cls, (gh, gw), image_shape)
         if cls_mask.any():
-            stats[f"gate_{cls_name}_inside"].append(float(gate_map[cls_mask].mean()))
+            stats[f"gate_{cls_name.replace(' ', '_')}_inside"].append(float(gate_map[cls_mask].mean()))
 
     delta = getattr(module, "last_residual_delta", None)
     if delta is not None and isinstance(delta, torch.Tensor):
         delta_map = delta.detach().cpu().float()[0].abs().mean(0)
         stats["residual_all"].append(float(delta_map.mean()))
+        stats["residual_max"].append(float(delta_map.max()))
         if inside.any():
             stats["residual_inside"].append(float(delta_map[inside].mean()))
+            stats["residual_inside_max"].append(float(delta_map[inside].max()))
         if outside.any():
             stats["residual_outside"].append(float(delta_map[outside].mean()))
+            stats["residual_outside_max"].append(float(delta_map[outside].max()))
 
 
 def iter_predictions(model: YOLO, images: list[Path], args: argparse.Namespace, mode_kwargs: dict[str, object]):
@@ -1212,9 +1218,14 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         "gate_outside": [],
         "gate_person_inside": [],
         "gate_motorcycle_inside": [],
+        "gate_traffic_light_inside": [],
+        "gate_traffic_sign_inside": [],
         "residual_all": [],
+        "residual_max": [],
         "residual_inside": [],
+        "residual_inside_max": [],
         "residual_outside": [],
+        "residual_outside_max": [],
     }
     saved_images = 0
     saved_match_images = 0

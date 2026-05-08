@@ -502,7 +502,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -603,7 +603,7 @@ class ObjectAwareMultiScaleSoftPriorResidualReflectGateConcat(ObjectAwareMultiSc
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -682,7 +682,7 @@ class ObjectAwareMultiScaleSmallPriorAuxConcat(ObjectAwareMultiScaleSmallPriorRe
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -752,7 +752,7 @@ class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPrior
             dim=1,
         )
         object_gate = self.object_prior(cues)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -919,8 +919,8 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             dim=1,
         )
         object_gate, loss_gate = self._object_gate(cue)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
-            self.last_object_gate = loss_gate
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = loss_gate if self.training and self.foreground_loss_weight > 0 else object_gate
         else:
             self.last_object_gate = None
         channel_gate = self.channel_gate(cue)
@@ -989,7 +989,7 @@ class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPri
         )
         object_gate = self.object_prior(cues)
         object_gate = self.gate_floor + (1.0 - self.gate_floor) * object_gate
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -1123,7 +1123,7 @@ class ObjectAwareP2HeadResidualRefine(nn.Module):
             dim=1,
         )
         object_gate, loss_gate = self._object_gate(cues)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = loss_gate if self.training else object_gate
         else:
             self.last_object_gate = None
@@ -1270,7 +1270,7 @@ class ObjectAwareP2HeadResidualRefineLite(nn.Module):
             )
         )
         object_gate = self.object_prior(cue)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
             self.last_object_gate = object_gate
         else:
             self.last_object_gate = None
@@ -1430,8 +1430,8 @@ class ObjectAwareP2HeadResidualRefineEfficient(nn.Module):
             dim=1,
         )
         object_gate, loss_gate = self._object_gate(cue)
-        if self.capture_object_gate and self.foreground_loss_weight > 0 and (self.training or not torch.is_grad_enabled()):
-            self.last_object_gate = loss_gate
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = loss_gate if self.training and self.foreground_loss_weight > 0 else object_gate
         else:
             self.last_object_gate = None
         channel_gate = self.channel_gate(cue)
