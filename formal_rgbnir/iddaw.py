@@ -86,6 +86,9 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
     "bifpn_only_light_nir_p2p5_c256_r2_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_c256_r2_yolo11s_6cls_personmerge"
     ),
+    "bifpn_only_light_nir_p2p5_c256_r3_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_c256_r3_yolo11s_6cls_personmerge"
+    ),
     "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_6cls_personmerge"
     ),
