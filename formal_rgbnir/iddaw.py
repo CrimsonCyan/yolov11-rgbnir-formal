@@ -1006,10 +1006,10 @@ def common_train_kwargs(
     small_ref_ratio_value = (
         small_ref_ratio
         if small_ref_ratio is not None
-        else float(os.getenv("SMALL_REF_RATIO", "") or str(102.0 / 2048.0))
+        else float(os.getenv("SMALL_REF_RATIO", "") or "0.05")
     )
     small_max_weight_value = (
-        small_max_weight if small_max_weight is not None else float(os.getenv("SMALL_MAX_WEIGHT", "3.0") or 3.0)
+        small_max_weight if small_max_weight is not None else float(os.getenv("SMALL_MAX_WEIGHT", "2.0") or 2.0)
     )
     kwargs = {
         "cache": "ram",

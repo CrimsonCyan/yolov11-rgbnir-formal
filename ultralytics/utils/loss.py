@@ -436,8 +436,8 @@ class v8DetectionLoss:
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
         self.small_center_gain = float(getattr(h, "small_center_gain", 0.0) or 0.0)
         self.small_scale_gain = float(getattr(h, "small_scale_gain", 0.0) or 0.0)
-        self.small_ref_ratio = float(getattr(h, "small_ref_ratio", 102.0 / 2048.0) or (102.0 / 2048.0))
-        self.small_max_weight = float(getattr(h, "small_max_weight", 3.0) or 3.0)
+        self.small_ref_ratio = float(getattr(h, "small_ref_ratio", 0.05) or 0.05)
+        self.small_max_weight = float(getattr(h, "small_max_weight", 2.0) or 2.0)
         self.use_small_object_loss = self.small_center_gain > 0.0 or self.small_scale_gain > 0.0
 
         # ATSS use
@@ -509,8 +509,22 @@ class v8DetectionLoss:
 
         target_wh_px = target_wh * stride_weight.unsqueeze(-1)
         small_ref_side = imgsz.max().to(pred.dtype) * self.small_ref_ratio
-        min_side = target_wh_px.min(dim=1).values.clamp_min(1.0)
-        small_weight = torch.sqrt(small_ref_side / min_side).clamp(1.0, self.small_max_weight).detach()
+        min_side = target_wh_px.min(dim=1).values
+        equiv_side = torch.sqrt(target_wh_px.prod(dim=1).clamp_min(1e-6))
+        small_mask = (min_side >= 4.0) & (equiv_side <= small_ref_side)
+        if not small_mask.any():
+            zero = pred_bboxes.sum() * 0.0
+            return zero, zero
+
+        pred = pred[small_mask]
+        target = target[small_mask]
+        pred_wh = pred_wh[small_mask]
+        target_wh = target_wh[small_mask]
+        pred_center = pred_center[small_mask]
+        target_center = target_center[small_mask]
+        score_weight = score_weight[small_mask]
+        equiv_side = equiv_side[small_mask].clamp_min(1.0)
+        small_weight = torch.sqrt(small_ref_side / equiv_side).clamp(1.0, self.small_max_weight).detach()
         weight = score_weight * small_weight
 
         center_dist = ((pred_center - target_center).square().sum(dim=1) + 1e-9).sqrt()
@@ -522,8 +536,7 @@ class v8DetectionLoss:
             + torch.log((pred_wh[:, 1] + 1e-4) / (target_wh[:, 1] + 1e-4)).abs()
         ).clamp(0.0, 2.0)
 
-        denom = target_scores_sum if isinstance(target_scores_sum, torch.Tensor) else pred.new_tensor(target_scores_sum)
-        denom = denom.to(pred.dtype).clamp_min(1.0)
+        denom = weight.sum().to(pred.dtype) + 1e-6
         return (center_loss * weight).sum() / denom, (scale_loss * weight).sum() / denom
 
     def compute_loss(self, preds, batch):

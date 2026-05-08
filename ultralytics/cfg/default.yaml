@@ -102,8 +102,8 @@ cls: 0.5 # (float) cls loss gain (scale with pixels)
 dfl: 1.5 # (float) dfl loss gain
 small_center_gain: 0.0 # (float) small-object center auxiliary loss gain, 0 disables
 small_scale_gain: 0.0 # (float) small-object scale auxiliary loss gain, 0 disables
-small_ref_ratio: 0.0498 # (float) reference small side ratio, 102 / 2048 by default
-small_max_weight: 3.0 # (float) maximum small-object auxiliary loss weight
+small_ref_ratio: 0.05 # (float) reference small-object side ratio relative to train image size
+small_max_weight: 2.0 # (float) maximum small-object auxiliary loss weight
 pose: 12.0 # (float) pose loss gain
 kobj: 1.0 # (float) keypoint obj loss gain
 nbs: 64 # (int) nominal batch size
