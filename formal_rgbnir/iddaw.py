@@ -984,6 +984,10 @@ def common_train_kwargs(
     cos_lr: bool = False,
     pretrained: bool = True,
     mosaic: float | None = None,
+    small_center_gain: float | None = None,
+    small_scale_gain: float | None = None,
+    small_ref_ratio: float | None = None,
+    small_max_weight: float | None = None,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
@@ -992,6 +996,20 @@ def common_train_kwargs(
     close_mosaic = int(os.getenv("CLOSE_MOSAIC", "20"))
     env_mosaic = os.getenv("MOSAIC", "").strip()
     mosaic_value = mosaic if mosaic is not None else (float(env_mosaic) if env_mosaic else None)
+    small_center_gain_value = (
+        small_center_gain if small_center_gain is not None else float(os.getenv("SMALL_CENTER_GAIN", "0.0") or 0.0)
+    )
+    small_scale_gain_value = (
+        small_scale_gain if small_scale_gain is not None else float(os.getenv("SMALL_SCALE_GAIN", "0.0") or 0.0)
+    )
+    small_ref_ratio_value = (
+        small_ref_ratio
+        if small_ref_ratio is not None
+        else float(os.getenv("SMALL_REF_RATIO", "") or str(102.0 / 2048.0))
+    )
+    small_max_weight_value = (
+        small_max_weight if small_max_weight is not None else float(os.getenv("SMALL_MAX_WEIGHT", "3.0") or 3.0)
+    )
     kwargs = {
         "cache": "ram",
         "imgsz": imgsz,
@@ -1003,6 +1021,10 @@ def common_train_kwargs(
         "device": device,
         "optimizer": optimizer_name,
         "pretrained": pretrained,
+        "small_center_gain": small_center_gain_value,
+        "small_scale_gain": small_scale_gain_value,
+        "small_ref_ratio": small_ref_ratio_value,
+        "small_max_weight": small_max_weight_value,
         "project": "runs/IDD_AW",
         "name": experiment_name(mode),
     }

@@ -96,6 +96,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train.")
     parser.add_argument("--cos-lr", action="store_true", help="Use cosine learning rate schedule for train.")
     parser.add_argument("--mosaic", type=float, default=-1.0, help="Optional mosaic augmentation override, e.g. 0 disables mosaic.")
+    parser.add_argument("--small-center-gain", type=float, default=None, help="Small-object center auxiliary loss gain.")
+    parser.add_argument("--small-scale-gain", type=float, default=None, help="Small-object scale auxiliary loss gain.")
+    parser.add_argument("--small-ref-ratio", type=float, default=None, help="Small-object reference side ratio.")
+    parser.add_argument("--small-max-weight", type=float, default=None, help="Maximum small-object auxiliary loss weight.")
     parser.add_argument(
         "--pretrained",
         type=parse_bool_arg,
@@ -146,6 +150,10 @@ def main() -> None:
                     cos_lr=args.cos_lr,
                     pretrained=args.pretrained,
                     mosaic=args.mosaic if args.mosaic >= 0 else None,
+                    small_center_gain=args.small_center_gain,
+                    small_scale_gain=args.small_scale_gain,
+                    small_ref_ratio=args.small_ref_ratio,
+                    small_max_weight=args.small_max_weight,
                 ),
                 resume=True,
                 **mode_kwargs,
@@ -167,6 +175,10 @@ def main() -> None:
                 cos_lr=args.cos_lr,
                 pretrained=args.pretrained,
                 mosaic=args.mosaic if args.mosaic >= 0 else None,
+                small_center_gain=args.small_center_gain,
+                small_scale_gain=args.small_scale_gain,
+                small_ref_ratio=args.small_ref_ratio,
+                small_max_weight=args.small_max_weight,
             ),
             **mode_kwargs,
         )

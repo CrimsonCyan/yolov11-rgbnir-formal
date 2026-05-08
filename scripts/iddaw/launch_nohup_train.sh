@@ -42,6 +42,10 @@ export COS_LR="${COS_LR:-0}"
 export PRETRAINED="${PRETRAINED:-true}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 export MOSAIC="${MOSAIC:-}"
+export SMALL_CENTER_GAIN="${SMALL_CENTER_GAIN:-}"
+export SMALL_SCALE_GAIN="${SMALL_SCALE_GAIN:-}"
+export SMALL_REF_RATIO="${SMALL_REF_RATIO:-}"
+export SMALL_MAX_WEIGHT="${SMALL_MAX_WEIGHT:-}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_8cls_personmerge_traffic || "$IDDAW_CLASS_SCHEMA" == "8cls_personmerge_traffic" ]]; then
     DATASET_TAG="8-class-personmerge-traffic"
@@ -100,6 +104,22 @@ if [[ -n "$MOSAIC" ]]; then
   CMD+=(--mosaic "$MOSAIC")
 fi
 
+if [[ -n "$SMALL_CENTER_GAIN" ]]; then
+  CMD+=(--small-center-gain "$SMALL_CENTER_GAIN")
+fi
+
+if [[ -n "$SMALL_SCALE_GAIN" ]]; then
+  CMD+=(--small-scale-gain "$SMALL_SCALE_GAIN")
+fi
+
+if [[ -n "$SMALL_REF_RATIO" ]]; then
+  CMD+=(--small-ref-ratio "$SMALL_REF_RATIO")
+fi
+
+if [[ -n "$SMALL_MAX_WEIGHT" ]]; then
+  CMD+=(--small-max-weight "$SMALL_MAX_WEIGHT")
+fi
+
 if [[ -n "$RESUME_CKPT" ]]; then
   CMD+=(--resume "$RESUME_CKPT")
 fi
@@ -136,6 +156,10 @@ cos_lr=$COS_LR
 pretrained=$PRETRAINED
 close_mosaic=$CLOSE_MOSAIC
 mosaic=${MOSAIC:-}
+small_center_gain=${SMALL_CENTER_GAIN:-}
+small_scale_gain=${SMALL_SCALE_GAIN:-}
+small_ref_ratio=${SMALL_REF_RATIO:-}
+small_max_weight=${SMALL_MAX_WEIGHT:-}
 started_at=$STAMP
 command=${CMD[*]}
 EOF

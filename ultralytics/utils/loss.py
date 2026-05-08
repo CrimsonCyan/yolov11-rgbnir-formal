@@ -434,6 +434,11 @@ class v8DetectionLoss:
         # self.assigner = ATSSAssigner(9, num_classes=self.nc)
         self.bbox_loss = BboxLoss(m.reg_max).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+        self.small_center_gain = float(getattr(h, "small_center_gain", 0.0) or 0.0)
+        self.small_scale_gain = float(getattr(h, "small_scale_gain", 0.0) or 0.0)
+        self.small_ref_ratio = float(getattr(h, "small_ref_ratio", 102.0 / 2048.0) or (102.0 / 2048.0))
+        self.small_max_weight = float(getattr(h, "small_max_weight", 3.0) or 3.0)
+        self.use_small_object_loss = self.small_center_gain > 0.0 or self.small_scale_gain > 0.0
 
         # ATSS use
         self.grid_cell_offset = 0.5
@@ -474,9 +479,56 @@ class v8DetectionLoss:
             loss, batch_size = self.compute_loss(preds, batch)
         return loss.sum() * batch_size, loss.detach()
 
+    def _small_loss_ramp(self):
+        """Warm up small-object losses after early localization stabilizes."""
+        if not self.use_small_object_loss:
+            return 0.0
+        epoch = int(getattr(self.hyp, "current_epoch", 0) or 0) + 1
+        if epoch <= 5:
+            return 0.0
+        if epoch < 15:
+            return (epoch - 5) / 10.0
+        return 1.0
+
+    def _small_object_center_scale_loss(self, pred_bboxes, target_bboxes, target_scores, target_scores_sum, fg_mask,
+                                        imgsz, stride_tensor):
+        """Small-object weighted center and scale losses on positive assigned boxes."""
+        if not self.use_small_object_loss or not fg_mask.any():
+            zero = pred_bboxes.sum() * 0.0
+            return zero, zero
+
+        pred = pred_bboxes[fg_mask]
+        target = target_bboxes[fg_mask]
+        score_weight = target_scores.sum(-1)[fg_mask].to(pred.dtype)
+        stride_weight = stride_tensor.squeeze(-1).unsqueeze(0).expand_as(fg_mask)[fg_mask].to(pred.dtype)
+
+        pred_wh = (pred[:, 2:] - pred[:, :2]).clamp_min(1e-4)
+        target_wh = (target[:, 2:] - target[:, :2]).clamp_min(1e-4)
+        pred_center = (pred[:, :2] + pred[:, 2:]) * 0.5
+        target_center = (target[:, :2] + target[:, 2:]) * 0.5
+
+        target_wh_px = target_wh * stride_weight.unsqueeze(-1)
+        small_ref_side = imgsz.max().to(pred.dtype) * self.small_ref_ratio
+        min_side = target_wh_px.min(dim=1).values.clamp_min(1.0)
+        small_weight = torch.sqrt(small_ref_side / min_side).clamp(1.0, self.small_max_weight).detach()
+        weight = score_weight * small_weight
+
+        center_dist = ((pred_center - target_center).square().sum(dim=1) + 1e-9).sqrt()
+        target_diag = (target_wh.square().sum(dim=1) + 1e-9).sqrt()
+        center_loss = center_dist / target_diag
+
+        scale_loss = (
+            torch.log((pred_wh[:, 0] + 1e-4) / (target_wh[:, 0] + 1e-4)).abs()
+            + torch.log((pred_wh[:, 1] + 1e-4) / (target_wh[:, 1] + 1e-4)).abs()
+        ).clamp(0.0, 2.0)
+
+        denom = target_scores_sum if isinstance(target_scores_sum, torch.Tensor) else pred.new_tensor(target_scores_sum)
+        denom = denom.to(pred.dtype).clamp_min(1.0)
+        return (center_loss * weight).sum() / denom, (scale_loss * weight).sum() / denom
+
     def compute_loss(self, preds, batch):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(3, device=self.device)  # box, cls, dfl
+        loss = torch.zeros(5 if self.use_small_object_loss else 3, device=self.device)  # box, cls, dfl, small center/scale
         feats = preds[1] if isinstance(preds, tuple) else preds
         feats = feats[:self.stride.size(0)]
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
@@ -564,6 +616,13 @@ class v8DetectionLoss:
                                               ((imgsz[0] ** 2 + imgsz[1] ** 2) / torch.square(stride_tensor)).repeat(1,
                                                                                                                      batch_size).transpose(
                                                   1, 0))
+            if self.use_small_object_loss:
+                center_loss, scale_loss = self._small_object_center_scale_loss(
+                    pred_bboxes, target_bboxes, target_scores, target_scores_sum, fg_mask, imgsz, stride_tensor
+                )
+                ramp = self._small_loss_ramp()
+                loss[3] = center_loss * self.small_center_gain * ramp
+                loss[4] = scale_loss * self.small_scale_gain * ramp
 
         if isinstance(self.bce, (EMASlideLoss, SlideLoss)):
             if fg_mask.sum():
@@ -579,7 +638,7 @@ class v8DetectionLoss:
 
     def compute_loss_aux(self, preds, batch):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(3, device=self.device)  # box, cls, dfl
+        loss = torch.zeros(5 if self.use_small_object_loss else 3, device=self.device)  # box, cls, dfl, small center/scale
         feats_all = preds[1] if isinstance(preds, tuple) else preds
         if len(feats_all) == self.stride.size(0):
             return self.compute_loss(preds, batch)
@@ -643,6 +702,17 @@ class v8DetectionLoss:
 
             loss[0] += aux_loss_0 * self.aux_loss_ratio
             loss[2] += aux_loss_2 * self.aux_loss_ratio
+            if self.use_small_object_loss:
+                center_loss, scale_loss = self._small_object_center_scale_loss(
+                    pred_bboxes, target_bboxes, target_scores, target_scores_sum, fg_mask, imgsz, stride_tensor
+                )
+                center_loss_aux, scale_loss_aux = self._small_object_center_scale_loss(
+                    pred_bboxes_aux, target_bboxes_aux, target_scores_aux, target_scores_sum_aux, fg_mask_aux, imgsz,
+                    stride_tensor
+                )
+                ramp = self._small_loss_ramp()
+                loss[3] = (center_loss + center_loss_aux * self.aux_loss_ratio) * self.small_center_gain * ramp
+                loss[4] = (scale_loss + scale_loss_aux * self.aux_loss_ratio) * self.small_scale_gain * ramp
 
         if isinstance(self.bce, (EMASlideLoss, SlideLoss)):
             auto_iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True).mean()

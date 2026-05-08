@@ -93,10 +93,19 @@ class DetectionTrainer(BaseTrainer):
     def get_validator(self):
         """Returns a DetectionValidator for YOLO model validation."""
         self.loss_names = "box_loss", "cls_loss", "dfl_loss"
+        if self._has_small_object_loss():
+            self.loss_names = (*self.loss_names, "small_center_loss", "small_scale_loss")
         if self._has_fg_gate_loss():
             self.loss_names = (*self.loss_names, "fg_gate_loss")
         return yolo.detect.DetectionValidator(
             self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+        )
+
+    def _has_small_object_loss(self):
+        """Check whether small-object center/scale auxiliary losses are enabled."""
+        return bool(
+            float(getattr(self.args, "small_center_gain", 0.0) or 0.0) > 0.0
+            or float(getattr(self.args, "small_scale_gain", 0.0) or 0.0) > 0.0
         )
 
     def _has_fg_gate_loss(self):
@@ -116,8 +125,8 @@ class DetectionTrainer(BaseTrainer):
         if loss_items is not None:
             loss_count = int(loss_items.numel()) if hasattr(loss_items, "numel") else len(loss_items)
             loss_names = self.loss_names
-            if loss_count == len(loss_names) + 1:
-                loss_names = (*loss_names, "fg_gate_loss")
+            if loss_count > len(loss_names):
+                loss_names = (*loss_names, *(f"extra_loss_{i + 1}" for i in range(loss_count - len(loss_names))))
             keys = [f"{prefix}/{x}" for x in loss_names]
             loss_items = [round(float(x), 5) for x in loss_items]  # convert tensors to 5 decimal place floats
             return dict(zip(keys, loss_items))
