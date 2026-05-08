@@ -772,12 +772,13 @@ class ObjectAwareMultiScaleSmallPriorBoostConcat(ObjectAwareMultiScaleSmallPrior
 
 
 class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
-    """Fusion-side OA module that adds a small object-aware residual to NIR before BiFPN.
+    """Fusion-side reflectance residual module that enhances NIR before BiFPN.
 
-    Unlike the earlier gate-concat modules, this block does not multiply the
-    original NIR path by a learned gate. It keeps RGB unchanged and uses the
-    object prior only to modulate an additive reflectance residual, making the
-    default behavior close to plain RGB/NIR concatenation.
+    This block keeps RGB unchanged and keeps the original NIR path as an
+    identity branch. RGB context, NIR luminance, NIR reflectance, and their
+    cross-modal difference are used to predict a small additive residual for
+    the NIR feature. It intentionally does not expose an object-prior gate or
+    foreground auxiliary loss.
     """
 
     def __init__(
@@ -809,8 +810,6 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             raise ValueError(f"max_residual_scale must be positive, got {max_residual_scale}")
         if work_reduction < 1:
             raise ValueError(f"work_reduction must be >= 1, got {work_reduction}")
-        if gate_stride < 1:
-            raise ValueError(f"gate_stride must be >= 1, got {gate_stride}")
         if not 0.0 < residual_init < max_residual_scale:
             raise ValueError(
                 "residual_init must be positive and smaller than max_residual_scale, "
@@ -818,15 +817,14 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             )
 
         self.d = dimension
-        self.foreground_loss_weight = float(foreground_loss_weight)
-        self.foreground_target_mode = "soft_small"
+        # Kept in the signature for YAML compatibility, but this residual-only
+        # variant deliberately disables the foreground-supervised object gate.
+        self.foreground_loss_weight = 0.0
+        self.foreground_target_mode = None
         self.small_area_ref = float(small_area_ref)
         self.max_prior_weight = float(max_prior_weight)
         self.max_residual_scale = float(max_residual_scale)
-        self.gate_stride = int(gate_stride)
         self.use_context_gate = bool(context_gate)
-        self.capture_object_gate = False
-        self.last_object_gate = None
         self.last_residual_delta = None
 
         work_channels = max(nir_channels // int(work_reduction), 32)
@@ -849,11 +847,6 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             nn.Conv2d(cue_channels, hidden, kernel_size=1, stride=1, padding=0, bias=True),
             nn.SiLU(inplace=True),
             nn.Conv2d(hidden, nir_channels, kernel_size=1, stride=1, padding=0, bias=True),
-            nn.Sigmoid(),
-        )
-        self.object_prior = nn.Sequential(
-            DWConv(cue_channels, cue_channels, k=3, s=1),
-            nn.Conv2d(cue_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
             nn.Sigmoid(),
         )
         self.context_gate = (
@@ -883,16 +876,6 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         smooth7 = F.avg_pool2d(nir_feat, kernel_size=7, stride=1, padding=3)
         return self.smooth_fuse(torch.cat((smooth3, smooth5, smooth7), dim=1))
 
-    def _object_gate(self, cue):
-        gate_stride = int(getattr(self, "gate_stride", 1))
-        if gate_stride > 1:
-            gate_cue = F.avg_pool2d(cue, kernel_size=gate_stride, stride=gate_stride)
-            gate_low = self.object_prior(gate_cue)
-            gate = F.interpolate(gate_low, size=cue.shape[2:], mode="nearest")
-            return gate, gate_low
-        gate = self.object_prior(cue)
-        return gate, gate
-
     def forward(self, x):
         if len(x) != 2:
             raise ValueError(f"ObjectAwareFusionResidualEnhanceConcat expects 2 feature maps, got {len(x)}")
@@ -918,13 +901,8 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             ),
             dim=1,
         )
-        object_gate, loss_gate = self._object_gate(cue)
-        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
-            self.last_object_gate = loss_gate if self.training and self.foreground_loss_weight > 0 else object_gate
-        else:
-            self.last_object_gate = None
         channel_gate = self.channel_gate(cue)
-        selection_gate = channel_gate * object_gate
+        selection_gate = channel_gate
         if self.context_gate is not None:
             # Use global context only to scale the additive residual, not to suppress the original NIR path.
             selection_gate = selection_gate * (0.5 + self.context_gate(cue))
@@ -933,7 +911,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         residual_delta = residual_scale * selection_gate * residual
         nir_out = nir_feat + residual_delta
-        if self.capture_object_gate and not torch.is_grad_enabled():
+        if not torch.is_grad_enabled():
             self.last_residual_delta = residual_delta.detach()
         else:
             self.last_residual_delta = None
