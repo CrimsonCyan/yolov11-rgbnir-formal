@@ -95,6 +95,9 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
     "bifpn_only_light_nir_p2p5_oa_ctxres_p2only_c256_r4_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_oa_ctxres_p2only_c256_r4_yolo11s_6cls_personmerge"
     ),
+    "oa_yolo_pan_fusionres_p2only_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "oa_yolo_pan_fusionres_p2only_reduction1_yolo11s_6cls_personmerge"
+    ),
 }
 TRAFFIC_PERSONMERGE_MODES = set(TRAFFIC_PERSONMERGE_MODE_MAP)
 TRAINABLE_MODES = {
