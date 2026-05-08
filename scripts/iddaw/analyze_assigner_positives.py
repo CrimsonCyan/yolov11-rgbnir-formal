@@ -47,6 +47,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default="runs/analysis/assigner_positives", help="Output directory.")
     parser.add_argument(
+        "--focus-class",
+        action="append",
+        default=[],
+        help="Only run forwards for batches containing this class id/name. Can be repeated, e.g. traffic light.",
+    )
+    parser.add_argument(
+        "--max-focus-gt",
+        type=int,
+        default=0,
+        help="Stop after collecting at least this many GT instances from focus classes. 0 disables.",
+    )
+    parser.add_argument(
         "--small-side-ratio",
         type=float,
         default=0.05,
@@ -66,6 +78,24 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--tal-topk", type=int, default=10, help="TaskAlignedAssigner top-k used by YOLO loss.")
     return parser.parse_args()
+
+
+def parse_focus_classes(values: list[str], class_names: list[str]) -> set[int]:
+    focus: set[int] = set()
+    name_to_id = {name.lower(): idx for idx, name in enumerate(class_names)}
+    for raw in values:
+        for item in raw.split(","):
+            value = item.strip()
+            if not value:
+                continue
+            if value.isdigit():
+                focus.add(int(value))
+                continue
+            key = value.lower()
+            if key not in name_to_id:
+                raise ValueError(f"Unknown focus class '{value}'. Valid names: {class_names}")
+            focus.add(name_to_id[key])
+    return focus
 
 
 def normalize_path(path: str | Path) -> str:
@@ -286,6 +316,7 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 def main() -> None:
     args = parse_args()
     class_names = category_names_for_mode(args.mode)
+    focus_classes = parse_focus_classes(args.focus_class, class_names)
     trainer = build_trainer(args)
     split_path = trainer.trainset if args.split == "train" else trainer.testset
     loader_mode = args.loader_mode or args.split
@@ -295,12 +326,23 @@ def main() -> None:
     all_records: list[dict[str, object]] = []
     level_info: list[tuple[str, int, int, int]] = []
     batches_seen = 0
+    batches_scanned = 0
+    focus_gt_seen = 0
     for batch_i, batch in enumerate(loader):
-        if args.max_batches and batch_i >= args.max_batches:
+        batches_scanned += 1
+        if args.max_batches and batches_seen >= args.max_batches:
             break
+        if focus_classes:
+            batch_classes = {int(cls) for cls in batch["cls"].view(-1).tolist()}
+            if not (batch_classes & focus_classes):
+                continue
         records, level_info = analyze_batch(trainer, batch, criterion, class_names, args)
         all_records.extend(records)
         batches_seen += 1
+        if focus_classes:
+            focus_gt_seen += sum(int(row["class_id"]) in focus_classes for row in records)
+            if args.max_focus_gt and focus_gt_seen >= args.max_focus_gt:
+                break
 
     levels = [level for level, _, _, _ in level_info]
     out_dir = Path(args.out) / args.mode
@@ -325,7 +367,10 @@ def main() -> None:
         "imgsz": args.imgsz,
         "batch": int(trainer.args.batch),
         "batches_seen": batches_seen,
+        "batches_scanned": batches_scanned,
         "gt_seen": len(all_records),
+        "focus_classes": sorted(focus_classes),
+        "focus_gt_seen": focus_gt_seen,
         "tal_topk": args.tal_topk,
         "min_pos_per_gt": args.min_pos_per_gt,
         "small_side_ratio": args.small_side_ratio,
@@ -337,7 +382,9 @@ def main() -> None:
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"Saved assigner diagnostics to {out_dir}")
-    print(f"batches={batches_seen}, gt={len(all_records)}, levels={levels}")
+    print(f"batches={batches_seen}, scanned={batches_scanned}, gt={len(all_records)}, levels={levels}")
+    if focus_classes:
+        print(f"focus_classes={sorted(focus_classes)}, focus_gt={focus_gt_seen}")
     for row in by_class:
         if row.get("class") in {"traffic light", "traffic sign", "person", "motorcycle"}:
             print(
