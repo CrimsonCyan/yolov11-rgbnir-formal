@@ -86,6 +86,24 @@ def parse_args() -> argparse.Namespace:
         default=10.0,
         help="Drop instances whose polygon area is smaller than this at --filter-imgsz.",
     )
+    parser.add_argument(
+        "--min-mask-bbox-ratio",
+        type=float,
+        default=0.10,
+        help="Drop loose boxes whose polygon area / bbox area is lower than this.",
+    )
+    parser.add_argument(
+        "--max-resized-area-ratio",
+        type=float,
+        default=0.80,
+        help="Drop abnormal boxes whose resized bbox area exceeds this fraction of the resized image area.",
+    )
+    parser.add_argument(
+        "--max-resized-side-ratio",
+        type=float,
+        default=0.98,
+        help="Drop abnormal boxes whose resized width or height exceeds this fraction of the resized image side.",
+    )
     return parser.parse_args()
 
 
@@ -153,7 +171,13 @@ def filter_reason(
     resized_w = box[2] * float(width) * scale
     resized_h = box[3] * float(height) * scale
     resized_bbox_area = resized_w * resized_h
-    resized_polygon_area = polygon_area(polygon) * scale * scale
+    raw_bbox_area = box[2] * float(width) * box[3] * float(height)
+    raw_polygon_area = polygon_area(polygon)
+    resized_polygon_area = raw_polygon_area * scale * scale
+    resized_image_w = float(width) * scale
+    resized_image_h = float(height) * scale
+    resized_image_area = resized_image_w * resized_image_h
+    mask_bbox_ratio = raw_polygon_area / max(raw_bbox_area, 1e-6)
 
     if min(resized_w, resized_h) < args.min_resized_side:
         return "min_side"
@@ -161,6 +185,12 @@ def filter_reason(
         return "bbox_area"
     if resized_polygon_area < args.min_resized_mask_area:
         return "mask_area"
+    if mask_bbox_ratio < args.min_mask_bbox_ratio:
+        return "mask_bbox_ratio"
+    if resized_bbox_area > args.max_resized_area_ratio * resized_image_area:
+        return "max_bbox_area"
+    if resized_w > args.max_resized_side_ratio * resized_image_w or resized_h > args.max_resized_side_ratio * resized_image_h:
+        return "max_bbox_side"
     return None
 
 
@@ -351,8 +381,11 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
             f"- 若 resize 后 bbox 最短边 `< {args.min_resized_side:g}px`，则剔除。",
             f"- 若 resize 后 bbox 面积 `< {args.min_resized_area:g}px^2`，则剔除。",
             f"- 若 resize 后 polygon 面积 `< {args.min_resized_mask_area:g}px^2`，则剔除。",
+            f"- 若 polygon/bbox 面积比 `< {args.min_mask_bbox_ratio:g}`，则剔除，避免语义区域粘连或松散多边形形成过松检测框。",
+            f"- 若 resize 后 bbox 面积占 resized image 面积比例 `> {args.max_resized_area_ratio:g}`，则剔除。",
+            f"- 若 resize 后 bbox 宽或高占对应图像边长比例 `> {args.max_resized_side_ratio:g}`，则剔除。",
             "",
-            "该规则只过滤极端不可检测目标，不等同于删除全部小目标。",
+            "该规则只过滤极端不可检测目标，不等同于删除全部小目标。当前导出脚本使用标注 JSON 中的对象 polygon 逐对象生成 bbox，不对同一类别整张语义 mask 直接取外接矩形；如果后续改用类别语义 mask，应先按类别做连通域拆分，再对每个连通域单独生成 bbox。",
             "",
             "## 数据规模与类别统计",
             "",
@@ -393,6 +426,9 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
             f"  --min-resized-side {args.min_resized_side:g} \\",
             f"  --min-resized-area {args.min_resized_area:g} \\",
             f"  --min-resized-mask-area {args.min_resized_mask_area:g} \\",
+            f"  --min-mask-bbox-ratio {args.min_mask_bbox_ratio:g} \\",
+            f"  --max-resized-area-ratio {args.max_resized_area_ratio:g} \\",
+            f"  --max-resized-side-ratio {args.max_resized_side_ratio:g} \\",
             "  --clean",
             "```",
             "",
@@ -431,6 +467,9 @@ def main() -> None:
             "min_resized_side": args.min_resized_side,
             "min_resized_area": args.min_resized_area,
             "min_resized_mask_area": args.min_resized_mask_area,
+            "min_mask_bbox_ratio": args.min_mask_bbox_ratio,
+            "max_resized_area_ratio": args.max_resized_area_ratio,
+            "max_resized_side_ratio": args.max_resized_side_ratio,
         },
         "splits": split_reports,
     }
