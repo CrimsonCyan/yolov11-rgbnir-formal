@@ -47,6 +47,7 @@ from ultralytics.utils.torch_utils import (
     ModelEMA,
     autocast,
     convert_optimizer_state_dict_to_fp16,
+    de_parallel,
     init_seeds,
     one_cycle,
     select_device,
