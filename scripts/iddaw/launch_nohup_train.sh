@@ -35,6 +35,7 @@ fi
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
+export DATA_CACHE="${DATA_CACHE:-disk}"
 export OPTIMIZER="${OPTIMIZER:-AdamW}"
 export BATCH="${BATCH:-}"
 export LR0="${LR0:-0.001}"
@@ -84,6 +85,7 @@ CMD=(
   --task train
   --epochs "$EPOCHS"
   --imgsz "$IMGSZ"
+  --cache "$DATA_CACHE"
   --val-interval "$VAL_INTERVAL"
   --device "$DEVICE"
   --optimizer "$OPTIMIZER"
@@ -159,6 +161,7 @@ wandb_group=${WANDB_GROUP:-}
 wandb_tags=${WANDB_TAGS:-}
 val_interval=$VAL_INTERVAL
 imgsz=$IMGSZ
+cache=$DATA_CACHE
 optimizer=$OPTIMIZER
 batch=${BATCH:-}
 lr0=${LR0:-}

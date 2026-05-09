@@ -27,6 +27,15 @@ from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
 
 import math
+
+
+def _safe_loss_denominator(value, min_value=1.0, eps=1e-6):
+    """Return a tensor denominator that is safe for empty targets or zero positive assignments."""
+    if torch.is_tensor(value):
+        return value.to(dtype=torch.float32).clamp_min(min_value) + eps
+    return torch.tensor(float(value), dtype=torch.float32).clamp_min(min_value) + eps
+
+
 # 辅助头部分的代码从魔鬼面具v11代码里面复制，已和魔导沟通确认，具体请参考  https://github.com/z1069614715/objectdetection_script
 class SlideLoss(nn.Module):
     def __init__(self, loss_fcn):
@@ -599,7 +608,7 @@ class v8DetectionLoss:
                 pred_scores.detach().sigmoid(), (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
                 anchor_points * stride_tensor, gt_labels, gt_bboxes, mask_gt)
 
-        target_scores_sum = max(target_scores.sum(), 1)
+        target_scores_sum = _safe_loss_denominator(target_scores.sum())
 
         # cls loss
         if isinstance(self.bce, (nn.BCEWithLogitsLoss, FocalLoss_YOLO)):
@@ -619,7 +628,7 @@ class v8DetectionLoss:
                 cls_iou_targets = torch.zeros((target_labels.shape[0], target_labels.shape[1], self.nc),
                                               dtype=torch.int64,
                                               device=target_labels.device)  # (b, h*w, 80)
-            loss[1] = self.bce(pred_scores, cls_iou_targets.to(dtype)).sum() / max(fg_mask.sum(), 1)  # BCE
+            loss[1] = self.bce(pred_scores, cls_iou_targets.to(dtype)).sum() / _safe_loss_denominator(fg_mask.sum())  # BCE
         elif isinstance(self.bce, QualityfocalLoss_YOLO):
             if fg_mask.sum():
                 pos_ious = bbox_iou(pred_bboxes, target_bboxes / stride_tensor, xywh=False).clamp(min=1e-6).detach()
@@ -639,8 +648,9 @@ class v8DetectionLoss:
                 targets_onehot_pos = torch.zeros((target_labels.shape[0], target_labels.shape[1], self.nc),
                                                  dtype=torch.int64,
                                                  device=target_labels.device)  # (b, h*w, 80)
-            loss[1] = self.bce(pred_scores, cls_iou_targets.to(dtype), targets_onehot_pos.to(torch.bool)).sum() / max(
-                fg_mask.sum(), 1)
+            loss[1] = self.bce(
+                pred_scores, cls_iou_targets.to(dtype), targets_onehot_pos.to(torch.bool)
+            ).sum() / _safe_loss_denominator(fg_mask.sum())
 
         # bbox loss
         if fg_mask.sum():
@@ -710,8 +720,8 @@ class v8DetectionLoss:
             pred_scores.detach().sigmoid(), (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
             anchor_points * stride_tensor, gt_labels, gt_bboxes, mask_gt)
 
-        target_scores_sum = max(target_scores.sum(), 1)
-        target_scores_sum_aux = max(target_scores_aux.sum(), 1)
+        target_scores_sum = _safe_loss_denominator(target_scores.sum())
+        target_scores_sum_aux = _safe_loss_denominator(target_scores_aux.sum())
 
         # cls loss
         if isinstance(self.bce, nn.BCEWithLogitsLoss):
@@ -922,7 +932,7 @@ class v8SegmentationLoss(v8DetectionLoss):
             mask_gt,
         )
 
-        target_scores_sum = max(target_scores.sum(), 1)
+        target_scores_sum = _safe_loss_denominator(target_scores.sum())
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
@@ -1102,7 +1112,7 @@ class v8PoseLoss(v8DetectionLoss):
             mask_gt,
         )
 
-        target_scores_sum = max(target_scores.sum(), 1)
+        target_scores_sum = _safe_loss_denominator(target_scores.sum())
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
@@ -1294,7 +1304,7 @@ class v8OBBLoss(v8DetectionLoss):
             mask_gt,
         )
 
-        target_scores_sum = max(target_scores.sum(), 1)
+        target_scores_sum = _safe_loss_denominator(target_scores.sum())
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way

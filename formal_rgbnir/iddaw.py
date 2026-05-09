@@ -984,6 +984,7 @@ def common_train_kwargs(
     device: str = "0",
     val_interval: int = 1,
     imgsz: int = 640,
+    cache: str | bool | None = None,
     optimizer: str | None = None,
     batch: int | None = None,
     lr0: float | None = None,
@@ -1025,8 +1026,9 @@ def common_train_kwargs(
         if small_smooth_tau_ratio is not None
         else float(os.getenv("SMALL_SMOOTH_TAU_RATIO", "0.2") or 0.2)
     )
+    cache_value = cache if cache is not None else (os.getenv("DATA_CACHE") or "disk")
     kwargs = {
-        "cache": "ram",
+        "cache": cache_value,
         "imgsz": imgsz,
         "epochs": epochs,
         "val_interval": max(int(val_interval), 1),
@@ -1053,9 +1055,15 @@ def common_train_kwargs(
     return kwargs
 
 
-def common_val_kwargs(mode: str, imgsz: int = 640, batch: int | None = None) -> dict[str, object]:
+def common_val_kwargs(
+    mode: str,
+    imgsz: int = 640,
+    batch: int | None = None,
+    cache: str | bool | None = None,
+) -> dict[str, object]:
     val_batch = batch if batch and batch > 0 else (16 if mode == "decision_fusion" else train_batch_for(mode))
     return {
+        "cache": cache if cache is not None else (os.getenv("DATA_CACHE") or "disk"),
         "split": "val",
         "imgsz": imgsz,
         "batch": val_batch,

@@ -93,6 +93,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="0")
     parser.add_argument("--optimizer", default="", help="Optional optimizer override for train. Defaults to AdamW.")
     parser.add_argument("--batch", type=int, default=0, help="Optional batch override for train/val.")
+    parser.add_argument(
+        "--cache",
+        default="",
+        help="Dataset cache mode override for train/val. Defaults to DATA_CACHE or disk.",
+    )
     parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train. Defaults to 0.001.")
     parser.add_argument("--cos-lr", action="store_true", help="Use cosine learning rate schedule for train.")
     parser.add_argument("--mosaic", type=float, default=-1.0, help="Optional mosaic augmentation override, e.g. 0 disables mosaic.")
@@ -156,6 +161,7 @@ def main() -> None:
                     args.device,
                     args.val_interval,
                     args.imgsz,
+                    cache=args.cache or None,
                     optimizer=args.optimizer or None,
                     batch=args.batch or None,
                     lr0=args.lr0 or None,
@@ -183,6 +189,7 @@ def main() -> None:
                 args.device,
                 args.val_interval,
                 args.imgsz,
+                cache=args.cache or None,
                 optimizer=args.optimizer or None,
                 batch=args.batch or None,
                 lr0=args.lr0 or None,
@@ -205,7 +212,11 @@ def main() -> None:
 
     model = model_cls(args.weights)
     if args.task == "val":
-        model.val(data=data_yaml, **common_val_kwargs(args.mode, args.imgsz, batch=args.batch or None), **mode_kwargs)
+        model.val(
+            data=data_yaml,
+            **common_val_kwargs(args.mode, args.imgsz, batch=args.batch or None, cache=args.cache or None),
+            **mode_kwargs,
+        )
         return
 
     model.predict(**common_predict_kwargs(args.mode, args.imgsz), **mode_kwargs)
