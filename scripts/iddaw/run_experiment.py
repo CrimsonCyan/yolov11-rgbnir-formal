@@ -101,6 +101,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--small-ref-ratio", type=float, default=None, help="Small-object reference side ratio.")
     parser.add_argument("--small-max-weight", type=float, default=None, help="Maximum small-object auxiliary loss weight.")
     parser.add_argument(
+        "--small-weight-mode",
+        choices=["hard", "smooth", "current"],
+        default=None,
+        help="Small-object auxiliary weighting mode. 'current' aliases the legacy hard cutoff.",
+    )
+    parser.add_argument(
+        "--small-smooth-tau-ratio",
+        type=float,
+        default=None,
+        help="Smooth transition width relative to small_ref_side when --small-weight-mode=smooth.",
+    )
+    parser.add_argument(
         "--pretrained",
         type=parse_bool_arg,
         default=True,
@@ -154,6 +166,8 @@ def main() -> None:
                     small_scale_gain=args.small_scale_gain,
                     small_ref_ratio=args.small_ref_ratio,
                     small_max_weight=args.small_max_weight,
+                    small_weight_mode=args.small_weight_mode,
+                    small_smooth_tau_ratio=args.small_smooth_tau_ratio,
                 ),
                 resume=True,
                 **mode_kwargs,
@@ -179,6 +193,8 @@ def main() -> None:
                 small_scale_gain=args.small_scale_gain,
                 small_ref_ratio=args.small_ref_ratio,
                 small_max_weight=args.small_max_weight,
+                small_weight_mode=args.small_weight_mode,
+                small_smooth_tau_ratio=args.small_smooth_tau_ratio,
             ),
             **mode_kwargs,
         )

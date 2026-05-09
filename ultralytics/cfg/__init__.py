@@ -170,6 +170,7 @@ CFG_FRACTION_KEYS = frozenset(
         "small_center_gain",
         "small_scale_gain",
         "small_ref_ratio",
+        "small_smooth_tau_ratio",
         "hsv_h",
         "hsv_s",
         "hsv_v",

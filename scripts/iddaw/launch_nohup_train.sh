@@ -42,10 +42,12 @@ export COS_LR="${COS_LR:-0}"
 export PRETRAINED="${PRETRAINED:-true}"
 export CLOSE_MOSAIC="${CLOSE_MOSAIC:-20}"
 export MOSAIC="${MOSAIC:-}"
-export SMALL_CENTER_GAIN="${SMALL_CENTER_GAIN:-}"
-export SMALL_SCALE_GAIN="${SMALL_SCALE_GAIN:-}"
-export SMALL_REF_RATIO="${SMALL_REF_RATIO:-}"
-export SMALL_MAX_WEIGHT="${SMALL_MAX_WEIGHT:-}"
+export SMALL_CENTER_GAIN="${SMALL_CENTER_GAIN:-0.05}"
+export SMALL_SCALE_GAIN="${SMALL_SCALE_GAIN:-0.02}"
+export SMALL_REF_RATIO="${SMALL_REF_RATIO:-0.05}"
+export SMALL_MAX_WEIGHT="${SMALL_MAX_WEIGHT:-2}"
+export SMALL_WEIGHT_MODE="${SMALL_WEIGHT_MODE:-smooth}"
+export SMALL_SMOOTH_TAU_RATIO="${SMALL_SMOOTH_TAU_RATIO:-0.2}"
 if [[ "$WANDB_ENABLED" == "1" ]]; then
   if [[ "$MODE" == *_8cls_personmerge_traffic || "$IDDAW_CLASS_SCHEMA" == "8cls_personmerge_traffic" ]]; then
     DATASET_TAG="8-class-personmerge-traffic"
@@ -120,6 +122,14 @@ if [[ -n "$SMALL_MAX_WEIGHT" ]]; then
   CMD+=(--small-max-weight "$SMALL_MAX_WEIGHT")
 fi
 
+if [[ -n "$SMALL_WEIGHT_MODE" ]]; then
+  CMD+=(--small-weight-mode "$SMALL_WEIGHT_MODE")
+fi
+
+if [[ -n "$SMALL_SMOOTH_TAU_RATIO" ]]; then
+  CMD+=(--small-smooth-tau-ratio "$SMALL_SMOOTH_TAU_RATIO")
+fi
+
 if [[ -n "$RESUME_CKPT" ]]; then
   CMD+=(--resume "$RESUME_CKPT")
 fi
@@ -160,6 +170,8 @@ small_center_gain=${SMALL_CENTER_GAIN:-}
 small_scale_gain=${SMALL_SCALE_GAIN:-}
 small_ref_ratio=${SMALL_REF_RATIO:-}
 small_max_weight=${SMALL_MAX_WEIGHT:-}
+small_weight_mode=${SMALL_WEIGHT_MODE:-}
+small_smooth_tau_ratio=${SMALL_SMOOTH_TAU_RATIO:-}
 started_at=$STAMP
 command=${CMD[*]}
 EOF

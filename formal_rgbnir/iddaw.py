@@ -994,6 +994,8 @@ def common_train_kwargs(
     small_scale_gain: float | None = None,
     small_ref_ratio: float | None = None,
     small_max_weight: float | None = None,
+    small_weight_mode: str | None = None,
+    small_smooth_tau_ratio: float | None = None,
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
@@ -1004,10 +1006,10 @@ def common_train_kwargs(
     env_mosaic = os.getenv("MOSAIC", "").strip()
     mosaic_value = mosaic if mosaic is not None else (float(env_mosaic) if env_mosaic else None)
     small_center_gain_value = (
-        small_center_gain if small_center_gain is not None else float(os.getenv("SMALL_CENTER_GAIN", "0.0") or 0.0)
+        small_center_gain if small_center_gain is not None else float(os.getenv("SMALL_CENTER_GAIN", "0.05") or 0.05)
     )
     small_scale_gain_value = (
-        small_scale_gain if small_scale_gain is not None else float(os.getenv("SMALL_SCALE_GAIN", "0.0") or 0.0)
+        small_scale_gain if small_scale_gain is not None else float(os.getenv("SMALL_SCALE_GAIN", "0.02") or 0.02)
     )
     small_ref_ratio_value = (
         small_ref_ratio
@@ -1016,6 +1018,12 @@ def common_train_kwargs(
     )
     small_max_weight_value = (
         small_max_weight if small_max_weight is not None else float(os.getenv("SMALL_MAX_WEIGHT", "2.0") or 2.0)
+    )
+    small_weight_mode_value = small_weight_mode if small_weight_mode is not None else (os.getenv("SMALL_WEIGHT_MODE") or "smooth")
+    small_smooth_tau_ratio_value = (
+        small_smooth_tau_ratio
+        if small_smooth_tau_ratio is not None
+        else float(os.getenv("SMALL_SMOOTH_TAU_RATIO", "0.2") or 0.2)
     )
     kwargs = {
         "cache": "ram",
@@ -1032,6 +1040,8 @@ def common_train_kwargs(
         "small_scale_gain": small_scale_gain_value,
         "small_ref_ratio": small_ref_ratio_value,
         "small_max_weight": small_max_weight_value,
+        "small_weight_mode": small_weight_mode_value,
+        "small_smooth_tau_ratio": small_smooth_tau_ratio_value,
         "project": "runs/IDD_AW",
         "name": experiment_name(mode),
     }

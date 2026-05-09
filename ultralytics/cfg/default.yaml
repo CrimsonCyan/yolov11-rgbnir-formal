@@ -100,10 +100,12 @@ warmup_bias_lr: 0.1 # (float) warmup initial bias lr
 box: 7.5 # (float) box loss gain
 cls: 0.5 # (float) cls loss gain (scale with pixels)
 dfl: 1.5 # (float) dfl loss gain
-small_center_gain: 0.0 # (float) small-object center auxiliary loss gain, 0 disables
-small_scale_gain: 0.0 # (float) small-object scale auxiliary loss gain, 0 disables
+small_center_gain: 0.05 # (float) small-object center auxiliary loss gain, 0 disables
+small_scale_gain: 0.02 # (float) small-object scale auxiliary loss gain, 0 disables
 small_ref_ratio: 0.05 # (float) reference small-object side ratio relative to train image size
 small_max_weight: 2.0 # (float) maximum small-object auxiliary loss weight
+small_weight_mode: smooth # (str) small-object auxiliary weight mode, choices=[hard, smooth]
+small_smooth_tau_ratio: 0.2 # (float) smooth small-object transition width relative to small_ref_side
 pose: 12.0 # (float) pose loss gain
 kobj: 1.0 # (float) keypoint obj loss gain
 nbs: 64 # (int) nominal batch size

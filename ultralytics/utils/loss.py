@@ -437,7 +437,15 @@ class v8DetectionLoss:
         self.small_center_gain = float(getattr(h, "small_center_gain", 0.0) or 0.0)
         self.small_scale_gain = float(getattr(h, "small_scale_gain", 0.0) or 0.0)
         self.small_ref_ratio = float(getattr(h, "small_ref_ratio", 0.05) or 0.05)
-        self.small_max_weight = float(getattr(h, "small_max_weight", 2.0) or 2.0)
+        self.small_max_weight = max(float(getattr(h, "small_max_weight", 2.0) or 2.0), 1.0)
+        self.small_weight_mode = str(getattr(h, "small_weight_mode", "hard") or "hard").strip().lower()
+        if self.small_weight_mode == "current":
+            self.small_weight_mode = "hard"
+        if self.small_weight_mode not in {"hard", "smooth"}:
+            raise ValueError(
+                f"Unsupported small_weight_mode={self.small_weight_mode!r}. Expected 'hard' or 'smooth'."
+            )
+        self.small_smooth_tau_ratio = max(float(getattr(h, "small_smooth_tau_ratio", 0.2) or 0.2), 1e-6)
         self.use_small_object_loss = self.small_center_gain > 0.0 or self.small_scale_gain > 0.0
 
         # ATSS use
@@ -511,7 +519,16 @@ class v8DetectionLoss:
         small_ref_side = imgsz.max().to(pred.dtype) * self.small_ref_ratio
         min_side = target_wh_px.min(dim=1).values
         equiv_side = torch.sqrt(target_wh_px.prod(dim=1).clamp_min(1e-6))
-        small_mask = (min_side >= 4.0) & (equiv_side <= small_ref_side)
+
+        valid_mask = min_side >= 4.0
+        if self.small_weight_mode == "smooth":
+            # Smooth mode keeps the small-object focus but avoids a hard gradient cutoff at small_ref_side.
+            tau = (small_ref_side * self.small_smooth_tau_ratio).clamp_min(1.0)
+            smooth_gate = torch.sigmoid((small_ref_side - equiv_side) / tau).detach()
+            small_mask = valid_mask & (smooth_gate > 0.02)
+        else:
+            smooth_gate = None
+            small_mask = valid_mask & (equiv_side <= small_ref_side)
         if not small_mask.any():
             zero = pred_bboxes.sum() * 0.0
             return zero, zero
@@ -524,7 +541,11 @@ class v8DetectionLoss:
         target_center = target_center[small_mask]
         score_weight = score_weight[small_mask]
         equiv_side = equiv_side[small_mask].clamp_min(1.0)
+        if smooth_gate is not None:
+            smooth_gate = smooth_gate[small_mask].to(pred.dtype)
         small_weight = torch.sqrt(small_ref_side / equiv_side).clamp(1.0, self.small_max_weight).detach()
+        if smooth_gate is not None:
+            small_weight = small_weight * smooth_gate
         weight = score_weight * small_weight
 
         center_dist = ((pred_center - target_center).square().sum(dim=1) + 1e-9).sqrt()
