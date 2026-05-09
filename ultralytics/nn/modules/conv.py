@@ -776,9 +776,11 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
 
     This block keeps RGB unchanged and keeps the original NIR path as an
     identity branch. RGB context, NIR luminance, NIR reflectance, and their
-    cross-modal difference are used to predict a small additive residual for
-    the NIR feature. It intentionally does not expose an object-prior gate or
-    foreground auxiliary loss.
+    cross-modal difference are used to predict an additive residual for the NIR
+    feature. A self-supervised spatial residual gate selects likely
+    object-related local responses, but the gate only modulates the residual and
+    never suppresses the raw NIR identity branch. It intentionally disables
+    foreground auxiliary loss to keep the detector loss unchanged.
     """
 
     def __init__(
@@ -795,6 +797,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         gate_stride=2,
         residual_init=0.03,
         context_gate=False,
+        spatial_gate_floor=0.1,
     ):
         super().__init__()
         if min(rgb_channels, nir_channels) <= 0:
@@ -815,6 +818,8 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
                 "residual_init must be positive and smaller than max_residual_scale, "
                 f"got {residual_init} and {max_residual_scale}"
             )
+        if not 0.0 <= spatial_gate_floor < 1.0:
+            raise ValueError(f"spatial_gate_floor must be in [0, 1), got {spatial_gate_floor}")
 
         self.d = dimension
         # Kept in the signature for YAML compatibility, but this residual-only
@@ -825,6 +830,9 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         self.max_prior_weight = float(max_prior_weight)
         self.max_residual_scale = float(max_residual_scale)
         self.use_context_gate = bool(context_gate)
+        self.spatial_gate_floor = float(spatial_gate_floor)
+        self.capture_object_gate = False
+        self.last_object_gate = None
         self.last_residual_delta = None
 
         work_channels = max(nir_channels // int(work_reduction), 32)
@@ -849,6 +857,12 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             nn.Conv2d(hidden, nir_channels, kernel_size=1, stride=1, padding=0, bias=True),
             nn.Sigmoid(),
         )
+        self.spatial_gate = nn.Sequential(
+            Conv(cue_channels, work_channels, k=1, s=1),
+            DWConv(work_channels, work_channels, k=3, s=1),
+            nn.Conv2d(work_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            nn.Sigmoid(),
+        )
         self.context_gate = (
             nn.Sequential(
                 nn.AdaptiveAvgPool2d(1),
@@ -860,11 +874,11 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             if self.use_context_gate
             else None
         )
-        self.residual_refine = nn.Sequential(
-            Conv(work_channels * 3, work_channels, k=1, s=1),
-            DWConv(work_channels, work_channels, k=3, s=1),
-            Conv(work_channels, nir_channels, k=1, s=1, act=False),
-        )
+        self.residual_reduce = Conv(work_channels * 3, work_channels, k=1, s=1)
+        self.residual_dw3 = DWConv(work_channels, work_channels, k=3, s=1)
+        self.residual_dw5 = DWConv(work_channels, work_channels, k=5, s=1)
+        self.residual_dwd2 = DWConv(work_channels, work_channels, k=3, s=1, d=2)
+        self.residual_fuse = Conv(work_channels * 3, nir_channels, k=1, s=1, act=False)
         self.gate_scale = nn.Parameter(torch.tensor(0.0, dtype=torch.float32))
         init_ratio = float(residual_init) / float(max_residual_scale)
         init_logit = math.log(init_ratio / (1.0 - init_ratio))
@@ -902,18 +916,33 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             dim=1,
         )
         channel_gate = self.channel_gate(cue)
-        selection_gate = channel_gate
+        raw_spatial_gate = self.spatial_gate(cue)
+        spatial_gate = self.spatial_gate_floor + (1.0 - self.spatial_gate_floor) * raw_spatial_gate
+        selection_gate = channel_gate * spatial_gate
         if self.context_gate is not None:
             # Use global context only to scale the additive residual, not to suppress the original NIR path.
             selection_gate = selection_gate * (0.5 + self.context_gate(cue))
 
-        residual = self.residual_refine(torch.cat((rgb_context, luminance, reflectance), dim=1))
+        residual_base = self.residual_reduce(torch.cat((rgb_context, luminance, reflectance), dim=1))
+        residual = self.residual_fuse(
+            torch.cat(
+                (
+                    self.residual_dw3(residual_base),
+                    self.residual_dw5(residual_base),
+                    self.residual_dwd2(residual_base),
+                ),
+                dim=1,
+            )
+        )
+        residual = torch.tanh(residual)
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         residual_delta = residual_scale * selection_gate * residual
         nir_out = nir_feat + residual_delta
         if not torch.is_grad_enabled():
+            self.last_object_gate = spatial_gate.detach() if self.capture_object_gate else None
             self.last_residual_delta = residual_delta.detach()
         else:
+            self.last_object_gate = None
             self.last_residual_delta = None
         return torch.cat((rgb_feat, nir_out), dim=self.d)
 

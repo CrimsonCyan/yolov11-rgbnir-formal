@@ -107,9 +107,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--small-max-weight", type=float, default=None, help="Maximum small-object auxiliary loss weight.")
     parser.add_argument(
         "--small-weight-mode",
-        choices=["hard", "smooth", "current"],
+        choices=["hard", "smooth", "soft", "current"],
         default=None,
-        help="Small-object auxiliary weighting mode. 'current' aliases the legacy hard cutoff.",
+        help="Small-object auxiliary weighting mode. 'soft' aliases the smooth transition mode; "
+        "'current' aliases the legacy hard cutoff.",
     )
     parser.add_argument(
         "--small-smooth-tau-ratio",

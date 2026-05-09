@@ -450,9 +450,11 @@ class v8DetectionLoss:
         self.small_weight_mode = str(getattr(h, "small_weight_mode", "hard") or "hard").strip().lower()
         if self.small_weight_mode == "current":
             self.small_weight_mode = "hard"
+        if self.small_weight_mode == "soft":
+            self.small_weight_mode = "smooth"
         if self.small_weight_mode not in {"hard", "smooth"}:
             raise ValueError(
-                f"Unsupported small_weight_mode={self.small_weight_mode!r}. Expected 'hard' or 'smooth'."
+                f"Unsupported small_weight_mode={self.small_weight_mode!r}. Expected 'hard', 'smooth', or 'soft'."
             )
         self.small_smooth_tau_ratio = max(float(getattr(h, "small_smooth_tau_ratio", 0.2) or 0.2), 1e-6)
         self.use_small_object_loss = self.small_center_gain > 0.0 or self.small_scale_gain > 0.0
