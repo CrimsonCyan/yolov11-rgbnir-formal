@@ -1026,7 +1026,7 @@ def common_train_kwargs(
         if small_smooth_tau_ratio is not None
         else float(os.getenv("SMALL_SMOOTH_TAU_RATIO", "0.2") or 0.2)
     )
-    cache_value = cache if cache is not None else (os.getenv("DATA_CACHE") or "disk")
+    cache_value = cache if cache is not None else (os.getenv("DATA_CACHE") or "ram")
     kwargs = {
         "cache": cache_value,
         "imgsz": imgsz,
@@ -1063,7 +1063,7 @@ def common_val_kwargs(
 ) -> dict[str, object]:
     val_batch = batch if batch and batch > 0 else (16 if mode == "decision_fusion" else train_batch_for(mode))
     return {
-        "cache": cache if cache is not None else (os.getenv("DATA_CACHE") or "disk"),
+        "cache": cache if cache is not None else (os.getenv("DATA_CACHE") or "ram"),
         "split": "val",
         "imgsz": imgsz,
         "batch": val_batch,

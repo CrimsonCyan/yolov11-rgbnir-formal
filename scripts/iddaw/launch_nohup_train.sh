@@ -35,7 +35,7 @@ fi
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 export VAL_INTERVAL="${VAL_INTERVAL:-1}"
 export IMGSZ="${IMGSZ:-640}"
-export DATA_CACHE="${DATA_CACHE:-disk}"
+export DATA_CACHE="${DATA_CACHE:-ram}"
 export OPTIMIZER="${OPTIMIZER:-AdamW}"
 export BATCH="${BATCH:-}"
 export LR0="${LR0:-0.001}"

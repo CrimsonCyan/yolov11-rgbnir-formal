@@ -96,7 +96,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cache",
         default="",
-        help="Dataset cache mode override for train/val. Defaults to DATA_CACHE or disk.",
+        help="Dataset cache mode override for train/val. Defaults to DATA_CACHE or ram.",
     )
     parser.add_argument("--lr0", type=float, default=0.0, help="Optional initial learning rate override for train. Defaults to 0.001.")
     parser.add_argument("--cos-lr", action="store_true", help="Use cosine learning rate schedule for train.")
