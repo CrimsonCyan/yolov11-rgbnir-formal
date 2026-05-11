@@ -57,6 +57,7 @@ from ultralytics.nn.modules import (
     ObjectAwareMultiScaleSmallPriorAuxConcat,
     ObjectAwareMultiScaleSmallPriorBoostConcat,
     ObjectAwareFusionResidualEnhanceConcat,
+    ObjectAwareFusionSegMaskResidualEnhanceConcat,
     ObjectAwareMultiScaleSoftPriorGateConcatFloor,
     ObjectAwareP2HeadResidualRefine,
     ObjectAwareP2HeadResidualRefineLite,
@@ -392,6 +393,9 @@ class BaseModel(torch.nn.Module):
     def _object_aware_foreground_loss(self, batch):
         """Add weak bbox supervision to object-prior maps exposed by foreground-aware OA modules."""
         if "bboxes" not in batch or "batch_idx" not in batch or batch["bboxes"].numel() == 0:
+            for module in self.modules():
+                if float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0:
+                    module.last_object_gate = None
             return None
 
         losses = []
@@ -409,6 +413,18 @@ class BaseModel(torch.nn.Module):
                 target, weight_map = self._soft_small_foreground_prior_from_bboxes(batch, gate, module)
                 target = target.float()
                 weight_map = weight_map.float()
+            elif target_mode in {"mask", "segment", "seg"}:
+                target = self._foreground_mask_from_segments(batch, gate)
+                if target is None:
+                    if not getattr(self, "_oa_seg_mask_missing_logged", False):
+                        LOGGER.warning(
+                            "WARNING ⚠️ OA segmentation foreground loss requested but batch masks are missing or "
+                            "not one-to-one with bbox targets. Skipping this auxiliary loss for the current batch."
+                        )
+                        self._oa_seg_mask_missing_logged = True
+                    module.last_object_gate = None
+                    continue
+                target = target.float()
             else:
                 target = self._foreground_mask_from_bboxes(batch, gate).float()
             gate = gate.float().clamp(1e-4, 1.0 - 1e-4)
@@ -445,6 +461,36 @@ class BaseModel(torch.nn.Module):
             x_start, x_end = int(x1[idx].item()), int(x2[idx].item())
             target[bi, 0, y_start:y_end, x_start:x_end] = 1.0
         return target
+
+    @staticmethod
+    def _foreground_mask_from_segments(batch, gate):
+        """Build image-level foreground targets from one-to-one instance masks at the gate resolution."""
+        masks = batch.get("masks")
+        if masks is None or "batch_idx" not in batch:
+            return None
+
+        bs, _, h, w = gate.shape
+        batch_idx = batch["batch_idx"].to(device=gate.device).view(-1).long()
+        masks = masks.to(device=gate.device, dtype=torch.float32)
+        if masks.ndim == 2:
+            masks = masks.unsqueeze(0)
+        if masks.ndim == 4 and masks.shape[1] == 1:
+            masks = masks[:, 0]
+        if masks.ndim != 3 or masks.shape[0] != batch_idx.numel():
+            return None
+
+        valid = (batch_idx >= 0) & (batch_idx < bs)
+        if not valid.any():
+            return gate.new_zeros((bs, 1, h, w))
+
+        target = gate.new_zeros((bs, 1, masks.shape[-2], masks.shape[-1]))
+        for bi in torch.unique(batch_idx[valid]).tolist():
+            image_mask = masks[batch_idx == int(bi)].clamp(0.0, 1.0)
+            if image_mask.numel():
+                target[int(bi), 0] = image_mask.amax(dim=0)
+        if target.shape[-2:] != (h, w):
+            target = torch.nn.functional.interpolate(target, size=(h, w), mode="nearest")
+        return target.clamp(0.0, 1.0)
 
     @staticmethod
     def _soft_small_foreground_prior_from_bboxes(batch, gate, module):
@@ -1326,6 +1372,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             ObjectAwareMultiScaleSmallPriorAuxConcat,
             ObjectAwareMultiScaleSmallPriorBoostConcat,
             ObjectAwareFusionResidualEnhanceConcat,
+            ObjectAwareFusionSegMaskResidualEnhanceConcat,
             ObjectAwareMultiScaleSoftPriorGateConcatFloor,
         }:
             if not isinstance(f, list) or len(f) != 2:

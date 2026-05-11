@@ -32,6 +32,14 @@ CATEGORY_TO_ID = {
     "traffic light": 6,
     "traffic sign": 7,
 }
+DEFAULT_BOX_OUTPUT_ROOT = r"E:\毕设\code\datasets\iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic"
+DEFAULT_SEGMENT_OUTPUT_ROOT = (
+    r"E:\毕设\code\datasets\iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment"
+)
+
+
+def default_output_root(label_format: str) -> str:
+    return DEFAULT_SEGMENT_OUTPUT_ROOT if label_format == "segment" else DEFAULT_BOX_OUTPUT_ROOT
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,8 +53,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-root",
-        default=r"E:\毕设\code\datasets\iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
-        help="Target YOLO RGB+NIR dataset root.",
+        default=None,
+        help=(
+            "Target YOLO RGB+NIR dataset root. Defaults to the bbox dataset for "
+            "label-format=box and the *_segment dataset for label-format=segment."
+        ),
     )
     parser.add_argument("--weathers", nargs="*", default=WEATHERS, help="Weather subsets to export.")
     parser.add_argument("--splits", nargs="*", default=["train", "val"], help="Dataset splits to export.")
@@ -56,6 +67,15 @@ def parse_args() -> argparse.Namespace:
         choices=["copy", "hardlink", "skip"],
         default="copy",
         help="Use 'skip' to generate labels/meta only; use 'hardlink' to avoid duplicating image bytes.",
+    )
+    parser.add_argument(
+        "--label-format",
+        choices=["box", "segment"],
+        default="box",
+        help=(
+            "Write YOLO detection boxes or YOLO segmentation polygons. Segment labels use the same "
+            "per-object polygons and detectable-filter rules as box labels."
+        ),
     )
     parser.add_argument(
         "--detectable-filter",
@@ -144,6 +164,22 @@ def polygon_to_yolo_box(polygon: list[list[float]], width: int, height: int) -> 
     )
 
 
+def polygon_to_yolo_segment(polygon: list[list[float]], width: int, height: int) -> list[float] | None:
+    """Clip a raw polygon and convert it to normalized YOLO segmentation coordinates."""
+    if len(polygon) < 3:
+        return None
+    segment: list[float] = []
+    distinct_points: set[tuple[int, int]] = set()
+    for point in polygon:
+        x = min(max(float(point[0]), 0.0), float(width))
+        y = min(max(float(point[1]), 0.0), float(height))
+        segment.extend((x / float(width), y / float(height)))
+        distinct_points.add((round(x), round(y)))
+    if len(distinct_points) < 3:
+        return None
+    return segment
+
+
 def polygon_area(polygon: list[list[float]]) -> float:
     if len(polygon) < 3:
         return 0.0
@@ -224,16 +260,22 @@ def parse_yolo_lines(
             continue
         class_id = CATEGORY_TO_ID[label]
         class_name = CATEGORY_NAMES_8_PERSONMERGE_TRAFFIC[class_id]
-        line = f"{class_id} {box[0]:.6f} {box[1]:.6f} {box[2]:.6f} {box[3]:.6f}"
-        if line in seen:
-            continue
-        seen.add(line)
         reason = filter_reason(box, polygon, width, height, args)
         if reason is not None:
             filter_stats["removed"] += 1
             filter_stats["removed_by_reason"][reason] += 1
             filter_stats["removed_by_class"][class_name] += 1
             continue
+        if args.label_format == "segment":
+            segment = polygon_to_yolo_segment(polygon, width, height)
+            if segment is None:
+                continue
+            line = f"{class_id} " + " ".join(f"{coord:.6f}" for coord in segment)
+        else:
+            line = f"{class_id} {box[0]:.6f} {box[1]:.6f} {box[2]:.6f} {box[3]:.6f}"
+        if line in seen:
+            continue
+        seen.add(line)
         lines.append(line)
         counts[class_name] += 1
         filter_stats["kept"] += 1
@@ -373,6 +415,10 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
             "",
             "`rider` 合并到 `person`。`traffic light` 与 `traffic sign` 作为独立类别保留。",
             "",
+            f"标签格式：`{args.label_format}`。",
+            "",
+            "当 `label_format=segment` 时，标签写为 YOLO segmentation polygon。Ultralytics 会由同一 polygon 推导 bbox，因此 segmentation mask、bbox 与类别目标保持逐对象一一对应；目标过滤仍使用与检测框导出完全相同的阈值。",
+            "",
             "## 可检测目标过滤规则",
             "",
             "该版本用于减少由分割标注转检测框时产生的极端不可检测实例。过滤在 train/val 上使用同一规则，避免训练和评估口径不一致。",
@@ -429,6 +475,7 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
             f"  --min-mask-bbox-ratio {args.min_mask_bbox_ratio:g} \\",
             f"  --max-resized-area-ratio {args.max_resized_area_ratio:g} \\",
             f"  --max-resized-side-ratio {args.max_resized_side_ratio:g} \\",
+            f"  --label-format {args.label_format} \\",
             "  --clean",
             "```",
             "",
@@ -441,6 +488,8 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
 
 def main() -> None:
     args = parse_args()
+    if args.output_root is None:
+        args.output_root = default_output_root(args.label_format)
     source_root = Path(args.source_root).resolve()
     output_root = Path(args.output_root).resolve()
     weathers = [weather.upper() for weather in args.weathers]
@@ -461,6 +510,7 @@ def main() -> None:
         "categories": CATEGORY_NAMES_8_PERSONMERGE_TRAFFIC,
         "raw_category_mapping": CATEGORY_TO_ID,
         "image_mode": args.image_mode,
+        "label_format": args.label_format,
         "detectable_filter": {
             "enabled": args.detectable_filter,
             "filter_imgsz": args.filter_imgsz,

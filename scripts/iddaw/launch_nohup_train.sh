@@ -11,6 +11,7 @@ PYTHON_BIN="${PYTHON_BIN:-/data1/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
 DEFAULT_DATA_ROOT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
 DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
 DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic"
+DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment"
 export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
 if [[ "$MODE" == *_8cls_personmerge_traffic ]]; then
   export IDDAW_CLASS_SCHEMA="8cls_personmerge_traffic"
@@ -18,6 +19,9 @@ fi
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
 if [[ "$MODE" == *_8cls_personmerge_traffic || "$IDDAW_CLASS_SCHEMA" == "8cls_personmerge_traffic" ]]; then
   export IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC="${IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC:-$DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC}"
+  if [[ "$MODE" == *oa_segmask* ]]; then
+    export IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT="${IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT:-$DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT}"
+  fi
 elif [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
   export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"
 fi

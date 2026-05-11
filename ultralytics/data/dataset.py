@@ -160,6 +160,12 @@ class YOLODataset(BaseDataset):
         # Check if the dataset is all boxes or all segments
         lengths = ((len(lb["cls"]), len(lb["bboxes"]), len(lb["segments"])) for lb in labels)
         len_cls, len_boxes, len_segments = (sum(x) for x in zip(*lengths))
+        if self.data.get("oa_seg_masks", False) and len_boxes != len_segments:
+            raise ValueError(
+                "oa_seg_masks=True requires one-to-one YOLO segment labels for every bbox target, "
+                f"but got len(segments) = {len_segments}, len(boxes) = {len_boxes}. "
+                "Regenerate labels with tools/export_iddaw_raw_to_yolo_rgbnir.py --label-format segment."
+            )
         if len_segments and len_boxes != len_segments:
             LOGGER.warning(
                 f"WARNING ⚠️ Box and segment counts should be equal, but got len(segments) = {len_segments}, "
@@ -180,16 +186,17 @@ class YOLODataset(BaseDataset):
             transforms = v8_transforms(self, self.imgsz, hyp)
         else:
             transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        return_oa_masks = bool(self.data.get("oa_seg_masks", False))
         transforms.append(
             Format(
                 bbox_format="xywh",
                 normalize=True,
-                return_mask=self.use_segments,
+                return_mask=self.use_segments or return_oa_masks,
                 return_keypoint=self.use_keypoints,
                 return_obb=self.use_obb,
                 batch_idx=True,
                 mask_ratio=hyp.mask_ratio,
-                mask_overlap=hyp.overlap_mask,
+                mask_overlap=False if return_oa_masks else hyp.overlap_mask,
                 bgr=hyp.bgr if self.augment else 0.0,  # only affect training.
             )
         )

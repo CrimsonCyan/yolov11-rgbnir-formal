@@ -66,7 +66,14 @@ def configure_wandb(mode: str) -> None:
 
     os.environ.setdefault("WANDB_PROJECT", "iddaw-rgbnir-formal")
     os.environ.setdefault("WANDB_GROUP", "iddaw_all_weather")
-    dataset_tag = "6-class-personmerge" if len(category_names_for_mode(mode)) == 6 else "7-class"
+    num_classes = len(category_names_for_mode(mode))
+    dataset_tag = (
+        "6-class-personmerge"
+        if num_classes == 6
+        else "8-class-personmerge-traffic"
+        if num_classes == 8
+        else "7-class"
+    )
     os.environ.setdefault("WANDB_TAGS", f"{safe_wandb_tag(mode)},all-weather,{dataset_tag}")
 
 

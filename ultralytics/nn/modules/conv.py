@@ -33,6 +33,7 @@ __all__ = (
     "ObjectAwareMultiScaleSmallPriorAuxConcat",
     "ObjectAwareMultiScaleSmallPriorBoostConcat",
     "ObjectAwareFusionResidualEnhanceConcat",
+    "ObjectAwareFusionSegMaskResidualEnhanceConcat",
     "ObjectAwareMultiScaleSoftPriorGateConcatFloor",
     "ObjectAwareP2HeadResidualRefine",
     "ObjectAwareP2HeadResidualRefineLite",
@@ -796,8 +797,8 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         work_reduction=2,
         gate_stride=2,
         residual_init=0.03,
-        context_gate=False,
-        spatial_gate_floor=0.1,
+        context_gate=True,
+        spatial_gate_floor=0.0,
     ):
         super().__init__()
         if min(rgb_channels, nir_channels) <= 0:
@@ -938,13 +939,51 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         residual_scale = self.max_residual_scale * torch.sigmoid(self.reflectance_scale + self.gate_scale)
         residual_delta = residual_scale * selection_gate * residual
         nir_out = nir_feat + residual_delta
-        if not torch.is_grad_enabled():
-            self.last_object_gate = spatial_gate.detach() if self.capture_object_gate else None
-            self.last_residual_delta = residual_delta.detach()
+        if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
+            self.last_object_gate = spatial_gate if torch.is_grad_enabled() else spatial_gate.detach()
+            self.last_residual_delta = residual_delta.detach() if not torch.is_grad_enabled() else None
         else:
             self.last_object_gate = None
             self.last_residual_delta = None
         return torch.cat((rgb_feat, nir_out), dim=self.d)
+
+
+class ObjectAwareFusionSegMaskResidualEnhanceConcat(ObjectAwareFusionResidualEnhanceConcat):
+    """Fusion-side residual OA module supervised by one-to-one segmentation masks."""
+
+    def __init__(
+        self,
+        rgb_channels,
+        nir_channels,
+        dimension=1,
+        reduction=2,
+        foreground_loss_weight=0.03,
+        small_area_ref=0.0064,
+        max_prior_weight=3.0,
+        max_residual_scale=0.25,
+        work_reduction=2,
+        gate_stride=2,
+        residual_init=0.03,
+        context_gate=True,
+        spatial_gate_floor=0.0,
+    ):
+        super().__init__(
+            rgb_channels,
+            nir_channels,
+            dimension,
+            reduction,
+            foreground_loss_weight,
+            small_area_ref,
+            max_prior_weight,
+            max_residual_scale,
+            work_reduction,
+            gate_stride,
+            residual_init,
+            context_gate,
+            spatial_gate_floor,
+        )
+        self.foreground_loss_weight = float(foreground_loss_weight)
+        self.foreground_target_mode = "mask"
 
 
 class ObjectAwareMultiScaleSoftPriorGateConcatFloor(ObjectAwareMultiScaleSoftPriorGateConcat):

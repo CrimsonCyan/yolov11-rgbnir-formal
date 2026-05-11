@@ -101,8 +101,14 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
     "oa_yolo_pan_fusionres_p2only_reduction1_yolo11s_8cls_personmerge_traffic": (
         "oa_yolo_pan_fusionres_p2only_reduction1_yolo11s_6cls_personmerge"
     ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
 }
 TRAFFIC_PERSONMERGE_MODES = set(TRAFFIC_PERSONMERGE_MODE_MAP)
+OA_SEGMENT_MASK_MODES = {
+    "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+}
 TRAINABLE_MODES = {
     "rgb",
     "rgb_yolo11s",
@@ -202,11 +208,20 @@ def category_names_for_mode(mode: str) -> list[str]:
 def resolve_dataset_root(mode: str = "rgbnir") -> Path:
     schema = class_schema_for_mode(mode)
     if schema == TRAFFIC_CLASS_SCHEMA:
-        env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC")
-        candidates = [
-            repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
-            repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
-        ]
+        if mode in OA_SEGMENT_MASK_MODES:
+            env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT")
+            candidates = [
+                repo_root().parent
+                / "datasets"
+                / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment",
+                repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment",
+            ]
+        else:
+            env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC")
+            candidates = [
+                repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
+                repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
+            ]
     elif schema != LEGACY_CLASS_SCHEMA:
         env_root = os.getenv("IDDAW_YOLO_ROOT_6CLS_PERSONMERGE")
         candidates = [
@@ -258,6 +273,7 @@ def build_dataset_yaml(mode: str) -> Path:
     runtime_dir = repo_root() / "runtime_cfg"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     runtime_yaml = runtime_dir / f"iddaw_{mode}.yaml"
+    extra_lines = ["oa_seg_masks: true"] if mode in OA_SEGMENT_MASK_MODES else []
     runtime_yaml.write_text(
         "\n".join(
             [
@@ -266,6 +282,7 @@ def build_dataset_yaml(mode: str) -> Path:
                 f"val: {val}",
                 f"nc: {len(names)}",
                 f"names: {names!r}",
+                *extra_lines,
                 "",
             ]
         ),
@@ -275,6 +292,11 @@ def build_dataset_yaml(mode: str) -> Path:
 
 
 def experiment_name(mode: str) -> str:
+    if mode == "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic":
+        return (
+            "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+            "p2only-c256-r4-red1-8cls-personmerge-traffic"
+        )
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
         return experiment_name(TRAFFIC_PERSONMERGE_MODE_MAP[mode]).replace(
             "6cls-personmerge", "8cls-personmerge-traffic"
@@ -385,6 +407,15 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ctxres_p2only_c256_r4_8cls_personmerge_traffic.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
             ).resolve()
         )
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
