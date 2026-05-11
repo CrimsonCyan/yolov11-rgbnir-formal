@@ -92,8 +92,14 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
     "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_6cls_personmerge"
     ),
+    "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_yolo11s_6cls_personmerge"
+    ),
     "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_workred1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_workred1_yolo11s_6cls_personmerge"
     ),
     "bifpn_only_light_nir_p2p5_oa_ctxres_p2only_c256_r4_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_oa_ctxres_p2only_c256_r4_yolo11s_6cls_personmerge"
@@ -391,6 +397,15 @@ def model_config_for(mode: str) -> str:
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_c256_r4_8cls_personmerge_traffic.yaml"
             ).resolve()
         )
+    if mode == "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fusionres_p2only_c256_r4_8cls_personmerge_traffic.yaml"
+            ).resolve()
+        )
     if mode == "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic":
         return str(
             (
@@ -398,6 +413,15 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fusionres_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+            ).resolve()
+        )
+    if mode == "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_workred1_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_fusionres_p2only_c256_r4_reduction1_workred1_8cls_personmerge_traffic.yaml"
             ).resolve()
         )
     if mode == "bifpn_only_light_nir_p2p5_oa_ctxres_p2only_c256_r4_yolo11s_8cls_personmerge_traffic":
