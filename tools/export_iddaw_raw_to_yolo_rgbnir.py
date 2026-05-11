@@ -180,6 +180,28 @@ def polygon_to_yolo_segment(polygon: list[list[float]], width: int, height: int)
     return segment
 
 
+def segment_to_yolo_box(segment: list[float]) -> tuple[float, float, float, float] | None:
+    """Convert normalized YOLO segment coordinates to the bbox Ultralytics will use for duplicate checks."""
+    if len(segment) < 6 or len(segment) % 2 != 0:
+        return None
+    xs = segment[0::2]
+    ys = segment[1::2]
+    x1 = min(xs)
+    y1 = min(ys)
+    x2 = max(xs)
+    y2 = max(ys)
+    box_w = x2 - x1
+    box_h = y2 - y1
+    if box_w <= 0.0 or box_h <= 0.0:
+        return None
+    return (x1 + box_w / 2.0, y1 + box_h / 2.0, box_w, box_h)
+
+
+def label_dedup_key(class_id: int, box: tuple[float, float, float, float]) -> tuple[int, float, float, float, float]:
+    """Match YOLO label precision so export-time de-duplication matches Ultralytics cache checks."""
+    return (class_id, *(round(float(value), 6) for value in box))
+
+
 def polygon_area(polygon: list[list[float]]) -> float:
     if len(polygon) < 3:
         return 0.0
@@ -235,7 +257,7 @@ def parse_yolo_lines(
     width: int,
     height: int,
     args: argparse.Namespace,
-) -> tuple[list[str], Counter[str], dict[str, object]]:
+) -> tuple[list[str], Counter[str], dict[str, object], dict[str, object]]:
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     lines: list[str] = []
     counts: Counter[str] = Counter()
@@ -245,7 +267,11 @@ def parse_yolo_lines(
         "removed_by_reason": Counter(),
         "removed_by_class": Counter(),
     }
-    seen: set[str] = set()
+    cleanup_stats: dict[str, object] = {
+        "duplicate_labels_removed": 0,
+        "duplicate_labels_removed_by_class": Counter(),
+    }
+    seen_keys: set[tuple[int, float, float, float, float]] = set()
     for obj in payload.get("objects", []):
         if int(obj.get("deleted", 0)) != 0:
             continue
@@ -270,18 +296,27 @@ def parse_yolo_lines(
             segment = polygon_to_yolo_segment(polygon, width, height)
             if segment is None:
                 continue
+            segment = [round(float(coord), 6) for coord in segment]
+            dedup_box = segment_to_yolo_box(segment)
+            if dedup_box is None:
+                continue
             line = f"{class_id} " + " ".join(f"{coord:.6f}" for coord in segment)
         else:
+            dedup_box = tuple(round(float(coord), 6) for coord in box)
             line = f"{class_id} {box[0]:.6f} {box[1]:.6f} {box[2]:.6f} {box[3]:.6f}"
-        if line in seen:
+        dedup_key = label_dedup_key(class_id, dedup_box)
+        if dedup_key in seen_keys:
+            cleanup_stats["duplicate_labels_removed"] += 1
+            cleanup_stats["duplicate_labels_removed_by_class"][class_name] += 1
             continue
-        seen.add(line)
+        seen_keys.add(dedup_key)
         lines.append(line)
         counts[class_name] += 1
         filter_stats["kept"] += 1
     filter_stats["removed_by_reason"] = dict(filter_stats["removed_by_reason"])
     filter_stats["removed_by_class"] = dict(filter_stats["removed_by_class"])
-    return lines, counts, filter_stats
+    cleanup_stats["duplicate_labels_removed_by_class"] = dict(cleanup_stats["duplicate_labels_removed_by_class"])
+    return lines, counts, filter_stats, cleanup_stats
 
 
 def ensure_dirs(root: Path, splits: list[str]) -> None:
@@ -314,6 +349,11 @@ def merge_filter_stats(dst: dict[str, object], src: dict[str, object]) -> None:
     dst["removed_by_class"].update(src["removed_by_class"])
 
 
+def merge_cleanup_stats(dst: dict[str, object], src: dict[str, object]) -> None:
+    dst["duplicate_labels_removed"] += int(src["duplicate_labels_removed"])
+    dst["duplicate_labels_removed_by_class"].update(src["duplicate_labels_removed_by_class"])
+
+
 def export_split(
     source_root: Path,
     output_root: Path,
@@ -335,6 +375,10 @@ def export_split(
             "removed": 0,
             "removed_by_reason": Counter(),
             "removed_by_class": Counter(),
+        },
+        "label_cleanup": {
+            "duplicate_labels_removed": 0,
+            "duplicate_labels_removed_by_class": Counter(),
         },
     }
     visible_split_dir = output_root / "visible" / split
@@ -375,7 +419,7 @@ def export_split(
                     link_or_copy_image(nir_src, nir_split_dir / image_name, image_mode)
                     split_stats["images"] += 2
 
-                lines, counts, filter_stats = parse_yolo_lines(ann_src, width, height, args)
+                lines, counts, filter_stats, cleanup_stats = parse_yolo_lines(ann_src, width, height, args)
                 label_text = "\n".join(lines)
                 (visible_split_dir / label_name).write_text(label_text, encoding="utf-8")
                 (nir_split_dir / label_name).write_text(label_text, encoding="utf-8")
@@ -385,6 +429,7 @@ def export_split(
                 split_stats["class_counts"].update(counts)
                 split_stats["weather_counts"][weather.lower()] += 1
                 merge_filter_stats(split_stats["detectable_filter"], filter_stats)
+                merge_cleanup_stats(split_stats["label_cleanup"], cleanup_stats)
 
     split_stats["class_counts"] = dict(split_stats["class_counts"])
     split_stats["weather_counts"] = dict(split_stats["weather_counts"])
@@ -393,6 +438,9 @@ def export_split(
     )
     split_stats["detectable_filter"]["removed_by_class"] = dict(
         split_stats["detectable_filter"]["removed_by_class"]
+    )
+    split_stats["label_cleanup"]["duplicate_labels_removed_by_class"] = dict(
+        split_stats["label_cleanup"]["duplicate_labels_removed_by_class"]
     )
     return split_stats
 
@@ -418,6 +466,9 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
             f"标签格式：`{args.label_format}`。",
             "",
             "当 `label_format=segment` 时，标签写为 YOLO segmentation polygon。Ultralytics 会由同一 polygon 推导 bbox，因此 segmentation mask、bbox 与类别目标保持逐对象一一对应；目标过滤仍使用与检测框导出完全相同的阈值。",
+            "",
+            "导出时会按 `class + segment2bbox` 去重。该口径与 Ultralytics 构建 cache 时的 "
+            "duplicate label 检查一致，可避免不同 polygon 推导出相同 bbox 后在训练阶段被动去重。",
             "",
             "## 可检测目标过滤规则",
             "",
@@ -457,6 +508,12 @@ def write_dataset_info(output_root: Path, report: dict[str, object], args: argpa
             lines.append(f"| {split} | reason: {reason} | {count} |")
         for class_name, count in sorted(filt["removed_by_class"].items()):
             lines.append(f"| {split} | class: {class_name} | {count} |")
+    lines.extend(["", "### 重复标签清理统计", "", "| split | class name | duplicate labels removed |", "| --- | --- | ---: |"])
+    for split, stats in report["splits"].items():
+        cleanup = stats["label_cleanup"]
+        lines.append(f"| {split} | all | {cleanup['duplicate_labels_removed']} |")
+        for class_name, count in sorted(cleanup["duplicate_labels_removed_by_class"].items()):
+            lines.append(f"| {split} | {class_name} | {count} |")
     lines.extend(
         [
             "",

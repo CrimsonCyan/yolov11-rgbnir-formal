@@ -472,6 +472,7 @@ class ObjectAwareReflectanceGateConcat(nn.Module):
         self.foreground_target_mode = "box"
         self.capture_object_gate = False
         self.last_object_gate = None
+        self.last_object_gate_logits = None
         self.last_residual_delta = None
 
     def _smooth_nir(self, nir_feat):
@@ -834,6 +835,7 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         self.spatial_gate_floor = float(spatial_gate_floor)
         self.capture_object_gate = False
         self.last_object_gate = None
+        self.last_object_gate_logits = None
         self.last_residual_delta = None
 
         work_channels = max(nir_channels // int(work_reduction), 32)
@@ -858,11 +860,10 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             nn.Conv2d(hidden, nir_channels, kernel_size=1, stride=1, padding=0, bias=True),
             nn.Sigmoid(),
         )
-        self.spatial_gate = nn.Sequential(
+        self.spatial_gate_logits = nn.Sequential(
             Conv(cue_channels, work_channels, k=1, s=1),
             DWConv(work_channels, work_channels, k=3, s=1),
             nn.Conv2d(work_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
-            nn.Sigmoid(),
         )
         self.context_gate = (
             nn.Sequential(
@@ -917,7 +918,8 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
             dim=1,
         )
         channel_gate = self.channel_gate(cue)
-        raw_spatial_gate = self.spatial_gate(cue)
+        spatial_logits = self.spatial_gate_logits(cue)
+        raw_spatial_gate = torch.sigmoid(spatial_logits)
         spatial_gate = self.spatial_gate_floor + (1.0 - self.spatial_gate_floor) * raw_spatial_gate
         selection_gate = channel_gate * spatial_gate
         if self.context_gate is not None:
@@ -940,10 +942,16 @@ class ObjectAwareFusionResidualEnhanceConcat(nn.Module):
         residual_delta = residual_scale * selection_gate * residual
         nir_out = nir_feat + residual_delta
         if self.capture_object_gate and (self.training or not torch.is_grad_enabled()):
-            self.last_object_gate = spatial_gate if torch.is_grad_enabled() else spatial_gate.detach()
+            if torch.is_grad_enabled():
+                self.last_object_gate = spatial_gate
+                self.last_object_gate_logits = spatial_logits
+            else:
+                self.last_object_gate = spatial_gate.detach()
+                self.last_object_gate_logits = spatial_logits.detach()
             self.last_residual_delta = residual_delta.detach() if not torch.is_grad_enabled() else None
         else:
             self.last_object_gate = None
+            self.last_object_gate_logits = None
             self.last_residual_delta = None
         return torch.cat((rgb_feat, nir_out), dim=self.d)
 

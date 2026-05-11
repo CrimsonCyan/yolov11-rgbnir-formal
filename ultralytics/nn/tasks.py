@@ -390,12 +390,35 @@ class BaseModel(torch.nn.Module):
             if float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0:
                 module.capture_object_gate = bool(enabled)
 
+    @staticmethod
+    def _clear_object_aware_gate_cache(module):
+        """Clear transient tensors exposed by OA modules for auxiliary foreground loss."""
+        module.last_object_gate = None
+        if hasattr(module, "last_object_gate_logits"):
+            module.last_object_gate_logits = None
+
+    def _object_aware_foreground_loss_warmup(self):
+        """Warm up OA foreground loss after detection features become stable."""
+        epoch = int(getattr(getattr(self, "args", None), "current_epoch", 0) or 0)
+        if epoch < 5:
+            return 0.0
+        if epoch < 20:
+            return float(epoch - 4) / 15.0
+        return 1.0
+
     def _object_aware_foreground_loss(self, batch):
         """Add weak bbox supervision to object-prior maps exposed by foreground-aware OA modules."""
+        warmup = self._object_aware_foreground_loss_warmup()
+        if warmup <= 0.0:
+            for module in self.modules():
+                if float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0:
+                    self._clear_object_aware_gate_cache(module)
+            return None
+
         if "bboxes" not in batch or "batch_idx" not in batch or batch["bboxes"].numel() == 0:
             for module in self.modules():
                 if float(getattr(module, "foreground_loss_weight", 0.0) or 0.0) > 0:
-                    module.last_object_gate = None
+                    self._clear_object_aware_gate_cache(module)
             return None
 
         losses = []
@@ -414,7 +437,11 @@ class BaseModel(torch.nn.Module):
                 target = target.float()
                 weight_map = weight_map.float()
             elif target_mode in {"mask", "segment", "seg"}:
-                target = self._foreground_mask_from_segments(batch, gate)
+                logits = getattr(module, "last_object_gate_logits", None)
+                if logits is None or not isinstance(logits, torch.Tensor) or not logits.requires_grad:
+                    self._clear_object_aware_gate_cache(module)
+                    continue
+                target = self._foreground_mask_from_segments(batch, logits)
                 if target is None:
                     if not getattr(self, "_oa_seg_mask_missing_logged", False):
                         LOGGER.warning(
@@ -422,9 +449,26 @@ class BaseModel(torch.nn.Module):
                             "not one-to-one with bbox targets. Skipping this auxiliary loss for the current batch."
                         )
                         self._oa_seg_mask_missing_logged = True
-                    module.last_object_gate = None
+                    self._clear_object_aware_gate_cache(module)
                     continue
                 target = target.float()
+                pos = target.sum()
+                if pos <= 0:
+                    # Empty foreground batches would otherwise become all-background BCE and over-suppress the gate.
+                    self._clear_object_aware_gate_cache(module)
+                    continue
+                neg = target.numel() - pos
+                pos_weight = (neg / pos.clamp_min(1.0)).clamp(1.0, 10.0).reshape(1)
+                loss_map = torch.nn.functional.binary_cross_entropy_with_logits(
+                    logits.float(),
+                    target,
+                    reduction="none",
+                    pos_weight=pos_weight,
+                )
+                loss = loss_map.mean()
+                losses.append(loss * weight * warmup)
+                self._clear_object_aware_gate_cache(module)
+                continue
             else:
                 target = self._foreground_mask_from_bboxes(batch, gate).float()
             gate = gate.float().clamp(1e-4, 1.0 - 1e-4)
@@ -433,8 +477,8 @@ class BaseModel(torch.nn.Module):
             pos_weight = (neg / pos.clamp_min(1.0)).clamp(1.0, 10.0)
             loss_map = -(pos_weight * target * gate.log() + (1.0 - target) * (1.0 - gate).log())
             loss = (loss_map * weight_map).mean() if weight_map is not None else loss_map.mean()
-            losses.append(loss * weight)
-            module.last_object_gate = None
+            losses.append(loss * weight * warmup)
+            self._clear_object_aware_gate_cache(module)
 
         return torch.stack(losses).sum() if losses else None
 
