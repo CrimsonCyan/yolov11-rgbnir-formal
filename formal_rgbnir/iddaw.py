@@ -110,10 +110,76 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
     "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
     ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg050_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res015_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
 }
 TRAFFIC_PERSONMERGE_MODES = set(TRAFFIC_PERSONMERGE_MODE_MAP)
 OA_SEGMENT_MASK_MODES = {
     "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg050_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res015_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+}
+OA_SEGMENT_EXPERIMENT_NAMES = {
+    "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "fg010-p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "fg030-p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg050_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "fg050-p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res015_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "fg030-res015-p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "fg030-res035-p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+}
+OA_SEGMENT_CONFIG_FILENAMES = {
+    "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg010_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg030_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg050_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg050_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res015_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg030_res015_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg030_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg030_res035_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
 }
 TRAINABLE_MODES = {
     "rgb",
@@ -298,11 +364,8 @@ def build_dataset_yaml(mode: str) -> Path:
 
 
 def experiment_name(mode: str) -> str:
-    if mode == "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic":
-        return (
-            "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
-            "p2only-c256-r4-red1-8cls-personmerge-traffic"
-        )
+    if mode in OA_SEGMENT_EXPERIMENT_NAMES:
+        return OA_SEGMENT_EXPERIMENT_NAMES[mode]
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
         return experiment_name(TRAFFIC_PERSONMERGE_MODE_MAP[mode]).replace(
             "6cls-personmerge", "8cls-personmerge-traffic"
@@ -388,6 +451,8 @@ def experiment_name(mode: str) -> str:
 
 def model_config_for(mode: str) -> str:
     root = repo_root()
+    if mode in OA_SEGMENT_CONFIG_FILENAMES:
+        return str((root / "configs" / "models" / OA_SEGMENT_CONFIG_FILENAMES[mode]).resolve())
     if mode == "bifpn_only_light_nir_p2p5_c256_r4_yolo11s_8cls_personmerge_traffic":
         return str(
             (
@@ -431,15 +496,6 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ctxres_p2only_c256_r4_8cls_personmerge_traffic.yaml"
-            ).resolve()
-        )
-    if mode == "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic":
-        return str(
-            (
-                root
-                / "configs"
-                / "models"
-                / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
             ).resolve()
         )
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
