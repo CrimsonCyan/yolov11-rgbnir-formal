@@ -110,6 +110,9 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
     "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
     ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg003_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
+    ),
     "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "bifpn_only_light_nir_p2p5_oa_fusionres_p2only_c256_r4_reduction1_yolo11s_6cls_personmerge"
     ),
@@ -129,6 +132,7 @@ TRAFFIC_PERSONMERGE_MODE_MAP = {
 TRAFFIC_PERSONMERGE_MODES = set(TRAFFIC_PERSONMERGE_MODE_MAP)
 OA_SEGMENT_MASK_MODES = {
     "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg003_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
     "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
     "bifpn_only_light_nir_p2p5_oa_segmask_fg030_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
     "bifpn_only_light_nir_p2p5_oa_segmask_fg050_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic",
@@ -139,6 +143,10 @@ OA_SEGMENT_EXPERIMENT_NAMES = {
     "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
         "p2only-c256-r4-red1-8cls-personmerge-traffic"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg003_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
+        "fg003-res035-p2only-c256-r4-red1-8cls-personmerge-traffic"
     ),
     "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "iddaw-yolo11s-rgbnir-bifpn-only-light-nir-p2p5-oa-segmask-"
@@ -164,6 +172,9 @@ OA_SEGMENT_EXPERIMENT_NAMES = {
 OA_SEGMENT_CONFIG_FILENAMES = {
     "bifpn_only_light_nir_p2p5_oa_segmask_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
+    ),
+    "bifpn_only_light_nir_p2p5_oa_segmask_fg003_res035_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
+        "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg003_res035_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
     ),
     "bifpn_only_light_nir_p2p5_oa_segmask_fg010_p2only_c256_r4_reduction1_yolo11s_8cls_personmerge_traffic": (
         "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_segmask_fg010_p2only_c256_r4_reduction1_8cls_personmerge_traffic.yaml"
