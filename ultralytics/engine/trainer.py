@@ -712,6 +712,9 @@ class BaseTrainer:
 
                 # Check that resume data YAML exists, otherwise strip to force re-download of dataset
                 ckpt_args = attempt_load_weights(last).args
+                # Runtime-only field used by the small-object loss schedule; it is not a valid train arg
+                # and must not be replayed into DDP resume overrides.
+                ckpt_args.pop("current_epoch", None)
                 if not Path(ckpt_args["data"]).exists():
                     ckpt_args["data"] = self.args.data
 
