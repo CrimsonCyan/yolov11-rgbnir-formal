@@ -3,8 +3,9 @@ from __future__ import annotations
 import torch
 
 
-SMALL_AREA_SIDE = 102.0
-MEDIUM_AREA_SIDE = 306.0
+AREA_REFERENCE_SIZE = 640.0
+SMALL_AREA_SIDE = 32.0
+MEDIUM_AREA_SIDE = 96.0
 
 
 def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
@@ -29,9 +30,26 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
     return inter / union.clamp(min=1e-6)
 
 
-def area_bucket(area: float) -> str:
-    if area <= SMALL_AREA_SIDE * SMALL_AREA_SIDE:
+def letterbox_area_scale(image_shape, reference_size: float = AREA_REFERENCE_SIZE) -> float:
+    """Return the area scale from native image space to a square letterbox size."""
+    if image_shape is None:
+        return 1.0
+    if isinstance(image_shape, torch.Tensor):
+        shape = image_shape.detach().cpu().flatten().tolist()
+    else:
+        shape = list(image_shape)
+    if len(shape) < 2:
+        return 1.0
+    height = max(float(shape[0]), 1e-6)
+    width = max(float(shape[1]), 1e-6)
+    gain = min(float(reference_size) / height, float(reference_size) / width)
+    return gain * gain
+
+
+def area_bucket(area: float, image_shape=None, reference_size: float = AREA_REFERENCE_SIZE) -> str:
+    scaled_area = float(area) * letterbox_area_scale(image_shape, reference_size)
+    if scaled_area < SMALL_AREA_SIDE * SMALL_AREA_SIDE:
         return "small"
-    if area <= MEDIUM_AREA_SIDE * MEDIUM_AREA_SIDE:
+    if scaled_area < MEDIUM_AREA_SIDE * MEDIUM_AREA_SIDE:
         return "medium"
     return "large"

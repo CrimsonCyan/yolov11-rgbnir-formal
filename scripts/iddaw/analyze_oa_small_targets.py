@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from formal_rgbnir.box_ops import area_bucket, box_iou, xywh_to_xyxy
+from formal_rgbnir.box_ops import AREA_REFERENCE_SIZE, area_bucket, box_iou, xywh_to_xyxy
 from formal_rgbnir.iddaw import (
     DEFAULT_PAIRS,
     build_dataset_yaml,
@@ -49,6 +49,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weights", default="", help="Single-case checkpoint path.")
     parser.add_argument("--out", default="runs/analysis/oa_small_targets", help="Output directory.")
     parser.add_argument("--imgsz", type=int, default=800)
+    parser.add_argument(
+        "--area-imgsz",
+        type=float,
+        default=AREA_REFERENCE_SIZE,
+        help="Reference letterbox size for AP_S/AP_M/AP_L buckets. Defaults to COCO-style 640: <32^2, 32^2-96^2, >=96^2.",
+    )
     parser.add_argument("--batch", type=int, default=0, help="Batch size for validator metrics. Defaults to mode val batch.")
     parser.add_argument("--conf", type=float, default=0.001, help="Prediction confidence used for AP collection.")
     parser.add_argument("--pr-conf", type=float, default=0.25, help="Confidence threshold for precision/recall summary.")
@@ -129,7 +135,7 @@ def image_paths_for_mode(mode: str) -> list[Path]:
     return sorted(path for path in visible_val.iterdir() if path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp"})
 
 
-def load_target(image_path: Path, orig_shape: tuple[int, int]) -> dict[str, object]:
+def load_target(image_path: Path, orig_shape: tuple[int, int], area_imgsz: float) -> dict[str, object]:
     label_path = image_path.with_suffix(".txt")
     h, w = orig_shape
     boxes_xywh = []
@@ -150,7 +156,10 @@ def load_target(image_path: Path, orig_shape: tuple[int, int]) -> dict[str, obje
     else:
         boxes = torch.zeros((0, 4), dtype=torch.float32)
         labels_t = torch.zeros((0,), dtype=torch.long)
-    buckets = [area_bucket(float((box[2] - box[0]) * (box[3] - box[1]))) for box in boxes]
+    buckets = [
+        area_bucket(float((box[2] - box[0]) * (box[3] - box[1])), image_shape=(h, w), reference_size=area_imgsz)
+        for box in boxes
+    ]
     return {
         "sample_id": image_path.stem,
         "boxes_xyxy": boxes,
@@ -175,8 +184,15 @@ def collect_prediction(result) -> dict[str, object]:
     }
 
 
-def bucket_boxes(boxes: torch.Tensor) -> list[str]:
-    return [area_bucket(float((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0))) for box in boxes]
+def bucket_boxes(boxes: torch.Tensor, image_shape, area_imgsz: float) -> list[str]:
+    return [
+        area_bucket(
+            float((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0)),
+            image_shape=image_shape,
+            reference_size=area_imgsz,
+        )
+        for box in boxes
+    ]
 
 
 def box_area_xyxy(box: torch.Tensor) -> float:
@@ -272,10 +288,18 @@ def suppress_contained_predictions(
     return filtered, sorted(suppressed), pairs
 
 
-def prediction_area_mask(boxes: torch.Tensor, area_filter: str) -> torch.Tensor:
+def prediction_area_mask(boxes: torch.Tensor, area_filter: str, image_shape, area_imgsz: float) -> torch.Tensor:
     if len(boxes) == 0:
         return torch.zeros((0,), dtype=torch.bool, device=boxes.device)
-    values = [area_bucket(float((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0))) == area_filter for box in boxes]
+    values = [
+        area_bucket(
+            float((box[2] - box[0]).clamp(min=0) * (box[3] - box[1]).clamp(min=0)),
+            image_shape=image_shape,
+            reference_size=area_imgsz,
+        )
+        == area_filter
+        for box in boxes
+    ]
     return torch.tensor(values, dtype=torch.bool, device=boxes.device)
 
 
@@ -300,12 +324,14 @@ def filter_predn_for_area(
     ignored_boxes: torch.Tensor,
     ignored_labels: torch.Tensor,
     area_filter: str,
+    image_shape,
+    area_imgsz: float,
 ) -> torch.Tensor:
     if len(predn) == 0:
         return predn
     pred_boxes = predn[:, :4]
     pred_labels = predn[:, 5]
-    pred_area = prediction_area_mask(pred_boxes, area_filter)
+    pred_area = prediction_area_mask(pred_boxes, area_filter, image_shape, area_imgsz)
     valid_overlap = same_class_overlap_mask_device(pred_boxes, pred_labels, valid_boxes, valid_labels)
     ignored_overlap = same_class_overlap_mask_device(pred_boxes, pred_labels, ignored_boxes, ignored_labels)
     keep = (pred_area | valid_overlap) & ~(ignored_overlap & ~valid_overlap)
@@ -317,6 +343,7 @@ class AreaDetectionValidator(DetectionValidator):
 
     last_instance = None
     area_names = ("small", "medium", "large")
+    area_reference_size = AREA_REFERENCE_SIZE
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -345,7 +372,8 @@ class AreaDetectionValidator(DetectionValidator):
             if self.args.single_cls and len(predn):
                 predn[:, 5] = 0
 
-            buckets = bucket_boxes(bbox.detach().cpu()) if len(bbox) else []
+            area_imgsz = float(getattr(self, "area_reference_size", AREA_REFERENCE_SIZE))
+            buckets = bucket_boxes(bbox.detach().cpu(), pbatch["ori_shape"], area_imgsz) if len(bbox) else []
             for area in self.area_names:
                 valid_mask = torch.tensor([bucket == area for bucket in buckets], dtype=torch.bool, device=self.device)
                 ignored_mask = ~valid_mask if len(valid_mask) else torch.zeros((len(bbox),), dtype=torch.bool, device=self.device)
@@ -353,7 +381,16 @@ class AreaDetectionValidator(DetectionValidator):
                 valid_cls = cls[valid_mask]
                 ignored_bbox = bbox[ignored_mask]
                 ignored_cls = cls[ignored_mask]
-                area_predn = filter_predn_for_area(predn, valid_bbox, valid_cls, ignored_bbox, ignored_cls, area)
+                area_predn = filter_predn_for_area(
+                    predn,
+                    valid_bbox,
+                    valid_cls,
+                    ignored_bbox,
+                    ignored_cls,
+                    area,
+                    pbatch["ori_shape"],
+                    area_imgsz,
+                )
                 stat = self.area_stats[area]
                 stat["conf"].append(area_predn[:, 4] if len(area_predn) else torch.zeros(0, device=self.device))
                 stat["pred_cls"].append(area_predn[:, 5] if len(area_predn) else torch.zeros(0, device=self.device))
@@ -733,10 +770,10 @@ def save_gate_residual_comparison_image(
     return True
 
 
-def prediction_area_bucket(box: torch.Tensor) -> str:
+def prediction_area_bucket(box: torch.Tensor, image_shape=None, area_imgsz: float = AREA_REFERENCE_SIZE) -> str:
     width = float((box[2] - box[0]).clamp(min=0).item())
     height = float((box[3] - box[1]).clamp(min=0).item())
-    return area_bucket(width * height)
+    return area_bucket(width * height, image_shape=image_shape, reference_size=area_imgsz)
 
 
 def collect_gate_modules(model) -> list[torch.nn.Module]:
@@ -854,6 +891,7 @@ def match_predictions_for_area(
     iou_threshold: float,
     area_filter: str | None,
     conf: float | None = None,
+    area_imgsz: float = AREA_REFERENCE_SIZE,
 ) -> tuple[list[float], list[float], int]:
     pred_records = []
     gt_map = {}
@@ -871,11 +909,11 @@ def match_predictions_for_area(
         gt_map[image_id] = {"valid": valid_entries, "ignored": ignored_boxes}
         for box, score, label in zip(pred["boxes"], pred["scores"], pred["labels"]):
             if int(label) == class_id and (conf is None or float(score) >= conf):
-                pred_records.append((image_id, float(score), box))
+                pred_records.append((image_id, float(score), box, target.get("shape")))
     pred_records.sort(key=lambda item: item[1], reverse=True)
     total_gts = sum(len(items["valid"]) for items in gt_map.values())
     tps, fps = [], []
-    for image_id, _, pred_box in pred_records:
+    for image_id, _, pred_box, image_shape in pred_records:
         entries = gt_map.get(image_id, {"valid": [], "ignored": []})
         gt_entries = entries["valid"]
         unmatched = [(idx, entry[0]) for idx, entry in enumerate(gt_entries) if not entry[1]]
@@ -896,7 +934,7 @@ def match_predictions_for_area(
             if float(ignored_ious.max()) >= iou_threshold:
                 continue
 
-        if area_filter is not None and prediction_area_bucket(pred_box) != area_filter:
+        if area_filter is not None and prediction_area_bucket(pred_box, image_shape, area_imgsz) != area_filter:
             continue
         tps.append(0.0)
         fps.append(1.0)
@@ -933,13 +971,18 @@ def filter_prediction_for_area(
     ignored_boxes: torch.Tensor,
     ignored_labels: torch.Tensor,
     area_filter: str | None,
+    image_shape=None,
+    area_imgsz: float = AREA_REFERENCE_SIZE,
 ) -> dict[str, torch.Tensor]:
     if area_filter is None or len(prediction["boxes"]) == 0:
         return prediction
 
     boxes = prediction["boxes"]
     labels = prediction["labels"]
-    pred_area_mask = torch.tensor([prediction_area_bucket(box) == area_filter for box in boxes], dtype=torch.bool)
+    pred_area_mask = torch.tensor(
+        [prediction_area_bucket(box, image_shape, area_imgsz) == area_filter for box in boxes],
+        dtype=torch.bool,
+    )
     valid_overlap = same_class_overlap_mask(boxes, labels, valid_boxes, valid_labels)
     ignored_overlap = same_class_overlap_mask(boxes, labels, ignored_boxes, ignored_labels)
 
@@ -983,6 +1026,7 @@ def collect_ultralytics_stats(
     area_filter: str | None,
     iouv: torch.Tensor,
     conf: float | None = None,
+    area_imgsz: float = AREA_REFERENCE_SIZE,
 ) -> dict[str, np.ndarray]:
     tp_chunks: list[np.ndarray] = []
     conf_chunks: list[np.ndarray] = []
@@ -991,7 +1035,16 @@ def collect_ultralytics_stats(
 
     for prediction, target in zip(predictions, targets):
         valid_boxes, valid_labels, ignored_boxes, ignored_labels = split_target_by_area(target, area_filter)
-        filtered = filter_prediction_for_area(prediction, valid_boxes, valid_labels, ignored_boxes, ignored_labels, area_filter)
+        filtered = filter_prediction_for_area(
+            prediction,
+            valid_boxes,
+            valid_labels,
+            ignored_boxes,
+            ignored_labels,
+            area_filter,
+            target.get("shape"),
+            area_imgsz,
+        )
         pred_boxes = filtered["boxes"]
         pred_scores = filtered["scores"]
         pred_labels = filtered["labels"]
@@ -1147,6 +1200,7 @@ def validator_all_metric_rows(validator: AreaDetectionValidator, class_names: li
 
 def run_validator_metrics(case: Case, args: argparse.Namespace, class_names: list[str]) -> list[dict[str, object]]:
     AreaDetectionValidator.last_instance = None
+    AreaDetectionValidator.area_reference_size = float(args.area_imgsz)
     model = YOLO(str(case.weights))
     val_kwargs = common_val_kwargs(case.mode, args.imgsz, batch=args.batch or None)
     val_kwargs.update(
@@ -1169,15 +1223,21 @@ def run_validator_metrics(case: Case, args: argparse.Namespace, class_names: lis
     return append_mean_rows(rows)
 
 
-def summarize_metrics(predictions, targets, class_names: list[str], pr_conf: float) -> list[dict[str, object]]:
+def summarize_metrics(
+    predictions,
+    targets,
+    class_names: list[str],
+    pr_conf: float,
+    area_imgsz: float = AREA_REFERENCE_SIZE,
+) -> list[dict[str, object]]:
     iouv = torch.linspace(0.5, 0.95, 10)
     pr_iouv = torch.tensor([0.5])
     rows = []
     areas = [None, "small", "medium", "large"]
     for area in areas:
-        stats = collect_ultralytics_stats(predictions, targets, area, iouv)
+        stats = collect_ultralytics_stats(predictions, targets, area, iouv, area_imgsz=area_imgsz)
         metric_by_cls = metrics_from_stats(stats, class_names)
-        pr_stats = collect_ultralytics_stats(predictions, targets, area, pr_iouv, conf=pr_conf)
+        pr_stats = collect_ultralytics_stats(predictions, targets, area, pr_iouv, conf=pr_conf, area_imgsz=area_imgsz)
         pr_by_cls = pr_at_conf_from_stats(pr_stats, class_names)
         for cls, name in enumerate(class_names):
             metric = metric_by_cls[cls]
@@ -1241,7 +1301,7 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
         mode_kwargs = mode_specific_kwargs(case.mode)
         for result in iter_predictions(model, images, args, mode_kwargs):
             image_path = Path(result.path)
-            target = load_target(image_path, result.orig_shape)
+            target = load_target(image_path, result.orig_shape, args.area_imgsz)
             raw_prediction = collect_prediction(result)
             containment_pairs = find_containment_pairs(
                 raw_prediction,
@@ -1300,7 +1360,7 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
                     saved_gate_images += 1
 
     if metric_rows is None:
-        metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf)
+        metric_rows = summarize_metrics(predictions, targets, class_names, args.pr_conf, args.area_imgsz)
     gate_summary = {key: mean(values) for key, values in gate_stats.items()}
     gate_summary["num_gate_samples"] = len(gate_stats["gate_all"])
     gate_summary["num_saved_images"] = saved_images
@@ -1318,7 +1378,11 @@ def analyze_case(case: Case, args: argparse.Namespace) -> dict[str, object]:
             "validator_backend": "isolated AreaDetectionValidator" if args.metric_backend == "validator" else "",
             "ap_backend": "ultralytics.ap_per_class",
             "match_backend": "ultralytics.DetectionValidator.match_predictions",
-            "area_policy": "102/306 absolute-pixel GT buckets with COCO-style ignored-area detections",
+            "area_policy": (
+                f"COCO-style AP_S/AP_M/AP_L at {args.area_imgsz:g} letterbox scale: "
+                "small < 32^2, medium 32^2 <= area < 96^2, large >= 96^2; "
+                "native boxes are scaled by letterbox gain before bucketing"
+            ),
             "imgsz": args.imgsz,
             "batch": args.batch,
             "conf": args.conf,

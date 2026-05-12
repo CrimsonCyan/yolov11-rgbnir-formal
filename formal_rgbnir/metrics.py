@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import torch
 
-from .box_ops import area_bucket, box_iou
+from .box_ops import AREA_REFERENCE_SIZE, area_bucket, box_iou
 
 
 @dataclass
@@ -13,6 +13,7 @@ class DetectionRecord:
     score: float
     label: int
     bbox_xyxy: torch.Tensor
+    image_shape: object | None = None
 
 
 def _compute_ap(recalls: torch.Tensor, precisions: torch.Tensor) -> float:
@@ -26,10 +27,10 @@ def _compute_ap(recalls: torch.Tensor, precisions: torch.Tensor) -> float:
     return ap / 101.0
 
 
-def _prediction_area_bucket(box: torch.Tensor) -> str:
+def _prediction_area_bucket(box: torch.Tensor, image_shape=None, area_reference_size: float = AREA_REFERENCE_SIZE) -> str:
     width = float((box[2] - box[0]).clamp(min=0).item())
     height = float((box[3] - box[1]).clamp(min=0).item())
-    return area_bucket(width * height)
+    return area_bucket(width * height, image_shape=image_shape, reference_size=area_reference_size)
 
 
 def _collect_records(predictions, targets, class_id: int, area_filter: str | None):
@@ -50,7 +51,13 @@ def _collect_records(predictions, targets, class_id: int, area_filter: str | Non
         for box, score, label in zip(pred["boxes"], pred["scores"], pred["labels"]):
             if int(label) == class_id:
                 pred_records.append(
-                    DetectionRecord(image_id=image_id, score=float(score), label=int(label), bbox_xyxy=box)
+                    DetectionRecord(
+                        image_id=image_id,
+                        score=float(score),
+                        label=int(label),
+                        bbox_xyxy=box,
+                        image_shape=target.get("shape"),
+                    )
                 )
     pred_records.sort(key=lambda item: item.score, reverse=True)
     total_gts = sum(len(items["valid"]) for items in gt_map.values())
@@ -84,7 +91,7 @@ def _ap_for_threshold(predictions, targets, class_id: int, iou_threshold: float,
             if float(ignored_ious.max()) >= iou_threshold:
                 continue
 
-        if area_filter is not None and _prediction_area_bucket(record.bbox_xyxy) != area_filter:
+        if area_filter is not None and _prediction_area_bucket(record.bbox_xyxy, record.image_shape) != area_filter:
             continue
         tps.append(0.0)
         fps.append(1.0)
@@ -126,7 +133,14 @@ def evaluate_predictions(predictions, targets, num_classes: int) -> dict[str, fl
 def build_eval_targets(targets) -> list[dict]:
     built = []
     for target in targets:
-        area_buckets = [area_bucket(float((box[2] - box[0]) * (box[3] - box[1]))) for box in target["boxes_xyxy"]]
+        area_buckets = [
+            area_bucket(
+                float((box[2] - box[0]) * (box[3] - box[1])),
+                image_shape=target.get("shape"),
+                reference_size=AREA_REFERENCE_SIZE,
+            )
+            for box in target["boxes_xyxy"]
+        ]
         built.append(
             {
                 "sample_id": target["sample_id"],
