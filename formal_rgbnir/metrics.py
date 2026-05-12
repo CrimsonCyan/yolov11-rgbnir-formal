@@ -147,6 +147,7 @@ def build_eval_targets(targets) -> list[dict]:
                 "boxes_xyxy": target["boxes_xyxy"],
                 "labels": target["labels"],
                 "area_buckets": area_buckets,
+                "shape": target.get("shape"),
             }
         )
     return built
