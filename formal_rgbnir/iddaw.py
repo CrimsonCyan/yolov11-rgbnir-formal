@@ -80,6 +80,15 @@ PERSONMERGE_MODES = {
 }
 TRAFFIC_PERSONMERGE_MODE_MAP = {
     "rgb_yolo11s_8cls_personmerge_traffic": "rgb_yolo11s_6cls_personmerge",
+    "nir_p2p5_yolo11s_8cls_personmerge_traffic": "nir_p2p5_yolo11s_6cls_personmerge",
+    "early_fusion_p2p5_yolo11s_8cls_personmerge_traffic": (
+        "early_fusion_yolo11s_6cls_personmerge"
+    ),
+    "rgb_p2p5_yolov8s_8cls_personmerge_traffic": "rgb_p2p5_yolo11s_6cls_personmerge",
+    "nir_p2p5_yolov8s_8cls_personmerge_traffic": "nir_p2p5_yolo11s_6cls_personmerge",
+    "rgbnir_halfway_c3_p2p5_yolo11s_8cls_personmerge_traffic": (
+        "rgbnir_p2p5_yolo11s_6cls_personmerge"
+    ),
     "rgbnir_light_nir_p2p5_yolo11s_8cls_personmerge_traffic": (
         "rgbnir_light_nir_p2p5_yolo11s_6cls_personmerge"
     ),
@@ -340,10 +349,21 @@ def resolve_dataset_root(mode: str = "rgbnir") -> Path:
 
 def build_dataset_yaml(mode: str) -> Path:
     dataset_root = resolve_dataset_root(mode)
-    if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
+    source_mode = TRAFFIC_PERSONMERGE_MODE_MAP.get(mode, mode)
+    if source_mode in {
+        "rgb",
+        "rgb_yolo11s",
+        "rgb_yolo11s_6cls_personmerge",
+        "rgb_p2p5_yolo11s_6cls_personmerge",
+        "rgb_rtdetr",
+    }:
         train = "visible/train"
         val = "visible/val"
-    elif mode in {"nir", "nir_yolo11s_6cls_personmerge"}:
+    elif source_mode in {
+        "nir",
+        "nir_yolo11s_6cls_personmerge",
+        "nir_p2p5_yolo11s_6cls_personmerge",
+    }:
         train = "nir/train"
         val = "nir/val"
     elif mode in TRAINABLE_MODES | {"decision_fusion"}:
@@ -377,6 +397,19 @@ def build_dataset_yaml(mode: str) -> Path:
 def experiment_name(mode: str) -> str:
     if mode in OA_SEGMENT_EXPERIMENT_NAMES:
         return OA_SEGMENT_EXPERIMENT_NAMES[mode]
+    traffic_names = {
+        "nir_p2p5_yolo11s_8cls_personmerge_traffic": "iddaw-yolo11s-nir-p2p5-8cls-personmerge-traffic",
+        "early_fusion_p2p5_yolo11s_8cls_personmerge_traffic": (
+            "iddaw-yolo11s-rgbnir-early-fusion-p2p5-8cls-personmerge-traffic"
+        ),
+        "rgb_p2p5_yolov8s_8cls_personmerge_traffic": "iddaw-yolov8s-rgb-p2p5-8cls-personmerge-traffic",
+        "nir_p2p5_yolov8s_8cls_personmerge_traffic": "iddaw-yolov8s-nir-p2p5-8cls-personmerge-traffic",
+        "rgbnir_halfway_c3_p2p5_yolo11s_8cls_personmerge_traffic": (
+            "iddaw-yolo11s-rgbnir-halfway-c3-fusion-p2p5-8cls-personmerge-traffic"
+        ),
+    }
+    if mode in traffic_names:
+        return traffic_names[mode]
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
         return experiment_name(TRAFFIC_PERSONMERGE_MODE_MAP[mode]).replace(
             "6cls-personmerge", "8cls-personmerge-traffic"
@@ -507,6 +540,25 @@ def model_config_for(mode: str) -> str:
                 / "configs"
                 / "models"
                 / "yolo11s_rgbnir_bifpn_p2p5_light_nir_oa_ctxres_p2only_c256_r4_8cls_personmerge_traffic.yaml"
+            ).resolve()
+        )
+    if mode == "nir_p2p5_yolo11s_8cls_personmerge_traffic":
+        return str((root / "configs" / "models" / "yolo11s_nir_p2p5_8cls_personmerge_traffic.yaml").resolve())
+    if mode == "early_fusion_p2p5_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (root / "configs" / "models" / "yolo11s_rgbnir_early_fusion_p2p5_8cls_personmerge_traffic.yaml").resolve()
+        )
+    if mode == "rgb_p2p5_yolov8s_8cls_personmerge_traffic":
+        return str((root / "configs" / "models" / "yolov8s_rgb_p2p5_8cls_personmerge_traffic.yaml").resolve())
+    if mode == "nir_p2p5_yolov8s_8cls_personmerge_traffic":
+        return str((root / "configs" / "models" / "yolov8s_nir_p2p5_8cls_personmerge_traffic.yaml").resolve())
+    if mode == "rgbnir_halfway_c3_p2p5_yolo11s_8cls_personmerge_traffic":
+        return str(
+            (
+                root
+                / "configs"
+                / "models"
+                / "yolo11s_rgbnir_halfway_c3_fusion_p2p5_8cls_personmerge_traffic.yaml"
             ).resolve()
         )
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
@@ -923,9 +975,19 @@ def model_config_for(mode: str) -> str:
 def mode_specific_kwargs(mode: str) -> dict[str, object]:
     if mode in TRAFFIC_PERSONMERGE_MODE_MAP:
         return mode_specific_kwargs(TRAFFIC_PERSONMERGE_MODE_MAP[mode])
-    if mode in {"rgb", "rgb_yolo11s", "rgb_yolo11s_6cls_personmerge", "rgb_p2p5_yolo11s_6cls_personmerge", "rgb_rtdetr"}:
+    if mode in {
+        "rgb",
+        "rgb_yolo11s",
+        "rgb_yolo11s_6cls_personmerge",
+        "rgb_p2p5_yolo11s_6cls_personmerge",
+        "rgb_rtdetr",
+    }:
         return {"use_simotm": "BGR", "channels": 3}
-    if mode in {"nir", "nir_yolo11s_6cls_personmerge", "nir_p2p5_yolo11s_6cls_personmerge"}:
+    if mode in {
+        "nir",
+        "nir_yolo11s_6cls_personmerge",
+        "nir_p2p5_yolo11s_6cls_personmerge",
+    }:
         return {"use_simotm": "Gray", "channels": 1}
     if mode in (
         TRAINABLE_MODES
@@ -1196,7 +1258,17 @@ def common_val_kwargs(
 
 def common_predict_kwargs(mode: str, imgsz: int = 640) -> dict[str, object]:
     dataset_root = resolve_dataset_root(mode)
-    source_subdir = "nir/val" if mode in {"nir", "nir_yolo11s_6cls_personmerge", "nir_p2p5_yolo11s_6cls_personmerge"} else "visible/val"
+    source_mode = TRAFFIC_PERSONMERGE_MODE_MAP.get(mode, mode)
+    source_subdir = (
+        "nir/val"
+        if source_mode
+        in {
+            "nir",
+            "nir_yolo11s_6cls_personmerge",
+            "nir_p2p5_yolo11s_6cls_personmerge",
+        }
+        else "visible/val"
+    )
     return {
         "source": str((dataset_root / source_subdir).resolve()),
         "imgsz": imgsz,
