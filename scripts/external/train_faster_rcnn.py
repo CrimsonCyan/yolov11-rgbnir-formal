@@ -521,6 +521,7 @@ def collect_predictions(
     model: nn.Module,
     loader: DataLoader,
     device: torch.device,
+    config: TrainConfig,
 ) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, object]], float, int]:
     model.eval()
     predictions: list[dict[str, torch.Tensor]] = []
@@ -565,7 +566,7 @@ def evaluate_ultralytics_style(
     device: torch.device,
     config: TrainConfig,
 ) -> tuple[dict[str, float], list[dict[str, object]], float]:
-    predictions, targets_for_metrics, infer_ms, seen = collect_predictions(model, loader, device)
+    predictions, targets_for_metrics, infer_ms, seen = collect_predictions(model, loader, device, config)
     iouv = torch.linspace(0.5, 0.95, 10)
     rows: list[dict[str, object]] = []
     summary: dict[str, float] = {}
@@ -737,7 +738,7 @@ def evaluate_coco(
     device: torch.device,
     config: TrainConfig,
 ) -> tuple[dict[str, float], list[dict[str, object]], float]:
-    predictions, targets_for_metrics, infer_ms, seen = collect_predictions(model, loader, device)
+    predictions, targets_for_metrics, infer_ms, seen = collect_predictions(model, loader, device, config)
     coco_gt, detections = build_coco_eval_data(predictions, targets_for_metrics)
     evaluator = run_coco_eval(coco_gt, detections)
 
@@ -851,19 +852,35 @@ class DetectionProfileWrapper(nn.Module):
 
 @torch.inference_mode()
 def profile_gflops(model: nn.Module, imgsz: int, device: torch.device) -> float | None:
-    try:
-        from thop import profile
+    """Profile full inference FLOPs with PyTorch profiler.
 
+    THOP is unreliable for torchvision detection models because Faster R-CNN
+    returns nested detection dictionaries and can stall while tracing ROI ops.
+    PyTorch profiler gives a stable operator-level estimate for the same eval
+    forward path used during validation.
+    """
+    try:
         was_training = model.training
         model.eval()
         dummy = torch.rand(1, 3, imgsz, imgsz, device=device)
-        macs, _ = profile(DetectionProfileWrapper(model), inputs=(dummy,), verbose=False)
+        activities = [torch.profiler.ProfilerActivity.CPU]
+        if device.type == "cuda":
+            activities.append(torch.profiler.ProfilerActivity.CUDA)
+            torch.cuda.synchronize(device)
+        with torch.profiler.profile(activities=activities, with_flops=True) as profiler:
+            model([dummy[0]])
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
         if was_training:
             model.train()
-        return float(macs * 2.0 / 1e9)
+        flops = sum(event.flops for event in profiler.key_averages() if event.flops)
+        return float(flops / 1e9) if flops else None
     except Exception as exc:
         print(f"WARNING: GFLOPs profiling failed: {exc}", flush=True)
         return None
+    finally:
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
 
 def count_params(model: nn.Module) -> int:
