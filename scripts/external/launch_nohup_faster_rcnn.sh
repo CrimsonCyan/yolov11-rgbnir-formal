@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MODE="${1:?usage: launch_nohup_faster_rcnn.sh <faster_rcnn_rgb_8cls_detectable640|faster_rcnn_nir_8cls_detectable640> [epochs] [device] [resume_ckpt]}"
-EPOCHS="${2:-1}"
+EPOCHS="${2:-50}"
 DEVICE="${3:-${DEVICE:-0,1}}"
 RESUME_CKPT="${4:-}"
 
@@ -44,10 +44,10 @@ export BATCH_PER_GPU="${BATCH_PER_GPU:-4}"
 export WORKERS="${WORKERS:-4}"
 export PRETRAINED="${PRETRAINED:-true}"
 export AMP="${AMP:-true}"
-export LR="${LR:-0.0025}"
+export LR="${LR:-0.02}"
 export MOMENTUM="${MOMENTUM:-0.9}"
 export WEIGHT_DECAY="${WEIGHT_DECAY:-0.0005}"
-export LR_MILESTONES="${LR_MILESTONES:-60,80}"
+export LR_MILESTONES="${LR_MILESTONES:-30,40}"
 export LR_GAMMA="${LR_GAMMA:-0.1}"
 export WARMUP_ITERS="${WARMUP_ITERS:-1000}"
 export WARMUP_FACTOR="${WARMUP_FACTOR:-0.001}"
@@ -55,6 +55,7 @@ export CONF="${CONF:-0.001}"
 export PR_CONF="${PR_CONF:-0.25}"
 export IOU="${IOU:-0.7}"
 export AREA_IMGSZ="${AREA_IMGSZ:-640}"
+export EVAL_BACKEND="${EVAL_BACKEND:-coco}"
 export PROFILE_GFLOPS="${PROFILE_GFLOPS:-1}"
 export MAX_TRAIN_IMAGES="${MAX_TRAIN_IMAGES:-0}"
 export MAX_VAL_IMAGES="${MAX_VAL_IMAGES:-0}"
@@ -109,6 +110,7 @@ TRAIN_ARGS=(
   --pr-conf "$PR_CONF"
   --iou "$IOU"
   --area-imgsz "$AREA_IMGSZ"
+  --eval-backend "$EVAL_BACKEND"
   --max-train-images "$MAX_TRAIN_IMAGES"
   --max-val-images "$MAX_VAL_IMAGES"
 )
@@ -175,6 +177,7 @@ conf=$CONF
 pr_conf=$PR_CONF
 iou=$IOU
 area_imgsz=$AREA_IMGSZ
+eval_backend=$EVAL_BACKEND
 profile_gflops=$PROFILE_GFLOPS
 max_train_images=$MAX_TRAIN_IMAGES
 max_val_images=$MAX_VAL_IMAGES

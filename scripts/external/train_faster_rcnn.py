@@ -66,6 +66,7 @@ class TrainConfig:
     pr_conf: float
     iou: float
     area_imgsz: float
+    eval_backend: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,7 +76,7 @@ def parse_args() -> argparse.Namespace:
         "--dataset-root",
         default="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640",
     )
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch-per-gpu", type=int, default=4)
     parser.add_argument("--workers", type=int, default=4)
@@ -84,10 +85,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", default="")
     parser.add_argument("--pretrained", default="true", choices=["true", "false", "1", "0"])
     parser.add_argument("--amp", default="true", choices=["true", "false", "1", "0"])
-    parser.add_argument("--lr", type=float, default=0.0025)
+    parser.add_argument("--lr", type=float, default=0.02)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=0.0005)
-    parser.add_argument("--lr-milestones", default="60,80")
+    parser.add_argument("--lr-milestones", default="30,40")
     parser.add_argument("--lr-gamma", type=float, default=0.1)
     parser.add_argument("--warmup-iters", type=int, default=1000)
     parser.add_argument("--warmup-factor", type=float, default=0.001)
@@ -95,6 +96,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pr-conf", type=float, default=0.25, help="Confidence threshold used for P/R summaries.")
     parser.add_argument("--iou", type=float, default=0.7)
     parser.add_argument("--area-imgsz", type=float, default=AREA_REFERENCE_SIZE)
+    parser.add_argument("--eval-backend", choices=["coco", "ultralytics"], default="coco")
     parser.add_argument("--resume", default="")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--profile-gflops", action=argparse.BooleanOptionalAction, default=True)
@@ -515,7 +517,11 @@ def append_mean_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 @torch.inference_mode()
-def evaluate(model: nn.Module, loader: DataLoader, device: torch.device, config: TrainConfig) -> tuple[dict[str, float], list[dict[str, object]], float]:
+def collect_predictions(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, object]], float, int]:
     model.eval()
     predictions: list[dict[str, torch.Tensor]] = []
     targets_for_metrics: list[dict[str, object]] = []
@@ -549,6 +555,17 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device, config:
             }
             predictions.append(pred)
             targets_for_metrics.append(metric_target)
+    return predictions, targets_for_metrics, infer_ms, seen
+
+
+@torch.inference_mode()
+def evaluate_ultralytics_style(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    config: TrainConfig,
+) -> tuple[dict[str, float], list[dict[str, object]], float]:
+    predictions, targets_for_metrics, infer_ms, seen = collect_predictions(model, loader, device)
     iouv = torch.linspace(0.5, 0.95, 10)
     rows: list[dict[str, object]] = []
     summary: dict[str, float] = {}
@@ -592,6 +609,178 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device, config:
         }
     )
     return summary, rows, summary["infer_ms_per_img"]
+
+
+def xyxy_to_xywh(box: torch.Tensor) -> list[float]:
+    x1, y1, x2, y2 = [float(v) for v in box.tolist()]
+    return [x1, y1, max(0.0, x2 - x1), max(0.0, y2 - y1)]
+
+
+def build_coco_eval_data(
+    predictions: list[dict[str, torch.Tensor]],
+    targets: list[dict[str, object]],
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    images: list[dict[str, object]] = []
+    annotations: list[dict[str, object]] = []
+    detections: list[dict[str, object]] = []
+    ann_id = 1
+    for image_id, (prediction, target) in enumerate(zip(predictions, targets), start=1):
+        height, width = target["shape"]
+        images.append({"id": image_id, "width": int(width), "height": int(height), "file_name": str(target["sample_id"])})
+        boxes: torch.Tensor = target["boxes_xyxy"]
+        labels: torch.Tensor = target["labels"]
+        for box, label in zip(boxes, labels):
+            bbox = xyxy_to_xywh(box)
+            annotations.append(
+                {
+                    "id": ann_id,
+                    "image_id": image_id,
+                    "category_id": int(label) + 1,
+                    "bbox": bbox,
+                    "area": float(bbox[2] * bbox[3]),
+                    "iscrowd": 0,
+                }
+            )
+            ann_id += 1
+        for box, score, label in zip(prediction["boxes"], prediction["scores"], prediction["labels"]):
+            detections.append(
+                {
+                    "image_id": image_id,
+                    "category_id": int(label) + 1,
+                    "bbox": xyxy_to_xywh(box),
+                    "score": float(score),
+                }
+            )
+    categories = [{"id": index + 1, "name": name} for index, name in enumerate(CLASS_NAMES)]
+    coco_gt = {
+        "info": {"description": "IDD-AW detectable640 Faster R-CNN validation"},
+        "licenses": [],
+        "images": images,
+        "annotations": annotations,
+        "categories": categories,
+    }
+    return coco_gt, detections
+
+
+def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, object]], quiet: bool = True):
+    try:
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        from pycocotools.coco import COCO
+        from pycocotools.cocoeval import COCOeval
+    except ImportError as exc:
+        raise RuntimeError(
+            "COCOeval validation requires pycocotools. Install it in the training environment, for example: "
+            "pip install pycocotools"
+        ) from exc
+
+    def _run():
+        coco_gt = COCO()
+        coco_gt.dataset = coco_gt_data
+        coco_gt.createIndex()
+        coco_dt = coco_gt.loadRes(detections) if detections else coco_gt.loadRes([])
+        evaluator = COCOeval(coco_gt, coco_dt, "bbox")
+        evaluator.params.imgIds = [int(image["id"]) for image in coco_gt_data["images"]]
+        evaluator.params.catIds = [int(category["id"]) for category in coco_gt_data["categories"]]
+        evaluator.evaluate()
+        evaluator.accumulate()
+        evaluator.summarize()
+        return evaluator
+
+    if quiet:
+        buffer = StringIO()
+        with redirect_stdout(buffer):
+            return _run()
+    return _run()
+
+
+def coco_class_area_rows(
+    evaluator,
+    pr_metrics: dict[str, dict[int, tuple[float, float]]],
+    gt_counts: dict[str, dict[int, int]],
+    pr_conf: float,
+) -> list[dict[str, object]]:
+    precision = evaluator.eval["precision"]  # [TxRxKxAxM]
+    area_labels = list(evaluator.params.areaRngLbl)
+    rows: list[dict[str, object]] = []
+    for area_index, area_name in enumerate(area_labels):
+        for cls, class_name in enumerate(CLASS_NAMES):
+            values = precision[:, :, cls, area_index, -1]
+            valid = values[values > -1]
+            ap = float(valid.mean()) if valid.size else 0.0
+            ap50_values = precision[0, :, cls, area_index, -1]
+            ap50_valid = ap50_values[ap50_values > -1]
+            ap50 = float(ap50_valid.mean()) if ap50_valid.size else 0.0
+            precision_at_conf, recall_at_conf = pr_metrics[area_name][cls]
+            rows.append(
+                {
+                    "class": class_name,
+                    "area": area_name,
+                    "gt_count": gt_counts[area_name][cls],
+                    "precision": precision_at_conf,
+                    "recall": recall_at_conf,
+                    "AP50": ap50,
+                    "mAP50_95": ap,
+                    "precision_at_conf": precision_at_conf,
+                    "recall_at_conf": recall_at_conf,
+                    "conf": pr_conf,
+                }
+            )
+    return append_mean_rows(rows)
+
+
+@torch.inference_mode()
+def evaluate_coco(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    config: TrainConfig,
+) -> tuple[dict[str, float], list[dict[str, object]], float]:
+    predictions, targets_for_metrics, infer_ms, seen = collect_predictions(model, loader, device)
+    coco_gt, detections = build_coco_eval_data(predictions, targets_for_metrics)
+    evaluator = run_coco_eval(coco_gt, detections)
+
+    area_filters = {"all": None, "small": "small", "medium": "medium", "large": "large"}
+    pr_metrics: dict[str, dict[int, tuple[float, float]]] = {}
+    gt_counts: dict[str, dict[int, int]] = {}
+    for area_name, area_filter in area_filters.items():
+        stats = collect_stats(predictions, targets_for_metrics, area_filter, torch.tensor([0.5]), config.pr_conf, config.area_imgsz)
+        pr_metrics[area_name] = pr_at_conf_from_stats(stats)
+        target_cls = stats["target_cls"].astype(int)
+        counts = np.bincount(target_cls, minlength=len(CLASS_NAMES)) if len(target_cls) else np.zeros(len(CLASS_NAMES), dtype=int)
+        gt_counts[area_name] = {cls: int(counts[cls]) for cls in range(len(CLASS_NAMES))}
+
+    rows = coco_class_area_rows(evaluator, pr_metrics, gt_counts, config.pr_conf)
+    all_mean = next(row for row in rows if row["class"] == "mean" and row["area"] == "all")
+    small_mean = next(row for row in rows if row["class"] == "mean" and row["area"] == "small")
+    medium_mean = next(row for row in rows if row["class"] == "mean" and row["area"] == "medium")
+    large_mean = next(row for row in rows if row["class"] == "mean" and row["area"] == "large")
+    summary = {
+        "precision": float(all_mean["precision"]),
+        "recall": float(all_mean["recall"]),
+        "mAP50": float(evaluator.stats[1]),
+        "mAP50_95": float(evaluator.stats[0]),
+        "AP_S": float(evaluator.stats[3]),
+        "AP_M": float(evaluator.stats[4]),
+        "AP_L": float(evaluator.stats[5]),
+        "infer_ms_per_img": infer_ms / max(seen, 1),
+        "fps": 1000.0 / max(infer_ms / max(seen, 1), 1e-9),
+        "val_images": float(seen),
+        "val_gt": float(all_mean["gt_count"]),
+        "eval_backend": "coco",
+        "row_AP_S": float(small_mean["mAP50_95"]),
+        "row_AP_M": float(medium_mean["mAP50_95"]),
+        "row_AP_L": float(large_mean["mAP50_95"]),
+    }
+    return summary, rows, summary["infer_ms_per_img"]
+
+
+@torch.inference_mode()
+def evaluate(model: nn.Module, loader: DataLoader, device: torch.device, config: TrainConfig) -> tuple[dict[str, float], list[dict[str, object]], float]:
+    if config.eval_backend == "coco":
+        return evaluate_coco(model, loader, device, config)
+    return evaluate_ultralytics_style(model, loader, device, config)
 
 
 def write_metrics_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -736,6 +925,7 @@ def main() -> None:
         pr_conf=args.pr_conf,
         iou=args.iou,
         area_imgsz=args.area_imgsz,
+        eval_backend=args.eval_backend,
     )
 
     train_dataset = IDDAWYoloDetectionDataset(dataset_root, "train", config.modality, config.imgsz, args.max_train_images)
