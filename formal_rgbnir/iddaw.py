@@ -1184,12 +1184,12 @@ def common_train_kwargs(
 ) -> dict[str, object]:
     if mode not in TRAINABLE_MODES:
         raise ValueError(f"Mode does not support training: {mode}")
-    optimizer_name = optimizer or os.getenv("OPTIMIZER", "AdamW")
-    lr0_value = lr0 if lr0 is not None else float(os.getenv("LR0", "0.001") or 0.001)
+    optimizer_name = optimizer or os.getenv("OPTIMIZER", "Adam")
+    lr0_value = lr0 if lr0 is not None else float(os.getenv("LR0", "0.01") or 0.01)
     train_batch = batch if batch and batch > 0 else train_batch_for(mode)
     close_mosaic = int(os.getenv("CLOSE_MOSAIC", "20"))
-    env_mosaic = os.getenv("MOSAIC", "").strip()
-    mosaic_value = mosaic if mosaic is not None else (float(env_mosaic) if env_mosaic else None)
+    env_mosaic = os.getenv("MOSAIC", "0").strip()
+    mosaic_value = mosaic if mosaic is not None else (float(env_mosaic) if env_mosaic else 0.0)
     small_center_gain_value = (
         small_center_gain if small_center_gain is not None else float(os.getenv("SMALL_CENTER_GAIN", "0") or 0.0)
     )

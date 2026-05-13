@@ -13,6 +13,7 @@ DATA_CACHE="${DATA_CACHE:-ram}"
 OPTIMIZER="${OPTIMIZER:-Adam}"
 LR0="${LR0:-0.01}"
 PRETRAINED="${PRETRAINED:-true}"
+MOSAIC="${MOSAIC:-0}"
 SMALL_CENTER_GAIN="${SMALL_CENTER_GAIN:-0}"
 SMALL_SCALE_GAIN="${SMALL_SCALE_GAIN:-0}"
 GPU_TARGETS="${GPU_TARGETS:-0 1}"
@@ -109,7 +110,7 @@ wait_for_mode_pid() {
 
 echo "[queue] root=$ROOT"
 echo "[queue] epochs=$EPOCHS device=$DEVICE gap=${QUEUE_GAP_SECONDS}s"
-echo "[queue] imgsz=$IMGSZ batch=$BATCH cache=$DATA_CACHE optimizer=$OPTIMIZER lr0=$LR0 pretrained=$PRETRAINED"
+echo "[queue] imgsz=$IMGSZ batch=$BATCH cache=$DATA_CACHE optimizer=$OPTIMIZER lr0=$LR0 pretrained=$PRETRAINED mosaic=$MOSAIC"
 echo "[queue] small_loss=center_gain:$SMALL_CENTER_GAIN scale_gain:$SMALL_SCALE_GAIN"
 echo "[queue] retry_limit=$QUEUE_RETRY_LIMIT retry_delay=${QUEUE_RETRY_DELAY_SECONDS}s"
 echo "[queue] skip_gpu_idle_wait=$SKIP_GPU_IDLE_WAIT"
@@ -129,7 +130,7 @@ for i in "${!MODES[@]}"; do
     echo "[queue] starting $mode attempt=$attempt at $(date +%F_%T)"
     WANDB_ENABLED="${WANDB_ENABLED:-1}" IDDAW_CLASS_SCHEMA=8cls_personmerge_traffic \
       IMGSZ="$IMGSZ" BATCH="$BATCH" DATA_CACHE="$DATA_CACHE" OPTIMIZER="$OPTIMIZER" LR0="$LR0" \
-      PRETRAINED="$PRETRAINED" SMALL_CENTER_GAIN="$SMALL_CENTER_GAIN" SMALL_SCALE_GAIN="$SMALL_SCALE_GAIN" \
+      PRETRAINED="$PRETRAINED" MOSAIC="$MOSAIC" SMALL_CENTER_GAIN="$SMALL_CENTER_GAIN" SMALL_SCALE_GAIN="$SMALL_SCALE_GAIN" \
       bash "$ROOT/scripts/iddaw/launch_nohup_train.sh" "$mode" "$EPOCHS" "$DEVICE"
 
     if wait_for_mode_pid "$mode"; then
