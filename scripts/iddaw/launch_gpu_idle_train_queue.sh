@@ -7,10 +7,20 @@ mkdir -p "$LOG_DIR"
 
 EPOCHS="${EPOCHS:-100}"
 DEVICE="${DEVICE:-0,1}"
+IMGSZ="${IMGSZ:-640}"
+BATCH="${BATCH:-20}"
+DATA_CACHE="${DATA_CACHE:-ram}"
+OPTIMIZER="${OPTIMIZER:-Adam}"
+LR0="${LR0:-0.01}"
+PRETRAINED="${PRETRAINED:-true}"
+SMALL_CENTER_GAIN="${SMALL_CENTER_GAIN:-0}"
+SMALL_SCALE_GAIN="${SMALL_SCALE_GAIN:-0}"
 GPU_TARGETS="${GPU_TARGETS:-0 1}"
 GPU_CHECK_INTERVAL_SECONDS="${GPU_CHECK_INTERVAL_SECONDS:-300}"
 GPU_CONFIRM_DELAY_SECONDS="${GPU_CONFIRM_DELAY_SECONDS:-300}"
 QUEUE_GAP_SECONDS="${QUEUE_GAP_SECONDS:-120}"
+QUEUE_RETRY_LIMIT="${QUEUE_RETRY_LIMIT:-2}"
+QUEUE_RETRY_DELAY_SECONDS="${QUEUE_RETRY_DELAY_SECONDS:-300}"
 GPU_IDLE_POWER_W="${GPU_IDLE_POWER_W:-50}"
 GPU_IDLE_MEM_MB="${GPU_IDLE_MEM_MB:-1000}"
 
@@ -98,19 +108,38 @@ wait_for_mode_pid() {
 
 echo "[queue] root=$ROOT"
 echo "[queue] epochs=$EPOCHS device=$DEVICE gap=${QUEUE_GAP_SECONDS}s"
+echo "[queue] imgsz=$IMGSZ batch=$BATCH cache=$DATA_CACHE optimizer=$OPTIMIZER lr0=$LR0 pretrained=$PRETRAINED"
+echo "[queue] small_loss=center_gain:$SMALL_CENTER_GAIN scale_gain:$SMALL_SCALE_GAIN"
+echo "[queue] retry_limit=$QUEUE_RETRY_LIMIT retry_delay=${QUEUE_RETRY_DELAY_SECONDS}s"
 echo "[queue] schema=8cls_personmerge_traffic"
 echo "[queue] dataset policy: oa_segmask modes use segment labels; other modes use bbox labels"
 echo "[queue] modes=${MODES[*]}"
 
-wait_for_gpu_idle
-
 for i in "${!MODES[@]}"; do
   mode="${MODES[$i]}"
-  echo "[queue] starting $mode at $(date +%F_%T)"
-  WANDB_ENABLED="${WANDB_ENABLED:-1}" IDDAW_CLASS_SCHEMA=8cls_personmerge_traffic \
-    bash "$ROOT/scripts/iddaw/launch_nohup_train.sh" "$mode" "$EPOCHS" "$DEVICE"
-  wait_for_mode_pid "$mode"
-  echo "[queue] finished $mode at $(date +%F_%T)"
+  attempt=1
+  while true; do
+    wait_for_gpu_idle
+    echo "[queue] starting $mode attempt=$attempt at $(date +%F_%T)"
+    WANDB_ENABLED="${WANDB_ENABLED:-1}" IDDAW_CLASS_SCHEMA=8cls_personmerge_traffic \
+      IMGSZ="$IMGSZ" BATCH="$BATCH" DATA_CACHE="$DATA_CACHE" OPTIMIZER="$OPTIMIZER" LR0="$LR0" \
+      PRETRAINED="$PRETRAINED" SMALL_CENTER_GAIN="$SMALL_CENTER_GAIN" SMALL_SCALE_GAIN="$SMALL_SCALE_GAIN" \
+      bash "$ROOT/scripts/iddaw/launch_nohup_train.sh" "$mode" "$EPOCHS" "$DEVICE"
+
+    if wait_for_mode_pid "$mode"; then
+      echo "[queue] finished $mode attempt=$attempt at $(date +%F_%T)"
+      break
+    fi
+
+    if [[ "$attempt" -ge "$QUEUE_RETRY_LIMIT" ]]; then
+      echo "[queue] mode=$mode failed after $attempt attempt(s); stop queue" >&2
+      exit 1
+    fi
+
+    attempt=$((attempt + 1))
+    echo "[queue] mode=$mode failed; retry attempt=$attempt after ${QUEUE_RETRY_DELAY_SECONDS}s"
+    sleep "$QUEUE_RETRY_DELAY_SECONDS"
+  done
 
   if [[ "$i" -lt $((${#MODES[@]} - 1)) ]]; then
     echo "[queue] sleeping ${QUEUE_GAP_SECONDS}s before next mode"

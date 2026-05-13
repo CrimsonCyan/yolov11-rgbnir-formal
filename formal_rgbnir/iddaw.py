@@ -1191,10 +1191,10 @@ def common_train_kwargs(
     env_mosaic = os.getenv("MOSAIC", "").strip()
     mosaic_value = mosaic if mosaic is not None else (float(env_mosaic) if env_mosaic else None)
     small_center_gain_value = (
-        small_center_gain if small_center_gain is not None else float(os.getenv("SMALL_CENTER_GAIN", "0.05") or 0.05)
+        small_center_gain if small_center_gain is not None else float(os.getenv("SMALL_CENTER_GAIN", "0") or 0.0)
     )
     small_scale_gain_value = (
-        small_scale_gain if small_scale_gain is not None else float(os.getenv("SMALL_SCALE_GAIN", "0.02") or 0.02)
+        small_scale_gain if small_scale_gain is not None else float(os.getenv("SMALL_SCALE_GAIN", "0") or 0.0)
     )
     small_ref_ratio_value = (
         small_ref_ratio
