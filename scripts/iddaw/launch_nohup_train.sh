@@ -12,6 +12,8 @@ DEFAULT_DATA_ROOT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_r
 DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
 DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
 DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment"
+TRAFFIC_DETECTABLE640_BASENAME="iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
+TRAFFIC_SEGMENT_BASENAME="iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment"
 export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
 if [[ "$MODE" == *_8cls_personmerge_traffic ]]; then
   export IDDAW_CLASS_SCHEMA="8cls_personmerge_traffic"
@@ -19,8 +21,18 @@ fi
 export IDDAW_YOLO_ROOT="${IDDAW_YOLO_ROOT:-${IDDAW_FOG_YOLO_ROOT:-$DEFAULT_DATA_ROOT}}"
 if [[ "$MODE" == *_8cls_personmerge_traffic || "$IDDAW_CLASS_SCHEMA" == "8cls_personmerge_traffic" ]]; then
   export IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC="${IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC:-$DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC}"
+  if [[ "$(basename "$IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC")" != "$TRAFFIC_DETECTABLE640_BASENAME" ]]; then
+    echo "ERROR: 8cls bbox training must use detectable640 dataset: $TRAFFIC_DETECTABLE640_BASENAME" >&2
+    echo "Got IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC=$IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC" >&2
+    exit 2
+  fi
   if [[ "$MODE" == *oa_segmask* ]]; then
     export IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT="${IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT:-$DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT}"
+    if [[ "$(basename "$IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT")" != "$TRAFFIC_SEGMENT_BASENAME" ]]; then
+      echo "ERROR: 8cls segmask training must use the filtered segment dataset: $TRAFFIC_SEGMENT_BASENAME" >&2
+      echo "Got IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT=$IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT" >&2
+      exit 2
+    fi
   fi
 elif [[ "$MODE" == *_6cls_personmerge || "$IDDAW_CLASS_SCHEMA" == "6cls_personmerge" ]]; then
   export IDDAW_YOLO_ROOT_6CLS_PERSONMERGE="${IDDAW_YOLO_ROOT_6CLS_PERSONMERGE:-$DEFAULT_DATA_ROOT_6CLS_PERSONMERGE}"

@@ -22,6 +22,8 @@ DEFAULT_PAIRS = ["visible", "nir"]
 DEFAULT_CLASS_SCHEMA = "6cls_personmerge"
 LEGACY_CLASS_SCHEMA = "7cls"
 TRAFFIC_CLASS_SCHEMA = "8cls_personmerge_traffic"
+TRAFFIC_DETECTABLE640_DATASET_NAME = "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
+TRAFFIC_SEGMENT_DATASET_NAME = "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment"
 PERSONMERGE_MODES = {
     "rgb_yolo11s_6cls_personmerge",
     "rgb_p2p5_yolo11s_6cls_personmerge",
@@ -304,22 +306,14 @@ def resolve_dataset_root(mode: str = "rgbnir") -> Path:
         if mode in OA_SEGMENT_MASK_MODES:
             env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT")
             candidates = [
-                repo_root().parent
-                / "datasets"
-                / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment",
-                repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment",
+                repo_root().parent / "datasets" / TRAFFIC_SEGMENT_DATASET_NAME,
+                repo_root() / "datasets" / TRAFFIC_SEGMENT_DATASET_NAME,
             ]
         else:
             env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC")
             candidates = [
-                repo_root().parent
-                / "datasets"
-                / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640",
-                repo_root()
-                / "datasets"
-                / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640",
-                repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
-                repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
+                repo_root().parent / "datasets" / TRAFFIC_DETECTABLE640_DATASET_NAME,
+                repo_root() / "datasets" / TRAFFIC_DETECTABLE640_DATASET_NAME,
             ]
     elif schema != LEGACY_CLASS_SCHEMA:
         env_root = os.getenv("IDDAW_YOLO_ROOT_6CLS_PERSONMERGE")
@@ -341,6 +335,15 @@ def resolve_dataset_root(mode: str = "rgbnir") -> Path:
         root = Path(env_root).expanduser().resolve()
         if not root.exists():
             raise FileNotFoundError(f"IDDAW YOLO dataset root does not exist: {root}")
+        if schema == TRAFFIC_CLASS_SCHEMA:
+            expected = TRAFFIC_SEGMENT_DATASET_NAME if mode in OA_SEGMENT_MASK_MODES else TRAFFIC_DETECTABLE640_DATASET_NAME
+            if root.name != expected:
+                raise ValueError(
+                    "8cls_personmerge_traffic runs must use the filtered detectable640 dataset.\n"
+                    f"Mode: {mode}\n"
+                    f"Expected dataset directory name: {expected}\n"
+                    f"Got: {root}"
+                )
         return root
     for candidate in candidates:
         if candidate.exists():
