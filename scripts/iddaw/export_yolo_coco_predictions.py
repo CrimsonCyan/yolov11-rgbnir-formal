@@ -213,6 +213,43 @@ def build_coco_gt(
     }, image_id_by_stem
 
 
+def load_rgbnir_image(visible_path: Path, pairs_rgb_ir: list[str], imgsz: int) -> object:
+    import cv2
+
+    if len(pairs_rgb_ir) != 2:
+        raise ValueError(f"pairs_rgb_ir must contain visible/nir folder names, got {pairs_rgb_ir!r}")
+    rgb_token, nir_token = pairs_rgb_ir
+    nir_path = Path(str(visible_path).replace(rgb_token, nir_token))
+    visible = cv2.imread(str(visible_path), cv2.IMREAD_COLOR)
+    nir = cv2.imread(str(nir_path), cv2.IMREAD_GRAYSCALE)
+    if visible is None:
+        raise FileNotFoundError(f"Failed to read visible image: {visible_path}")
+    if nir is None:
+        raise FileNotFoundError(f"Failed to read paired NIR image: {nir_path}")
+    h_vis, w_vis = visible.shape[:2]
+    h_nir, w_nir = nir.shape[:2]
+    if (h_vis, w_vis) != (h_nir, w_nir):
+        # Match the repository inference loader behavior closely enough for paired
+        # files while preserving the visible image geometry used for COCO GT.
+        interpolation = cv2.INTER_AREA if max(h_nir, w_nir) > imgsz else cv2.INTER_LINEAR
+        nir = cv2.resize(nir, (w_vis, h_vis), interpolation=interpolation)
+    b, g, r = cv2.split(visible)
+    return cv2.merge((b, g, r, nir))
+
+
+def prediction_sources_for_mode(
+    images: list[Path],
+    mode_kwargs: dict[str, object],
+    imgsz: int,
+) -> tuple[list[object] | list[str], bool]:
+    if mode_kwargs.get("use_simotm") == "RGBNIR":
+        pairs = mode_kwargs.get("pairs_rgb_ir", ["visible", "nir"])
+        if not isinstance(pairs, list):
+            raise ValueError(f"pairs_rgb_ir must be a list, got {type(pairs).__name__}")
+        return [load_rgbnir_image(path, pairs, imgsz) for path in images], True
+    return [str(path) for path in images], False
+
+
 def export_predictions(
     args: argparse.Namespace,
     images: list[Path],
@@ -223,10 +260,11 @@ def export_predictions(
 
     model = YOLO(str(Path(args.weights).expanduser().resolve()))
     mode_kwargs = mode_specific_kwargs(args.mode)
+    sources, in_memory_sources = prediction_sources_for_mode(images, mode_kwargs, args.imgsz)
     predictions: list[dict[str, object]] = []
     start = time.perf_counter()
     results = model.predict(
-        source=[str(path) for path in images],
+        source=sources,
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
@@ -240,8 +278,8 @@ def export_predictions(
         stream=True,
         **mode_kwargs,
     )
-    for result in results:
-        image_path = Path(result.path)
+    for result_index, result in enumerate(results):
+        image_path = images[result_index] if in_memory_sources else Path(result.path)
         image_id = image_id_by_stem.get(image_path.stem)
         if image_id is None:
             raise KeyError(f"Prediction image not found in GT image map: {image_path}")
