@@ -132,11 +132,7 @@ else
   if [[ "$DEVICE_CLEAN" == *","* ]]; then
     IFS=',' read -r -a GPU_IDS <<<"$DEVICE_CLEAN"
     NPROC="${#GPU_IDS[@]}"
-    if [[ -x "$TORCHRUN_BIN" ]]; then
-      CMD=("$TORCHRUN_BIN" --standalone --nproc_per_node "$NPROC" "${TRAIN_ARGS[@]}" --device cuda)
-    else
-      CMD=("$PYTHON_BIN" -m torch.distributed.run --standalone --nproc_per_node "$NPROC" "${TRAIN_ARGS[@]}" --device cuda)
-    fi
+    CMD=("$PYTHON_BIN" -m torch.distributed.run --standalone --nproc_per_node "$NPROC" "${TRAIN_ARGS[@]}" --device cuda)
   else
     CMD=("$PYTHON_BIN" "${TRAIN_ARGS[@]}" --device cuda)
   fi
