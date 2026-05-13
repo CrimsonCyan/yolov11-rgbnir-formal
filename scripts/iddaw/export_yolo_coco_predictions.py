@@ -213,41 +213,11 @@ def build_coco_gt(
     }, image_id_by_stem
 
 
-def load_rgbnir_image(visible_path: Path, pairs_rgb_ir: list[str], imgsz: int) -> object:
-    import cv2
-
-    if len(pairs_rgb_ir) != 2:
-        raise ValueError(f"pairs_rgb_ir must contain visible/nir folder names, got {pairs_rgb_ir!r}")
-    rgb_token, nir_token = pairs_rgb_ir
-    nir_path = Path(str(visible_path).replace(rgb_token, nir_token))
-    visible = cv2.imread(str(visible_path), cv2.IMREAD_COLOR)
-    nir = cv2.imread(str(nir_path), cv2.IMREAD_GRAYSCALE)
-    if visible is None:
-        raise FileNotFoundError(f"Failed to read visible image: {visible_path}")
-    if nir is None:
-        raise FileNotFoundError(f"Failed to read paired NIR image: {nir_path}")
-    h_vis, w_vis = visible.shape[:2]
-    h_nir, w_nir = nir.shape[:2]
-    if (h_vis, w_vis) != (h_nir, w_nir):
-        # Match the repository inference loader behavior closely enough for paired
-        # files while preserving the visible image geometry used for COCO GT.
-        interpolation = cv2.INTER_AREA if max(h_nir, w_nir) > imgsz else cv2.INTER_LINEAR
-        nir = cv2.resize(nir, (w_vis, h_vis), interpolation=interpolation)
-    b, g, r = cv2.split(visible)
-    return cv2.merge((b, g, r, nir))
-
-
-def prediction_sources_for_mode(
-    images: list[Path],
-    mode_kwargs: dict[str, object],
-    imgsz: int,
-) -> tuple[list[object] | list[str], bool]:
-    if mode_kwargs.get("use_simotm") == "RGBNIR":
-        pairs = mode_kwargs.get("pairs_rgb_ir", ["visible", "nir"])
-        if not isinstance(pairs, list):
-            raise ValueError(f"pairs_rgb_ir must be a list, got {type(pairs).__name__}")
-        return [load_rgbnir_image(path, pairs, imgsz) for path in images], True
-    return [str(path) for path in images], False
+def write_source_list(images: list[Path], out_dir: Path) -> Path:
+    """Write an image list so Ultralytics uses its file loader instead of in-memory list batching."""
+    source_file = out_dir / "source_images.txt"
+    source_file.write_text("\n".join(str(path) for path in images), encoding="utf-8")
+    return source_file
 
 
 def export_predictions(
@@ -255,16 +225,17 @@ def export_predictions(
     images: list[Path],
     image_id_by_stem: dict[str, int],
     class_names: list[str],
+    out_dir: Path,
 ) -> tuple[list[dict[str, object]], float]:
     from ultralytics import YOLO
 
     model = YOLO(str(Path(args.weights).expanduser().resolve()))
     mode_kwargs = mode_specific_kwargs(args.mode)
-    sources, in_memory_sources = prediction_sources_for_mode(images, mode_kwargs, args.imgsz)
+    source_file = write_source_list(images, out_dir)
     predictions: list[dict[str, object]] = []
     start = time.perf_counter()
     results = model.predict(
-        source=sources,
+        source=str(source_file),
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
@@ -278,8 +249,8 @@ def export_predictions(
         stream=True,
         **mode_kwargs,
     )
-    for result_index, result in enumerate(results):
-        image_path = images[result_index] if in_memory_sources else Path(result.path)
+    for result in results:
+        image_path = Path(result.path)
         image_id = image_id_by_stem.get(image_path.stem)
         if image_id is None:
             raise KeyError(f"Prediction image not found in GT image map: {image_path}")
@@ -416,7 +387,7 @@ def main() -> None:
     out_dir = Path(args.out).expanduser().resolve() if args.out else ROOT / "runs" / "analysis" / "coco_eval" / sanitize_name(run_name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    predictions, elapsed = export_predictions(args, images, image_id_by_stem, class_names)
+    predictions, elapsed = export_predictions(args, images, image_id_by_stem, class_names, out_dir)
     gt_json = out_dir / "instances_gt.json"
     pred_json = out_dir / "predictions.json"
     gt_json.write_text(json.dumps(coco_gt, ensure_ascii=False), encoding="utf-8")
