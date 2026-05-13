@@ -21,6 +21,7 @@ GPU_CONFIRM_DELAY_SECONDS="${GPU_CONFIRM_DELAY_SECONDS:-300}"
 QUEUE_GAP_SECONDS="${QUEUE_GAP_SECONDS:-120}"
 QUEUE_RETRY_LIMIT="${QUEUE_RETRY_LIMIT:-2}"
 QUEUE_RETRY_DELAY_SECONDS="${QUEUE_RETRY_DELAY_SECONDS:-300}"
+SKIP_GPU_IDLE_WAIT="${SKIP_GPU_IDLE_WAIT:-0}"
 GPU_IDLE_POWER_W="${GPU_IDLE_POWER_W:-50}"
 GPU_IDLE_MEM_MB="${GPU_IDLE_MEM_MB:-1000}"
 
@@ -111,6 +112,7 @@ echo "[queue] epochs=$EPOCHS device=$DEVICE gap=${QUEUE_GAP_SECONDS}s"
 echo "[queue] imgsz=$IMGSZ batch=$BATCH cache=$DATA_CACHE optimizer=$OPTIMIZER lr0=$LR0 pretrained=$PRETRAINED"
 echo "[queue] small_loss=center_gain:$SMALL_CENTER_GAIN scale_gain:$SMALL_SCALE_GAIN"
 echo "[queue] retry_limit=$QUEUE_RETRY_LIMIT retry_delay=${QUEUE_RETRY_DELAY_SECONDS}s"
+echo "[queue] skip_gpu_idle_wait=$SKIP_GPU_IDLE_WAIT"
 echo "[queue] schema=8cls_personmerge_traffic"
 echo "[queue] dataset policy: oa_segmask modes use segment labels; other modes use bbox labels"
 echo "[queue] modes=${MODES[*]}"
@@ -119,7 +121,11 @@ for i in "${!MODES[@]}"; do
   mode="${MODES[$i]}"
   attempt=1
   while true; do
-    wait_for_gpu_idle
+    if [[ "$SKIP_GPU_IDLE_WAIT" == "1" || "$SKIP_GPU_IDLE_WAIT" == "true" || "$SKIP_GPU_IDLE_WAIT" == "True" ]]; then
+      echo "[gpu-idle] skipped at $(date +%F_%T)"
+    else
+      wait_for_gpu_idle
+    fi
     echo "[queue] starting $mode attempt=$attempt at $(date +%F_%T)"
     WANDB_ENABLED="${WANDB_ENABLED:-1}" IDDAW_CLASS_SCHEMA=8cls_personmerge_traffic \
       IMGSZ="$IMGSZ" BATCH="$BATCH" DATA_CACHE="$DATA_CACHE" OPTIMIZER="$OPTIMIZER" LR0="$LR0" \
