@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/data1/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
 DEFAULT_DATA_ROOT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir"
 DEFAULT_DATA_ROOT_6CLS_PERSONMERGE="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_6cls_personmerge"
-DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic"
+DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
 DEFAULT_DATA_ROOT_8CLS_PERSONMERGE_TRAFFIC_SEGMENT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_segment"
 export IDDAW_CLASS_SCHEMA="${IDDAW_CLASS_SCHEMA:-6cls_personmerge}"
 if [[ "$MODE" == *_8cls_personmerge_traffic ]]; then

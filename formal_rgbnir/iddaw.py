@@ -312,6 +312,12 @@ def resolve_dataset_root(mode: str = "rgbnir") -> Path:
         else:
             env_root = os.getenv("IDDAW_YOLO_ROOT_8CLS_PERSONMERGE_TRAFFIC")
             candidates = [
+                repo_root().parent
+                / "datasets"
+                / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640",
+                repo_root()
+                / "datasets"
+                / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640",
                 repo_root().parent / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
                 repo_root() / "datasets" / "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic",
             ]
