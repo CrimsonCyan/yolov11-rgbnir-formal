@@ -29,6 +29,9 @@ from formal_rgbnir.box_ops import AREA_REFERENCE_SIZE, area_bucket, box_iou
 from ultralytics.utils.metrics import ap_per_class
 
 
+# IDDAW uses YOLO labels in the range 0..7. Torchvision Faster R-CNN
+# reserves class id 0 for background, so dataset targets are shifted to 1..8
+# during training and shifted back to 0..7 for metric calculation.
 CLASS_NAMES = [
     "person",
     "motorcycle",
@@ -153,7 +156,15 @@ def letterbox_image(image: Image.Image, imgsz: int) -> tuple[Image.Image, float,
     return canvas, gain, float(int(round(pad_x))), float(int(round(pad_y)))
 
 
-def read_yolo_labels(label_path: Path, width: int, height: int, gain: float, pad_x: float, pad_y: float) -> tuple[torch.Tensor, torch.Tensor]:
+def read_yolo_labels(
+    label_path: Path,
+    width: int,
+    height: int,
+    gain: float,
+    pad_x: float,
+    pad_y: float,
+    warn_missing: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
     boxes: list[list[float]] = []
     labels: list[int] = []
     if label_path.exists():
@@ -177,6 +188,8 @@ def read_yolo_labels(label_path: Path, width: int, height: int, gain: float, pad
                 continue
             boxes.append([x1, y1, x2, y2])
             labels.append(cls + 1)  # torchvision reserves 0 for background.
+    elif warn_missing:
+        print(f"WARNING: Missing label file: {label_path}", flush=True)
     if not boxes:
         return torch.zeros((0, 4), dtype=torch.float32), torch.zeros((0,), dtype=torch.int64)
     return torch.tensor(boxes, dtype=torch.float32), torch.tensor(labels, dtype=torch.int64)
@@ -211,7 +224,15 @@ class IDDAWYoloDetectionDataset(Dataset):
         image, gain, pad_x, pad_y = letterbox_image(image, self.imgsz)
         image_np = np.asarray(image, dtype=np.float32) / 255.0
         image_tensor = torch.from_numpy(image_np).permute(2, 0, 1).contiguous()
-        boxes, labels = read_yolo_labels(image_path.with_suffix(".txt"), width, height, gain, pad_x, pad_y)
+        boxes, labels = read_yolo_labels(
+            image_path.with_suffix(".txt"),
+            width,
+            height,
+            gain,
+            pad_x,
+            pad_y,
+            warn_missing=self.split == "train",
+        )
         boxes[:, 0::2] = boxes[:, 0::2].clamp(0, self.imgsz)
         boxes[:, 1::2] = boxes[:, 1::2].clamp(0, self.imgsz)
         keep = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1]) if len(boxes) else torch.zeros((0,), dtype=torch.bool)
@@ -243,8 +264,14 @@ def move_targets(targets: list[dict[str, torch.Tensor]], device: torch.device) -
 
 
 def build_model(num_classes: int, pretrained: bool, imgsz: int, conf: float, nms_iou: float) -> nn.Module:
+    """Build Faster R-CNN with an explicit background class.
+
+    ``num_classes`` is the foreground class count. Torchvision expects one
+    additional background class in the predictor.
+    """
     weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT if pretrained else None
-    model = fasterrcnn_resnet50_fpn(weights=weights, min_size=imgsz, max_size=imgsz)
+    weights_backbone = None if not pretrained else None
+    model = fasterrcnn_resnet50_fpn(weights=weights, weights_backbone=weights_backbone, min_size=imgsz, max_size=imgsz)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes + 1)
     model.transform.min_size = (imgsz,)
@@ -257,6 +284,17 @@ def build_model(num_classes: int, pretrained: bool, imgsz: int, conf: float, nms
 def set_optimizer_lr(optimizer: torch.optim.Optimizer, lr: float) -> None:
     for group in optimizer.param_groups:
         group["lr"] = lr
+
+
+def assert_finite_loss(loss: torch.Tensor, distributed: bool, device: torch.device, epoch: int, global_step: int) -> None:
+    is_finite = bool(torch.isfinite(loss).detach().item())
+    if distributed:
+        finite = torch.tensor([1.0 if is_finite else 0.0], device=device)
+        dist.all_reduce(finite, op=dist.ReduceOp.MIN)
+        if finite.item() == 0.0:
+            raise RuntimeError(f"Non-finite Faster R-CNN loss on at least one rank at epoch={epoch + 1}, step={global_step}")
+    elif not is_finite:
+        raise RuntimeError(f"Non-finite Faster R-CNN loss at epoch={epoch + 1}, step={global_step}: {loss}")
 
 
 def lr_for_step(config: TrainConfig, epoch: int, global_step: int) -> float:
@@ -422,14 +460,15 @@ def metrics_from_stats(stats: dict[str, np.ndarray]) -> dict[int, dict[str, floa
             names=dict(enumerate(CLASS_NAMES)),
         )
         for index, cls in enumerate(unique_classes.astype(int)):
-            rows[cls].update(
-                {
-                    "precision": float(precision[index]),
-                    "recall": float(recall[index]),
-                    "AP50": float(ap[index, 0]),
-                    "mAP50_95": float(ap[index].mean()),
-                }
-            )
+            if 0 <= cls < len(CLASS_NAMES):
+                rows[cls].update(
+                    {
+                        "precision": float(precision[index]),
+                        "recall": float(recall[index]),
+                        "AP50": float(ap[index, 0]),
+                        "mAP50_95": float(ap[index].mean()),
+                    }
+                )
     return rows
 
 
@@ -574,7 +613,16 @@ def append_results_csv(path: Path, epoch: int, train_metrics: dict[str, float], 
         writer.writerow(row)
 
 
-def save_checkpoint(path: Path, model: nn.Module, optimizer: torch.optim.Optimizer, epoch: int, best_metric: float, config: TrainConfig, metrics: dict[str, float]) -> None:
+def save_checkpoint(
+    path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    epoch: int,
+    best_metric: float,
+    config: TrainConfig,
+    metrics: dict[str, float],
+    global_step: int,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
@@ -582,6 +630,7 @@ def save_checkpoint(path: Path, model: nn.Module, optimizer: torch.optim.Optimiz
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
             "best_metric": best_metric,
+            "global_step": global_step,
             "config": asdict(config),
             "metrics": metrics,
             "class_names": CLASS_NAMES,
@@ -590,13 +639,16 @@ def save_checkpoint(path: Path, model: nn.Module, optimizer: torch.optim.Optimiz
     )
 
 
-def maybe_load_checkpoint(path: str, model: nn.Module, optimizer: torch.optim.Optimizer, device: torch.device) -> tuple[int, float]:
+def maybe_load_checkpoint(path: str, model: nn.Module, optimizer: torch.optim.Optimizer, device: torch.device) -> tuple[int, float, int]:
     if not path:
-        return 0, -1.0
+        return 0, -1.0, 0
     payload = torch.load(path, map_location=device)
     model.load_state_dict(payload["model"], strict=True)
     optimizer.load_state_dict(payload["optimizer"])
-    return int(payload.get("epoch", -1)) + 1, float(payload.get("best_metric", -1.0))
+    start_epoch = int(payload.get("epoch", -1)) + 1
+    best_metric = float(payload.get("best_metric", -1.0))
+    global_step = int(payload.get("global_step", start_epoch * 0))
+    return start_epoch, best_metric, global_step
 
 
 class DetectionProfileWrapper(nn.Module):
@@ -722,7 +774,7 @@ def main() -> None:
         momentum=config.momentum,
         weight_decay=config.weight_decay,
     )
-    start_epoch, best_metric = maybe_load_checkpoint(args.resume, model_without_ddp, optimizer, device)
+    start_epoch, best_metric, resume_step = maybe_load_checkpoint(args.resume, model_without_ddp, optimizer, device)
     if distributed:
         model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
         model_without_ddp = model.module
@@ -743,7 +795,7 @@ def main() -> None:
     if distributed:
         dist.barrier()
 
-    global_step = start_epoch * max(len(train_loader), 1)
+    global_step = resume_step if resume_step > 0 else start_epoch * max(len(train_loader), 1)
     for epoch in range(start_epoch, config.epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
@@ -760,8 +812,7 @@ def main() -> None:
             with torch.cuda.amp.autocast(enabled=config.amp and cuda_available):
                 loss_dict = model(images, targets)
                 loss = sum(value for value in loss_dict.values())
-            if not torch.isfinite(loss):
-                raise RuntimeError(f"Non-finite Faster R-CNN loss at epoch={epoch + 1}, step={global_step}: {loss}")
+            assert_finite_loss(loss, distributed, device, epoch, global_step)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -793,10 +844,10 @@ def main() -> None:
                 "gflops": gflops,
             }
             (run_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
-            save_checkpoint(run_dir / "weights" / "last.pt", model_without_ddp, optimizer, epoch, best_metric, config, val_metrics)
+            save_checkpoint(run_dir / "weights" / "last.pt", model_without_ddp, optimizer, epoch, best_metric, config, val_metrics, global_step)
             if val_metrics["mAP50_95"] >= best_metric:
                 best_metric = val_metrics["mAP50_95"]
-                save_checkpoint(run_dir / "weights" / "best.pt", model_without_ddp, optimizer, epoch, best_metric, config, val_metrics)
+                save_checkpoint(run_dir / "weights" / "best.pt", model_without_ddp, optimizer, epoch, best_metric, config, val_metrics, global_step)
             print(
                 f"epoch={epoch + 1}/{config.epochs} loss={train_metrics['loss']:.4f} "
                 f"mAP50={val_metrics['mAP50']:.4f} mAP50-95={val_metrics['mAP50_95']:.4f} "

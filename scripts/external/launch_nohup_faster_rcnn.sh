@@ -28,6 +28,12 @@ esac
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export DATASET_ROOT="${DATASET_ROOT:-$DEFAULT_DATA_ROOT}"
+if [[ ! -d "$DATASET_ROOT" ]]; then
+  echo "ERROR: DATASET_ROOT does not exist: $DATASET_ROOT" >&2
+  exit 2
+fi
+DATASET_ROOT="$(cd "$DATASET_ROOT" && pwd -P)"
+export DATASET_ROOT
 if [[ "$(basename "$DATASET_ROOT")" != "$DETECTABLE640_BASENAME" ]]; then
   echo "ERROR: Faster R-CNN 8cls baselines must use detectable640 dataset: $DETECTABLE640_BASENAME" >&2
   echo "Got DATASET_ROOT=$DATASET_ROOT" >&2
@@ -50,6 +56,8 @@ export PR_CONF="${PR_CONF:-0.25}"
 export IOU="${IOU:-0.7}"
 export AREA_IMGSZ="${AREA_IMGSZ:-640}"
 export PROFILE_GFLOPS="${PROFILE_GFLOPS:-1}"
+export MAX_TRAIN_IMAGES="${MAX_TRAIN_IMAGES:-0}"
+export MAX_VAL_IMAGES="${MAX_VAL_IMAGES:-0}"
 
 if [[ -z "${WANDB_ENABLED+x}" ]]; then
   if [[ "$EPOCHS" -le 1 ]]; then
@@ -101,6 +109,8 @@ TRAIN_ARGS=(
   --pr-conf "$PR_CONF"
   --iou "$IOU"
   --area-imgsz "$AREA_IMGSZ"
+  --max-train-images "$MAX_TRAIN_IMAGES"
+  --max-val-images "$MAX_VAL_IMAGES"
 )
 
 if [[ "$PROFILE_GFLOPS" != "1" && "$PROFILE_GFLOPS" != "true" && "$PROFILE_GFLOPS" != "True" ]]; then
@@ -166,6 +176,8 @@ pr_conf=$PR_CONF
 iou=$IOU
 area_imgsz=$AREA_IMGSZ
 profile_gflops=$PROFILE_GFLOPS
+max_train_images=$MAX_TRAIN_IMAGES
+max_val_images=$MAX_VAL_IMAGES
 started_at=$STAMP
 command=${CMD[*]}
 EOF
