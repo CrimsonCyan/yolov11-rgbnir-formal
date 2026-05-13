@@ -80,6 +80,7 @@ PERSONMERGE_MODES = {
 }
 TRAFFIC_PERSONMERGE_MODE_MAP = {
     "rgb_yolo11s_8cls_personmerge_traffic": "rgb_yolo11s_6cls_personmerge",
+    "rgb_p2p5_yolo11s_8cls_personmerge_traffic": "rgb_p2p5_yolo11s_6cls_personmerge",
     "nir_p2p5_yolo11s_8cls_personmerge_traffic": "nir_p2p5_yolo11s_6cls_personmerge",
     "early_fusion_p2p5_yolo11s_8cls_personmerge_traffic": (
         "early_fusion_yolo11s_6cls_personmerge"
@@ -398,6 +399,7 @@ def experiment_name(mode: str) -> str:
     if mode in OA_SEGMENT_EXPERIMENT_NAMES:
         return OA_SEGMENT_EXPERIMENT_NAMES[mode]
     traffic_names = {
+        "rgb_p2p5_yolo11s_8cls_personmerge_traffic": "iddaw-yolo11s-rgb-p2p5-8cls-personmerge-traffic",
         "nir_p2p5_yolo11s_8cls_personmerge_traffic": "iddaw-yolo11s-nir-p2p5-8cls-personmerge-traffic",
         "early_fusion_p2p5_yolo11s_8cls_personmerge_traffic": (
             "iddaw-yolo11s-rgbnir-early-fusion-p2p5-8cls-personmerge-traffic"
@@ -544,6 +546,8 @@ def model_config_for(mode: str) -> str:
         )
     if mode == "nir_p2p5_yolo11s_8cls_personmerge_traffic":
         return str((root / "configs" / "models" / "yolo11s_nir_p2p5_8cls_personmerge_traffic.yaml").resolve())
+    if mode == "rgb_p2p5_yolo11s_8cls_personmerge_traffic":
+        return str((root / "configs" / "models" / "yolo11s_rgb_p2p5_8cls_personmerge_traffic.yaml").resolve())
     if mode == "early_fusion_p2p5_yolo11s_8cls_personmerge_traffic":
         return str(
             (root / "configs" / "models" / "yolo11s_rgbnir_early_fusion_p2p5_8cls_personmerge_traffic.yaml").resolve()
