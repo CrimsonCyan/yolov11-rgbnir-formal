@@ -40,6 +40,7 @@ CLASS_NAMES = [
     "traffic sign",
 ]
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp"}
+DETECTABLE640_DATASET_NAME = "iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
 
 
 @dataclass(frozen=True)
@@ -647,6 +648,13 @@ def configure_wandb(config: TrainConfig, run_dir: Path):
 
 def main() -> None:
     args = parse_args()
+    dataset_root = Path(args.dataset_root).expanduser().resolve()
+    if dataset_root.name != DETECTABLE640_DATASET_NAME:
+        raise ValueError(
+            "Faster R-CNN 8cls baselines must use the filtered detectable640 bbox dataset.\n"
+            f"Expected dataset directory name: {DETECTABLE640_DATASET_NAME}\n"
+            f"Got: {dataset_root}"
+        )
     distributed, rank, local_rank, world_size = setup_distributed()
     set_seed(args.seed, rank)
     cuda_available = torch.cuda.is_available() and args.device != "cpu"
@@ -659,7 +667,7 @@ def main() -> None:
 
     config = TrainConfig(
         modality=args.modality,
-        dataset_root=str(Path(args.dataset_root).resolve()),
+        dataset_root=str(dataset_root),
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch_per_gpu=args.batch_per_gpu,
@@ -678,7 +686,6 @@ def main() -> None:
         area_imgsz=args.area_imgsz,
     )
 
-    dataset_root = Path(config.dataset_root)
     train_dataset = IDDAWYoloDetectionDataset(dataset_root, "train", config.modality, config.imgsz, args.max_train_images)
     val_dataset = IDDAWYoloDetectionDataset(dataset_root, "val", config.modality, config.imgsz, args.max_val_images)
     train_sampler = DistributedSampler(train_dataset, shuffle=True) if distributed else None

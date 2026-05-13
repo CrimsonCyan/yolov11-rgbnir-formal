@@ -10,6 +10,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-/data1/lvyanhu/miniconda3/envs/visnir-exp/bin/python}"
 TORCHRUN_BIN="${TORCHRUN_BIN:-/data1/lvyanhu/miniconda3/envs/visnir-exp/bin/torchrun}"
 DEFAULT_DATA_ROOT="/data1/lvyanhu/code/datasets/iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
+DETECTABLE640_BASENAME="iddaw_all_weather_full_yolov11_rgbnir_8cls_personmerge_traffic_detectable640"
 
 case "$MODE" in
   faster_rcnn_rgb_8cls_detectable640)
@@ -27,6 +28,11 @@ esac
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export DATASET_ROOT="${DATASET_ROOT:-$DEFAULT_DATA_ROOT}"
+if [[ "$(basename "$DATASET_ROOT")" != "$DETECTABLE640_BASENAME" ]]; then
+  echo "ERROR: Faster R-CNN 8cls baselines must use detectable640 dataset: $DETECTABLE640_BASENAME" >&2
+  echo "Got DATASET_ROOT=$DATASET_ROOT" >&2
+  exit 2
+fi
 export IMGSZ="${IMGSZ:-640}"
 export BATCH_PER_GPU="${BATCH_PER_GPU:-4}"
 export WORKERS="${WORKERS:-4}"
