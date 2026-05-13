@@ -45,8 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--eval-space",
         choices=["letterbox", "original"],
-        default="letterbox",
-        help="Coordinate space for COCO JSON. 'letterbox' maps GT and predictions to imgsz x imgsz like training/validation.",
+        default="original",
+        help=(
+            "Coordinate space for COCO JSON. Ultralytics prediction boxes are already scaled back to result.orig_shape, "
+            "so 'original' matches the native validator coordinate space. Use 'letterbox' only for explicit coordinate-space checks."
+        ),
     )
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--device", default="0")
@@ -106,7 +109,9 @@ def list_images(source_dir: Path, max_images: int = 0) -> list[Path]:
 
 
 def letterbox_params(width: int, height: int, imgsz: int) -> tuple[float, float, float]:
-    gain = min(float(imgsz) / max(float(width), 1.0), float(imgsz) / max(float(height), 1.0))
+    if width <= 0 or height <= 0 or imgsz <= 0:
+        raise ValueError(f"Invalid image or target size for letterbox conversion: width={width}, height={height}, imgsz={imgsz}")
+    gain = min(float(imgsz) / float(width), float(imgsz) / float(height))
     new_width = round(width * gain)
     new_height = round(height * gain)
     pad_x = (imgsz - new_width) / 2.0
@@ -226,13 +231,18 @@ def export_predictions(
     image_id_by_stem: dict[str, int],
     class_names: list[str],
     out_dir: Path,
-) -> tuple[list[dict[str, object]], float]:
+) -> tuple[list[dict[str, object]], float, dict[str, int]]:
     from ultralytics import YOLO
 
     model = YOLO(str(Path(args.weights).expanduser().resolve()))
     mode_kwargs = mode_specific_kwargs(args.mode)
     source_file = write_source_list(images, out_dir)
     predictions: list[dict[str, object]] = []
+    skipped = {
+        "empty_results": 0,
+        "class_out_of_range": 0,
+        "invalid_bbox": 0,
+    }
     start = time.perf_counter()
     results = model.predict(
         source=str(source_file),
@@ -258,6 +268,7 @@ def export_predictions(
         coco_width, coco_height = (args.imgsz, args.imgsz) if args.eval_space == "letterbox" else (width, height)
         boxes = result.boxes
         if boxes is None or len(boxes) == 0:
+            skipped["empty_results"] += 1
             continue
         xyxy = boxes.xyxy.detach().cpu().tolist()
         scores = boxes.conf.detach().cpu().tolist()
@@ -265,11 +276,13 @@ def export_predictions(
         for box, score, cls_value in zip(xyxy, scores, classes):
             cls = int(cls_value)
             if not 0 <= cls < len(class_names):
+                skipped["class_out_of_range"] += 1
                 continue
             if args.eval_space == "letterbox":
                 box = transform_xyxy_to_letterbox(box, width, height, args.imgsz)
             bbox = xyxy_to_xywh(box, coco_width, coco_height)
             if bbox[2] <= 0 or bbox[3] <= 0:
+                skipped["invalid_bbox"] += 1
                 continue
             predictions.append(
                 {
@@ -280,7 +293,12 @@ def export_predictions(
                 }
             )
     elapsed = time.perf_counter() - start
-    return predictions, elapsed
+    if not predictions:
+        raise RuntimeError(
+            "No detections were exported. "
+            f"Skipped counts: {skipped}. Check weights, modality, dataset path, confidence threshold, and class mapping."
+        )
+    return predictions, elapsed, skipped
 
 
 def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, object]]):
@@ -289,9 +307,6 @@ def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, ob
         from pycocotools.cocoeval import COCOeval
     except ImportError as exc:
         raise RuntimeError("COCOeval requires pycocotools. Install it in the active environment.") from exc
-    if not detections:
-        raise RuntimeError("No detections exported; COCOeval cannot load an empty prediction list.")
-
     stdout_buffer = StringIO()
     with redirect_stdout(stdout_buffer):
         coco_gt = COCO()
@@ -387,7 +402,7 @@ def main() -> None:
     out_dir = Path(args.out).expanduser().resolve() if args.out else ROOT / "runs" / "analysis" / "coco_eval" / sanitize_name(run_name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    predictions, elapsed = export_predictions(args, images, image_id_by_stem, class_names, out_dir)
+    predictions, elapsed, skipped_predictions = export_predictions(args, images, image_id_by_stem, class_names, out_dir)
     gt_json = out_dir / "instances_gt.json"
     pred_json = out_dir / "predictions.json"
     gt_json.write_text(json.dumps(coco_gt, ensure_ascii=False), encoding="utf-8")
@@ -402,6 +417,7 @@ def main() -> None:
         "num_images": len(images),
         "num_gt": len(coco_gt["annotations"]),
         "num_predictions": len(predictions),
+        "skipped_predictions": skipped_predictions,
         "imgsz": args.imgsz,
         "eval_space": args.eval_space,
         "batch": args.batch,
