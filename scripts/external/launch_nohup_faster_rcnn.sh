@@ -3,7 +3,7 @@ set -euo pipefail
 
 MODE="${1:?usage: launch_nohup_faster_rcnn.sh <faster_rcnn_rgb_8cls_detectable640|faster_rcnn_nir_8cls_detectable640> [epochs] [device] [resume_ckpt]}"
 EPOCHS="${2:-50}"
-DEVICE="${3:-${DEVICE:-0,1}}"
+DEVICE="${3:-${DEVICE:-0}}"
 RESUME_CKPT="${4:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -27,6 +27,7 @@ esac
 
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+export TORCH_HOME="${TORCH_HOME:-/data1/lvyanhu/.cache/torch}"
 export DATASET_ROOT="${DATASET_ROOT:-$DEFAULT_DATA_ROOT}"
 if [[ ! -d "$DATASET_ROOT" ]]; then
   echo "ERROR: DATASET_ROOT does not exist: $DATASET_ROOT" >&2
@@ -40,7 +41,7 @@ if [[ "$(basename "$DATASET_ROOT")" != "$DETECTABLE640_BASENAME" ]]; then
   exit 2
 fi
 export IMGSZ="${IMGSZ:-640}"
-export BATCH_PER_GPU="${BATCH_PER_GPU:-4}"
+export BATCH_PER_GPU="${BATCH_PER_GPU:-16}"
 export WORKERS="${WORKERS:-4}"
 export PRETRAINED="${PRETRAINED:-true}"
 export AMP="${AMP:-true}"
@@ -152,6 +153,7 @@ pid=$PID
 log_file=$LOG_FILE
 python_bin=$PYTHON_BIN
 torchrun_bin=$TORCHRUN_BIN
+torch_home=$TORCH_HOME
 dataset_root=$DATASET_ROOT
 project=$PROJECT
 run_name=$RUN_NAME
