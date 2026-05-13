@@ -45,10 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--eval-space",
         choices=["letterbox", "original"],
-        default="original",
+        default="letterbox",
         help=(
-            "Coordinate space for COCO JSON. Ultralytics prediction boxes are already scaled back to result.orig_shape, "
-            "so 'original' matches the native validator coordinate space. Use 'letterbox' only for explicit coordinate-space checks."
+            "Coordinate space for COCO JSON. Ultralytics prediction boxes are result.orig_shape native coordinates. "
+            "'letterbox' maps both GT and predictions once into imgsz x imgsz, preserving the project's 640-scale AP_S/M/L buckets; "
+            "'original' keeps native image coordinates."
         ),
     )
     parser.add_argument("--batch", type=int, default=16)
@@ -420,6 +421,7 @@ def main() -> None:
         "skipped_predictions": skipped_predictions,
         "imgsz": args.imgsz,
         "eval_space": args.eval_space,
+        "prediction_box_space": "result.orig_shape/native before optional eval-space transform",
         "batch": args.batch,
         "device": args.device,
         "conf": args.conf,
