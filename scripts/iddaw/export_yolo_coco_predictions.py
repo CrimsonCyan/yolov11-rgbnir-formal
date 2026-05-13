@@ -56,7 +56,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="0")
     parser.add_argument("--conf", type=float, default=0.001, help="Low export confidence for AP calculation.")
     parser.add_argument("--iou", type=float, default=0.7, help="NMS IoU used during YOLO inference.")
-    parser.add_argument("--max-det", type=int, default=300, help="YOLO inference max_det; COCOeval still reports maxDets=100.")
+    parser.add_argument("--max-det", type=int, default=300, help="YOLO inference max_det.")
+    parser.add_argument(
+        "--coco-max-det",
+        type=int,
+        default=100,
+        help="Largest COCOeval maxDets entry. Standard COCO uses 100; set 300 to evaluate with maxDets=[1,10,300].",
+    )
     parser.add_argument("--half", action="store_true", help="Use FP16 inference when supported.")
     parser.add_argument("--max-images", type=int, default=0, help="Debug cap; 0 means full split.")
     parser.add_argument("--no-eval", action="store_true", help="Only export JSON files, do not run COCOeval.")
@@ -302,7 +308,7 @@ def export_predictions(
     return predictions, elapsed, skipped
 
 
-def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, object]]):
+def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, object]], coco_max_det: int):
     try:
         from pycocotools.coco import COCO
         from pycocotools.cocoeval import COCOeval
@@ -317,6 +323,7 @@ def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, ob
         evaluator = COCOeval(coco_gt, coco_dt, "bbox")
         evaluator.params.imgIds = [int(image["id"]) for image in coco_gt_data["images"]]
         evaluator.params.catIds = [int(category["id"]) for category in coco_gt_data["categories"]]
+        evaluator.params.maxDets = [1, 10, int(coco_max_det)]
         evaluator.evaluate()
         evaluator.accumulate()
         evaluator.summarize()
@@ -427,6 +434,7 @@ def main() -> None:
         "conf": args.conf,
         "nms_iou": args.iou,
         "max_det": args.max_det,
+        "coco_max_dets": [1, 10, int(args.coco_max_det)],
         "infer_wall_sec": elapsed,
         "infer_ms_per_img_wall": elapsed * 1000.0 / max(len(images), 1),
         "fps_wall": len(images) / max(elapsed, 1e-9),
@@ -435,7 +443,7 @@ def main() -> None:
     }
 
     if not args.no_eval:
-        evaluator, eval_text = run_coco_eval(coco_gt, predictions)
+        evaluator, eval_text = run_coco_eval(coco_gt, predictions, args.coco_max_det)
         (out_dir / "coco_eval.txt").write_text(eval_text, encoding="utf-8")
         rows = class_area_rows(evaluator, class_names, coco_gt)
         write_csv(out_dir / "metrics_by_class_area.csv", rows)
@@ -449,7 +457,7 @@ def main() -> None:
                 "AP_L": float(evaluator.stats[5]),
                 "AR_1": float(evaluator.stats[6]),
                 "AR_10": float(evaluator.stats[7]),
-                "AR_100": float(evaluator.stats[8]),
+                f"AR_{int(args.coco_max_det)}": float(evaluator.stats[8]),
             }
         )
 
