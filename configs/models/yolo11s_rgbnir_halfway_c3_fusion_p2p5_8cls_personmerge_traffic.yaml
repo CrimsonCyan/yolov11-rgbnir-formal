@@ -53,7 +53,7 @@ head:
 
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
   - [[29, 14], 1, Concat, [1]]
-  - [-1, 2, C3k2, [256, False]]
+  - [-1, 2, C3k2, [128, False]]
 
   - [-1, 1, Conv, [256, 3, 2]]
   - [[32, 28], 1, Concat, [1]]
