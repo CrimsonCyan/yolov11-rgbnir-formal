@@ -38,6 +38,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", required=True, help="IDD-AW mode name, e.g. rgb_p2p5_yolo11s_8cls_personmerge_traffic.")
     parser.add_argument("--weights", required=True, help="YOLO checkpoint path, usually weights/best.pt.")
     parser.add_argument("--dataset-root", default="", help="Optional dataset root override. 8cls bbox runs must be detectable640.")
+    parser.add_argument(
+        "--allow-non-detectable-8cls",
+        action="store_true",
+        help=(
+            "Allow an explicit non-detectable640 8-class dataset root for legacy diagnostics. "
+            "Default behavior still rejects non-detectable640 8-class roots."
+        ),
+    )
     parser.add_argument("--split", default="val", choices=["train", "val", "test"], help="Dataset split to export/evaluate.")
     parser.add_argument("--out", default="", help="Output directory. Defaults to runs/analysis/coco_eval/<name>.")
     parser.add_argument("--name", default="", help="Output run name. Defaults to <mode>_<split>_<weight-stem>.")
@@ -398,7 +406,7 @@ def main() -> None:
     args = parse_args()
     class_names = category_names_for_mode(args.mode)
     dataset_root = Path(args.dataset_root).expanduser().resolve() if args.dataset_root else default_bbox_dataset_root(args.mode, class_names)
-    if len(class_names) == 8 and dataset_root.name != TRAFFIC_DETECTABLE640_DATASET_NAME:
+    if len(class_names) == 8 and dataset_root.name != TRAFFIC_DETECTABLE640_DATASET_NAME and not args.allow_non_detectable_8cls:
         raise ValueError(
             "8cls traffic COCO export must use the filtered detectable640 bbox dataset.\n"
             f"Expected: {TRAFFIC_DETECTABLE640_DATASET_NAME}\nGot: {dataset_root}"
