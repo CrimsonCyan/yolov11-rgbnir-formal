@@ -46,6 +46,29 @@ def parse_bool_arg(value: str) -> bool:
     raise argparse.ArgumentTypeError(f"Expected a boolean value, got: {value}")
 
 
+def parse_pretrained_arg(value: str) -> bool | str:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return value
+
+
+def load_explicit_pretrained(model, pretrained: bool | str) -> bool:
+    """Load a checkpoint path before training so YOLO(yaml) does not drop pretrained weights."""
+    if not isinstance(pretrained, str):
+        return pretrained
+
+    weights = Path(pretrained).expanduser()
+    if not weights.exists():
+        raise FileNotFoundError(f"Pretrained checkpoint not found: {weights}")
+
+    print(f"Loading explicit pretrained weights: {weights}")
+    model.load(str(weights))
+    return False
+
+
 def safe_wandb_tag(tag: str, max_length: int = 64) -> str:
     tag = tag.strip()
     return tag if len(tag) <= max_length else tag[:max_length]
@@ -127,9 +150,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--pretrained",
-        type=parse_bool_arg,
+        type=parse_pretrained_arg,
         default=True,
-        help="Use pretrained weights where supported by Ultralytics during train. Defaults to true.",
+        help=(
+            "Use pretrained weights where supported by Ultralytics during train. "
+            "Accepts true/false or a checkpoint path such as yolo11s.pt. Defaults to true."
+        ),
     )
     return parser.parse_args()
 
@@ -189,6 +215,7 @@ def main() -> None:
             return
 
         model = model_cls(model_config_for(args.mode))
+        train_pretrained = load_explicit_pretrained(model, args.pretrained)
         model.train(
             data=data_yaml,
             **common_train_kwargs(
@@ -202,7 +229,7 @@ def main() -> None:
                 batch=args.batch or None,
                 lr0=args.lr0 or None,
                 cos_lr=args.cos_lr,
-                pretrained=args.pretrained,
+                pretrained=train_pretrained,
                 mosaic=args.mosaic if args.mosaic >= 0 else None,
                 small_center_gain=args.small_center_gain,
                 small_scale_gain=args.small_scale_gain,
