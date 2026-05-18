@@ -12,6 +12,7 @@ from io import StringIO
 from pathlib import Path
 
 from PIL import Image
+import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -75,6 +76,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-images", type=int, default=0, help="Debug cap; 0 means full split.")
     parser.add_argument("--no-eval", action="store_true", help="Only export JSON files, do not run COCOeval.")
     parser.add_argument("--save-txt", action="store_true", help="Also let Ultralytics save YOLO-format predictions.")
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help=(
+            "Use Ultralytics stream=True. This lowers memory use but the infer timer will include per-result COCO conversion. "
+            "Default stream=False separates infer timing from COCO conversion timing."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -240,13 +249,78 @@ def write_source_list(images: list[Path], out_dir: Path) -> Path:
     return source_file
 
 
+def cuda_sync(device: str) -> None:
+    if device.lower() != "cpu" and torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
+def ultralytics_speed_summary(results) -> dict[str, float]:
+    speed_rows = [getattr(result, "speed", {}) or {} for result in results]
+    keys = ("preprocess", "inference", "postprocess")
+    if not speed_rows:
+        return {f"{key}_ms_img": 0.0 for key in keys} | {"ultralytics_total_ms_img": 0.0, "ultralytics_fps": 0.0}
+    summary = {
+        f"{key}_ms_img": sum(float(row.get(key, 0.0)) for row in speed_rows) / len(speed_rows)
+        for key in keys
+    }
+    summary["ultralytics_total_ms_img"] = sum(summary[f"{key}_ms_img"] for key in keys)
+    summary["ultralytics_fps"] = (
+        1000.0 / summary["ultralytics_total_ms_img"] if summary["ultralytics_total_ms_img"] > 0 else 0.0
+    )
+    return summary
+
+
+def result_to_coco_predictions(
+    result,
+    image_id_by_stem: dict[str, int],
+    class_names: list[str],
+    imgsz: int,
+    eval_space: str,
+    skipped: dict[str, int],
+) -> list[dict[str, object]]:
+    image_path = Path(result.path)
+    image_id = image_id_by_stem.get(image_path.stem)
+    if image_id is None:
+        raise KeyError(f"Prediction image not found in GT image map: {image_path}")
+    height, width = result.orig_shape
+    coco_width, coco_height = (imgsz, imgsz) if eval_space == "letterbox" else (width, height)
+    boxes = result.boxes
+    if boxes is None or len(boxes) == 0:
+        skipped["empty_results"] += 1
+        return []
+    out: list[dict[str, object]] = []
+    xyxy = boxes.xyxy.detach().cpu().tolist()
+    scores = boxes.conf.detach().cpu().tolist()
+    classes = boxes.cls.detach().cpu().tolist()
+    for box, score, cls_value in zip(xyxy, scores, classes):
+        cls = int(cls_value)
+        if not 0 <= cls < len(class_names):
+            skipped["class_out_of_range"] += 1
+            continue
+        if eval_space == "letterbox":
+            box = transform_xyxy_to_letterbox(box, width, height, imgsz)
+        bbox = xyxy_to_xywh(box, coco_width, coco_height)
+        if bbox[2] <= 0 or bbox[3] <= 0:
+            skipped["invalid_bbox"] += 1
+            continue
+        out.append(
+            {
+                "image_id": int(image_id),
+                "category_id": int(cls + 1),
+                "bbox": [float(value) for value in bbox],
+                "score": float(score),
+            }
+        )
+    return out
+
+
 def export_predictions(
     args: argparse.Namespace,
     images: list[Path],
     image_id_by_stem: dict[str, int],
     class_names: list[str],
     out_dir: Path,
-) -> tuple[list[dict[str, object]], float, dict[str, int]]:
+) -> tuple[list[dict[str, object]], dict[str, object], dict[str, int]]:
     from ultralytics import YOLO
 
     model = YOLO(str(Path(args.weights).expanduser().resolve()))
@@ -258,8 +332,7 @@ def export_predictions(
         "class_out_of_range": 0,
         "invalid_bbox": 0,
     }
-    start = time.perf_counter()
-    results = model.predict(
+    predict_kwargs = dict(
         source=str(source_file),
         imgsz=args.imgsz,
         batch=args.batch,
@@ -271,49 +344,46 @@ def export_predictions(
         verbose=False,
         save=False,
         save_txt=args.save_txt,
-        stream=True,
         **mode_kwargs,
     )
-    for result in results:
-        image_path = Path(result.path)
-        image_id = image_id_by_stem.get(image_path.stem)
-        if image_id is None:
-            raise KeyError(f"Prediction image not found in GT image map: {image_path}")
-        height, width = result.orig_shape
-        coco_width, coco_height = (args.imgsz, args.imgsz) if args.eval_space == "letterbox" else (width, height)
-        boxes = result.boxes
-        if boxes is None or len(boxes) == 0:
-            skipped["empty_results"] += 1
-            continue
-        xyxy = boxes.xyxy.detach().cpu().tolist()
-        scores = boxes.conf.detach().cpu().tolist()
-        classes = boxes.cls.detach().cpu().tolist()
-        for box, score, cls_value in zip(xyxy, scores, classes):
-            cls = int(cls_value)
-            if not 0 <= cls < len(class_names):
-                skipped["class_out_of_range"] += 1
-                continue
-            if args.eval_space == "letterbox":
-                box = transform_xyxy_to_letterbox(box, width, height, args.imgsz)
-            bbox = xyxy_to_xywh(box, coco_width, coco_height)
-            if bbox[2] <= 0 or bbox[3] <= 0:
-                skipped["invalid_bbox"] += 1
-                continue
-            predictions.append(
-                {
-                    "image_id": int(image_id),
-                    "category_id": int(cls + 1),
-                    "bbox": [float(value) for value in bbox],
-                    "score": float(score),
-                }
+    cuda_sync(args.device)
+    start = time.perf_counter()
+    speed_results = []
+    if args.stream:
+        results = model.predict(**predict_kwargs, stream=True)
+        for result in results:
+            speed_results.append(result)
+            predictions.extend(
+                result_to_coco_predictions(result, image_id_by_stem, class_names, args.imgsz, args.eval_space, skipped)
             )
-    elapsed = time.perf_counter() - start
+        cuda_sync(args.device)
+        infer_elapsed = time.perf_counter() - start
+        convert_elapsed = 0.0
+        timing_note = "stream=True: infer_wall_sec includes COCO row conversion during result iteration"
+    else:
+        results = model.predict(**predict_kwargs, stream=False)
+        cuda_sync(args.device)
+        infer_elapsed = time.perf_counter() - start
+        speed_results = list(results)
+        convert_start = time.perf_counter()
+        for result in speed_results:
+            predictions.extend(
+                result_to_coco_predictions(result, image_id_by_stem, class_names, args.imgsz, args.eval_space, skipped)
+            )
+        convert_elapsed = time.perf_counter() - convert_start
+        timing_note = "stream=False: infer_wall_sec excludes COCO row conversion and JSON writing"
     if not predictions:
         raise RuntimeError(
             "No detections were exported. "
             f"Skipped counts: {skipped}. Check weights, modality, dataset path, confidence threshold, and class mapping."
         )
-    return predictions, elapsed, skipped
+    timing = {
+        "infer_wall_sec": infer_elapsed,
+        "coco_convert_wall_sec": convert_elapsed,
+        "timing_note": timing_note,
+    }
+    timing.update(ultralytics_speed_summary(speed_results))
+    return predictions, timing, skipped
 
 
 def run_coco_eval(coco_gt_data: dict[str, object], detections: list[dict[str, object]], coco_max_det: int):
@@ -418,11 +488,13 @@ def main() -> None:
     out_dir = Path(args.out).expanduser().resolve() if args.out else ROOT / "runs" / "analysis" / "coco_eval" / sanitize_name(run_name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    predictions, elapsed, skipped_predictions = export_predictions(args, images, image_id_by_stem, class_names, out_dir)
+    predictions, timing, skipped_predictions = export_predictions(args, images, image_id_by_stem, class_names, out_dir)
     gt_json = out_dir / "instances_gt.json"
     pred_json = out_dir / "predictions.json"
+    write_start = time.perf_counter()
     gt_json.write_text(json.dumps(coco_gt, ensure_ascii=False), encoding="utf-8")
     pred_json.write_text(json.dumps(predictions, ensure_ascii=False), encoding="utf-8")
+    json_write_elapsed = time.perf_counter() - write_start
 
     summary: dict[str, object] = {
         "mode": args.mode,
@@ -443,20 +515,35 @@ def main() -> None:
         "nms_iou": args.iou,
         "max_det": args.max_det,
         "coco_max_dets": [1, 10, int(args.coco_max_det)],
-        "infer_wall_sec": elapsed,
-        "infer_ms_per_img_wall": elapsed * 1000.0 / max(len(images), 1),
-        "fps_wall": len(images) / max(elapsed, 1e-9),
+        "stream": bool(args.stream),
+        "timing_note": timing["timing_note"],
+        "infer_wall_sec": timing["infer_wall_sec"],
+        "infer_ms_per_img_wall": timing["infer_wall_sec"] * 1000.0 / max(len(images), 1),
+        "fps_infer_wall": len(images) / max(float(timing["infer_wall_sec"]), 1e-9),
+        "preprocess_ms_img": timing["preprocess_ms_img"],
+        "inference_ms_img": timing["inference_ms_img"],
+        "postprocess_ms_img": timing["postprocess_ms_img"],
+        "ultralytics_total_ms_img": timing["ultralytics_total_ms_img"],
+        "ultralytics_fps": timing["ultralytics_fps"],
+        "coco_convert_wall_sec": timing["coco_convert_wall_sec"],
+        "coco_convert_ms_per_img": timing["coco_convert_wall_sec"] * 1000.0 / max(len(images), 1),
+        "json_write_wall_sec": json_write_elapsed,
+        "json_write_ms_per_img": json_write_elapsed * 1000.0 / max(len(images), 1),
         "gt_json": str(gt_json),
         "pred_json": str(pred_json),
     }
 
     if not args.no_eval:
+        eval_start = time.perf_counter()
         evaluator, eval_text = run_coco_eval(coco_gt, predictions, args.coco_max_det)
+        eval_elapsed = time.perf_counter() - eval_start
         (out_dir / "coco_eval.txt").write_text(eval_text, encoding="utf-8")
         rows = class_area_rows(evaluator, class_names, coco_gt)
         write_csv(out_dir / "metrics_by_class_area.csv", rows)
         summary.update(
             {
+                "coco_eval_wall_sec": eval_elapsed,
+                "coco_eval_ms_per_img": eval_elapsed * 1000.0 / max(len(images), 1),
                 "mAP50_95": float(evaluator.stats[0]),
                 "mAP50": float(evaluator.stats[1]),
                 "mAP75": float(evaluator.stats[2]),
