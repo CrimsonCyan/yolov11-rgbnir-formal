@@ -29,6 +29,13 @@ IOU="${IOU:-0.7}"
 MAX_DET="${MAX_DET:-300}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 WEIGHTS="${WEIGHTS:-${ROOT_DIR}/runs/IDD_AW/MGFDet/weights/best.pt}"
+GRADIO_TEMP_DIR="${GRADIO_TEMP_DIR:-${ROOT_DIR}/runs/web_detect/gradio_tmp}"
+
+mkdir -p "${GRADIO_TEMP_DIR}" "${ROOT_DIR}/runs/web_detect"
+export GRADIO_TEMP_DIR
+export TMPDIR="${TMPDIR:-${GRADIO_TEMP_DIR}}"
+export TEMP="${TEMP:-${GRADIO_TEMP_DIR}}"
+export TMP="${TMP:-${GRADIO_TEMP_DIR}}"
 
 if ! "${PYTHON_BIN}" - <<'PY'
 import gradio  # noqa: F401

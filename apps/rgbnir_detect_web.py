@@ -11,17 +11,25 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+DEFAULT_GRADIO_TEMP_DIR = Path(
+    os.getenv("GRADIO_TEMP_DIR", str(ROOT / "runs/web_detect/gradio_tmp"))
+)
+DEFAULT_GRADIO_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("GRADIO_TEMP_DIR", str(DEFAULT_GRADIO_TEMP_DIR))
+os.environ.setdefault("TMPDIR", str(DEFAULT_GRADIO_TEMP_DIR))
+os.environ.setdefault("TEMP", str(DEFAULT_GRADIO_TEMP_DIR))
+os.environ.setdefault("TMP", str(DEFAULT_GRADIO_TEMP_DIR))
 
 import cv2
 import gradio as gr
 import numpy as np
 from PIL import Image
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from ultralytics import YOLO  # noqa: E402
 
