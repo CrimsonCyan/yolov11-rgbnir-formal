@@ -4,3 +4,4 @@ runtime_cfg/
 remote_logs/
 runs/
 *.md
+.DS_Store
