@@ -4,4 +4,6 @@ runtime_cfg/
 remote_logs/
 runs/
 *.md
+!website description.md
+!model-train.md
 .DS_Store
