@@ -86,6 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iou", type=float, default=float(os.getenv("IOU", "0.7")))
     parser.add_argument("--max-det", type=int, default=int(os.getenv("MAX_DET", "300")))
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--output-root", default=os.getenv("OUTPUT_ROOT", str(DEFAULT_OUT_ROOT)))
     return parser.parse_args()
 
 
@@ -99,6 +100,15 @@ def ensure_weights(weights: str | Path) -> Path:
             f"Weight file does not exist: {path}. Set WEIGHTS=/path/to/best.pt or pass --weights."
         )
     return path
+
+
+def resolve_output_root(output_root: str | Path | None) -> Path:
+    value = str(output_root or "").strip()
+    root = Path(value).expanduser() if value else DEFAULT_OUT_ROOT
+    if not root.is_absolute():
+        root = ROOT / root
+    root.mkdir(parents=True, exist_ok=True)
+    return root.resolve()
 
 
 @lru_cache(maxsize=2)
@@ -377,6 +387,7 @@ def batch_detect(
     imgsz: int,
     max_det: int,
     batch_size: int,
+    output_root: str,
     progress: gr.Progress = gr.Progress(track_tqdm=False),
 ) -> tuple[str, str, dict[str, Any]]:
     imgsz = int(imgsz)
@@ -393,7 +404,8 @@ def batch_detect(
     if not common:
         raise gr.Error("No RGB/NIR image pairs matched by identical filename stem.")
 
-    out_dir = DEFAULT_OUT_ROOT / timestamp()
+    output_root_path = resolve_output_root(output_root)
+    out_dir = output_root_path / timestamp()
     ann_dir = out_dir / "annotated"
     all_rows: list[dict[str, Any]] = []
     warnings: dict[str, list[str]] = {}
@@ -467,6 +479,7 @@ def batch_detect(
         "iou": iou,
         "max_det": max_det,
         "batch_size": batch_size,
+        "output_root": str(output_root_path),
         "matched_pairs": len(common),
         "processed_pairs": len(common) - len(failed),
         "detections": len(all_rows),
@@ -542,6 +555,7 @@ def build_demo(args: argparse.Namespace) -> gr.Blocks:
         with gr.Tab("批量 RGB/NIR 文件夹"):
             rgb_folder = gr.Textbox(label="RGB folder path", value=DEFAULT_RGB_FOLDER)
             nir_folder = gr.Textbox(label="NIR folder path", value=DEFAULT_NIR_FOLDER)
+            output_root_box = gr.Textbox(label="Batch output root", value=args.output_root)
             run_batch = gr.Button("Run batch detection", variant="primary")
             batch_status = gr.Textbox(label="Status", lines=4)
             batch_zip = gr.File(label="Result zip")
@@ -558,6 +572,7 @@ def build_demo(args: argparse.Namespace) -> gr.Blocks:
                     imgsz_box,
                     max_det_box,
                     batch_size_box,
+                    output_root_box,
                 ],
                 outputs=[batch_status, batch_zip, batch_json],
             )
